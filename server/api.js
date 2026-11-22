@@ -95,6 +95,7 @@ function saveItems(jobId, items) {
       override: it.override !== undefined ? it.override : snap.override ?? null,
       unit_price: it.unit_price !== undefined ? numOrNull(it.unit_price) : snap.unit_price ?? null,
       line_discount: numOrNull(it.line_discount) || 0,
+      ajuste_pct: lineType === 'prenda' ? Math.min(5, Math.max(0, numOrNull(it.ajuste_pct) || 0)) : 0,
       // «Comisionable» es parte de la matriz: lo define el producto, no la línea. Diseño/Digitalizado nunca comisiona.
       commissionable: lineType === 'diseno' ? 0 : product ? (product.commissionable === 0 ? 0 : 1) : it.commissionable === false || it.commissionable === 0 ? 0 : 1,
       qty: Number(it.qty) || 0, position: idx,

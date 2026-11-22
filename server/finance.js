@@ -20,6 +20,7 @@ export function lineInput(row) {
     sizes: row.sizes || {}, qty: row.qty, unit_cost: row.unit_cost, size_costs: row.size_costs || {},
     price_mode: row.price_mode || 'auto', manual_price: row.manual_price, override: row.override || null,
     unit_price: row.unit_price, decorations: row.decorations || [], line_discount: row.line_discount || 0,
+    ajuste_pct: row.ajuste_pct || 0,
     commissionable: row.commissionable !== 0 && row.commissionable !== false,
   };
 }

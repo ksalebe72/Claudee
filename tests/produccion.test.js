@@ -115,3 +115,11 @@ test('una base con tarifas anteriores pasa a «aplicación DTF una vez por prend
     } finally { b.stop(); }
   } finally { rmSync(carpeta, { recursive: true, force: true }); }
 });
+
+test('el ajuste a meta de una línea se guarda y se recalcula en el servidor', async () => {
+  const prod = await s.duena.post('/products', { sku: 'AJ1', name: 'Tee ajuste', base_cost: 4, sizes: ['M'], colors: ['Negro'] });
+  const q = await s.duena.post('/jobs', { title: 'Ajuste', items: [{ product_id: prod.id, sizes: { M: 10 }, ajuste_pct: 0.25, decorations: [{ process: 'bordado', location: 'Pecho izquierdo' }] }] });
+  assert.equal(q.items[0].ajuste_pct, 0.25);
+  assert.equal(q.items[0].calc.prenda.tallas[0].precio, 11, '$8.80 + 25%');
+  assert.equal(q.items[0].calc.decoraciones[0].precioPieza, 7.5, 'bordado $6 + 25%');
+});

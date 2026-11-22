@@ -72,6 +72,13 @@ export default function JobEditor() {
 
   const cfg = job?.pricing?.config || tarifas?.config;
   const calcs = useMemo(() => (job && cfg ? job.items.map((it) => calcularLinea(it, cfg)) : []), [job, cfg]);
+  // Rentabilidad para un juego de líneas (se usa en la vista previa y en «Ajustar a meta»)
+  const rentabilidadDe = (lineas) => calcularRentabilidad({
+    lineas, descuentoGlobal: job.discount, creditos: job.finanzas?.creditos || 0,
+    envioCobrado: job.shipping_charged, costoEnvio: job.shipping_cost, costosExtra: job.extra_costs || [],
+    tasaImpuesto: cfg.impuesto.tasa, exento: !!job.tax_exempt, reales: job.finanzas?.costos?.reales || {},
+    regla: reglaVigente(reglas, job), margen: cfg.margen,
+  });
   const finPreview = useMemo(() => {
     if (!job || !cfg || !reglas) return null;
     return calcularRentabilidad({
@@ -126,6 +133,32 @@ export default function JobEditor() {
   async function setInvoiceDate(v) {
     try { setJob(await api.put(`/jobs/${job.id}`, { invoice_date: v })); notify('Fecha de factura actualizada'); } catch (e) { notify(e.message, true); }
   }
+
+  /**
+   * Sube por igual el precio automático de las prendas y sus decoraciones hasta llegar al margen objetivo
+   * (después de la comisión del vendedor). Si ya hay un ajuste, busca el mínimo necesario (puede bajarlo).
+   */
+  function ajustarAMeta() {
+    const meta = cfg.margen.objetivo * 100;
+    const ajustables = job.items.map((it) => (it.line_type || 'prenda') === 'prenda' && it.price_mode !== 'manual' && (it.product_id || it.description));
+    if (!ajustables.some(Boolean)) return notify('No hay prendas con precio automático para ajustar.', true);
+    const con = (a) => job.items.map((it, i) => (ajustables[i] ? { ...it, ajuste_pct: a } : it));
+    const pct = (a) => rentabilidadDe(con(a).map((it) => calcularLinea(it, cfg))).contribucionPct;
+    const base = pct(0);
+    if (base == null) return notify('Completa primero los costos que faltan (la rentabilidad está incompleta).', true);
+    if (base >= meta) {
+      if (job.items.some((it) => Number(it.ajuste_pct) > 0)) { set({ items: con(0) }); notify(`Ajuste quitado: sin él ya da ${base}%.`); }
+      else notify(`Esta orden ya da ${base}%: no hace falta ajustar.`);
+      return;
+    }
+    if (pct(5) < meta) return notify('Ni subiendo 500% se llega a la meta: revisa costos o comisión.', true);
+    let lo = 0, hi = 5;
+    for (let k = 0; k < 40; k++) { const mid = (lo + hi) / 2; if (pct(mid) >= meta) hi = mid; else lo = mid; }
+    const a = Math.ceil(hi * 10000) / 10000; // a la centésima de %
+    set({ items: con(a) });
+    notify(`Precios subidos ${Math.round(a * 1000) / 10}% → contribución ${pct(a)}%. Revisa y guarda.`);
+  }
+  function quitarAjuste() { set({ items: job.items.map((it) => ({ ...it, ajuste_pct: 0 })) }); }
 
   async function abrirDecorador(proof = null) {
     if (!job.items.some((it) => it.product_id || it.description)) return notify('Agrega primero la prenda a la orden.', true);
@@ -246,6 +279,12 @@ export default function JobEditor() {
 
         <div className="stack sticky">
           {id && <Proofs job={job} setJob={setJob} notify={notify} onDesign={abrirDecorador} />}
+          {editable && (
+            <div className="row gap ajuste-meta">
+              <button className="btn" onClick={ajustarAMeta} title="Sube los precios automáticos lo justo para llegar a la meta, ya contando la comisión del vendedor">🎯 Ajustar a {Math.round(cfg.margen.objetivo * 100)}%</button>
+              {job.items.some((it) => Number(it.ajuste_pct) > 0) && <button className="link-btn" onClick={quitarAjuste}>Quitar ajuste</button>}
+            </div>
+          )}
           <RentabilidadCard fin={fin} preview={dirty} margen={cfg.margen} user={user} jobId={job.id} notify={notify} onUpdated={reload} />
           {id && isOrder && (
             <section className="card">

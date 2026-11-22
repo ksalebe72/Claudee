@@ -49,9 +49,14 @@ export function ensurePricing() {
     cfg.dtf.adicional = structuredClone(DEFAULT_PRICING.dtf.adicional);
     notas.push('precios DTF sin el salto a $25');
   }
+  const BORDADO_ORIGINAL = [{ puntadasHasta: null, cantidadDesde: 1, costo: 4.5, precio: 4.5 }];
+  if (igual(raw.bordado?.filas, BORDADO_ORIGINAL)) {
+    cfg.bordado.filas = structuredClone(DEFAULT_PRICING.bordado.filas);
+    notas.push('bordado a $6 por logo para el cliente');
+  }
   if (!notas.length) return;
   migrando = true;
-  try { savePricing(cfg, null, `DTF: ${notas.join(' · ')} (pedido de la dueña)`); } finally { migrando = false; }
+  try { savePricing(cfg, null, `${notas.join(' · ')} (pedido de la dueña)`); } finally { migrando = false; }
 }
 
 export function currentPricing() {

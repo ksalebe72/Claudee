@@ -119,6 +119,7 @@ export function LineEditor({ idx, item, calc, products, editable, onChange, onRe
   const todas = [...new Set([...(product?.sizes || []), ...enLinea])].sort((a, b) => (ORDEN.indexOf(a) + 1 || 99) - (ORDEN.indexOf(b) + 1 || 99));
   const sizes = todas.length ? todas : null;
   const tallas = calc?.prenda?.tallas || [];
+  const ajustePct = Number(item.ajuste_pct) > 0 && item.price_mode !== 'manual' ? Math.round(Number(item.ajuste_pct) * 1000) / 10 : 0;
   const porTalla = Object.fromEntries(tallas.map((t) => [t.talla ?? '_', t]));
 
   return (
@@ -173,7 +174,8 @@ export function LineEditor({ idx, item, calc, products, editable, onChange, onRe
         )}
         <label className="field mini-field"><span>Descuento línea $</span><input type="number" step="0.01" disabled={!editable} value={blank(item.line_discount)} onChange={(e) => set({ line_discount: e.target.value })} placeholder="0" /></label>
         <div className="muted small grow">
-          {calc?.manual ? <span className="badge tone-amber">precio manual</span> : tallas[0]?.fuente ? <>Precio: {tallas[0].fuente}{tallas[0].factor ? ` (×${tallas[0].factor.toFixed(2)})` : ''}</> : null}
+          {calc?.manual ? <span className="badge tone-amber">precio manual</span> : tallas[0]?.fuente ? <>Precio: {String(tallas[0].fuente).replace(/ \+ ajuste.*$/, '')}{tallas[0].factor ? ` (×${tallas[0].factor.toFixed(2)})` : ''}</> : null}
+          {ajustePct > 0 && <span className="badge tone-blue" title="Ajuste a la meta de margen: sube por igual la prenda y sus decoraciones"> 🎯 +{ajustePct}% ajuste a meta</span>}
           {item.override && <span className="badge tone-violet">excepción del producto</span>}
         </div>
       </div>

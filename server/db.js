@@ -116,6 +116,7 @@ for (const [c, d] of Object.entries({
 for (const [c, d] of Object.entries({
   line_type: "TEXT DEFAULT 'prenda'", unit_cost: 'REAL', size_costs: "TEXT DEFAULT '{}'", price_mode: "TEXT DEFAULT 'auto'",
   manual_price: 'REAL', override: 'TEXT', line_discount: 'REAL DEFAULT 0', commissionable: 'INTEGER DEFAULT 1', cost_total: 'REAL', calc: 'TEXT',
+  ajuste_pct: 'REAL DEFAULT 0',
 })) addColumn('job_items', c, d);
 for (const [c, d] of Object.entries({
   kind: "TEXT DEFAULT 'prenda'", commissionable: 'INTEGER DEFAULT 1', markup_mode: 'TEXT', markup_value: 'REAL',

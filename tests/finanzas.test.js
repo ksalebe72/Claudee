@@ -46,7 +46,7 @@ test('Prueba DTF: Gildan 5000 · 12 piezas · $6.00, $10.50 y $11.50 por pieza',
   assert.deepEqual(q.items.map((i) => i.calc.precioDecoPieza), [6.0, 10.5, 11.5]);
 });
 
-test('Prendas: $4.00 → $8.80 (escalonado) y $8.00 (fijo); $10.00 → $20.00. Bordado 10 pzs: $45 y $90', async () => {
+test('Prendas: $4.00 → $8.80 (escalonado) y $8.00 (fijo); $10.00 → $20.00. Bordado 10 pzs: $60 y $120', async () => {
   const p4 = await producto({ sku: 'P4', name: 'Prenda $4', base_cost: 4 });
   const p10 = await producto({ sku: 'P10', name: 'Prenda $10', base_cost: 10 });
   const q = await duena.post('/jobs', { title: 'Markup', items: [{ product_id: p4.id, qty: 1 }, { product_id: p10.id, qty: 1 }] });
@@ -63,9 +63,9 @@ test('Prendas: $4.00 → $8.80 (escalonado) y $8.00 (fijo); $10.00 → $20.00. B
   await duena.put('/tarifas', { config: t.config, nota: 'Volver a escalonado' });
 
   const b1 = await duena.post('/jobs', { title: 'Bordado', items: [{ product_id: p10.id, qty: 10, decorations: [{ process: 'bordado', location: 'Pecho izquierdo' }] }] });
-  assert.equal(b1.finanzas.porProceso.bordado.venta, 45.0);
+  assert.equal(b1.finanzas.porProceso.bordado.venta, 60.0);
   const b2 = await duena.post('/jobs', { title: 'Bordado 2', items: [{ product_id: p10.id, qty: 10, decorations: [{ process: 'bordado', location: 'Pecho izquierdo' }, { process: 'bordado', location: 'Espalda' }] }] });
-  assert.equal(b2.finanzas.porProceso.bordado.venta, 90.0);
+  assert.equal(b2.finanzas.porProceso.bordado.venta, 120.0);
 });
 
 test('Ajustes: solo la dueña cambia tarifas y queda historial con antes y después', async () => {
@@ -94,12 +94,12 @@ test('Comisión de Bryan 25%: el envío y el impuesto no entran en la base', asy
     items: [{ product_id: p.id, qty: 10, decorations: [{ process: 'bordado', location: 'Pecho izquierdo' }] }],
   });
   const f = q.finanzas;
-  assert.equal(f.ventaProductos, 133); // 10 × $8.80 + 10 × $4.50
+  assert.equal(f.ventaProductos, 148); // 10 × $8.80 + 10 × $6.00
   assert.equal(f.envioCobrado, 15);
-  assert.equal(f.impuesto, r2((133 + 15) * 0.06));
-  assert.equal(f.comision.base, 133, 'la base es solo la venta neta de productos');
-  assert.equal(f.comision.monto, 33.25);
-  assert.equal(f.total, r2(148 + f.impuesto));
+  assert.equal(f.impuesto, r2((148 + 15) * 0.06));
+  assert.equal(f.comision.base, 148, 'la base es solo la venta neta de productos');
+  assert.equal(f.comision.monto, 37);
+  assert.equal(f.total, r2(148 + 15 + f.impuesto)); // productos + envío + impuesto
 });
 
 test('Diseño/Digitalizado y servicios no comisionables quedan fuera de la base', async () => {

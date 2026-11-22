@@ -20,7 +20,7 @@ export const DEFAULT_PRICING = {
   },
   bordado: {
     // puntadasHasta null = cualquier cantidad de puntadas; cantidadDesde = desde N piezas.
-    filas: [{ puntadasHasta: null, cantidadDesde: 1, costo: 4.5, precio: 4.5 }],
+    filas: [{ puntadasHasta: null, cantidadDesde: 1, costo: 4.5, precio: 6.0 }], // costo $4.50 · precio al cliente $6 (dueña)
   },
   dtf: {
     // Costo del material: 'hoja' = hojas de 12×12 (se cuentan las hojas que necesita la línea completa) · 'area' = por pie² del diseño
@@ -197,13 +197,16 @@ export function calcularLinea(linea, cfg) {
   const tallas = Object.entries(linea.sizes || {}).filter(([, n]) => Number(n) > 0);
   const filas = tallas.length ? tallas.map(([talla, n]) => ({ talla, cant: Number(n) })) : [{ talla: null, cant: qty }];
   const manual = linea.price_mode === 'manual' && num(linea.manual_price) != null;
+  // «Ajustar a meta»: sube por igual el precio automático de la prenda y de sus decoraciones (no toca precios manuales)
+  const ajuste = Math.min(5, Math.max(0, num(linea.ajuste_pct) || 0));
+  const conAjuste = (precio) => (precio == null || !ajuste ? precio : round2(precio * (1 + ajuste)));
   const detalleTallas = filas.map(({ talla, cant }) => {
     const costo = num(talla != null ? linea.size_costs?.[talla] : null) ?? num(linea.unit_cost);
     const auto = precioPrenda(costo, cfg, linea.override);
-    const precio = manual ? round2(linea.manual_price) : auto.precio;
+    const precio = manual ? round2(linea.manual_price) : conAjuste(auto.precio);
     if (costo == null) faltantesCosto.push(`${nombre}: costo de la prenda${talla ? ` (talla ${talla})` : ''}`);
     if (precio == null) faltantesPrecio.push(`${nombre}: precio de la prenda${talla ? ` (talla ${talla})` : ''} (falta el costo o pon precio manual)`);
-    return { talla, cant, costo, precio, factor: manual ? null : auto.factor, fuente: manual ? 'precio manual' : auto.fuente };
+    return { talla, cant, costo, precio, factor: manual ? null : auto.factor, fuente: manual ? 'precio manual' : ajuste ? `${auto.fuente} + ajuste ${round2(ajuste * 100)}%` : auto.fuente };
   });
   const ventaPrenda = sumOrNull(detalleTallas.map((t) => (t.precio == null ? null : t.precio * t.cant)));
   const costoPrenda = sumOrNull(detalleTallas.map((t) => (t.costo == null ? null : t.costo * t.cant)));
@@ -258,6 +261,7 @@ export function calcularLinea(linea, cfg) {
     }
     const manualDeco = num(d.manual_price) != null;
     if (manualDeco) precioPieza = round2(d.manual_price);
+    else precioPieza = conAjuste(precioPieza);
     if (precioPieza == null) faltantesPrecio.push(`${etiqueta}: precio${detalle ? ` (${detalle})` : ''}`);
     if (costoPieza == null) faltantesCosto.push(`${etiqueta}: costo pendiente${detalle && detalle.startsWith('falta') ? ` (${detalle})` : ''}`);
     const venta = precioPieza == null ? null : round2(precioPieza * qty);

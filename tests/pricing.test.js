@@ -89,6 +89,17 @@ test('DTF sin el salto a $25: espalda 9.5×12 = $13 (1ª) · frente + espalda = 
   assert.equal(conDtf(24, [{ process: 'dtf', location: 'Espalda', width: 12, height: 16 }]).precioDecoPieza, 18.5);
 });
 
+test('Ajuste a meta: sube por igual prenda y decoraciones automáticas; no toca precios manuales', () => {
+  const base = { line_type: 'prenda', description: 'Tee', qty: 10, unit_cost: 4, decorations: [{ process: 'bordado', location: 'Pecho izquierdo' }] };
+  const l = calcularLinea({ ...base, ajuste_pct: 0.1 }, cfg);
+  assert.equal(l.prenda.tallas[0].precio, 9.68, '$8.80 + 10%');
+  assert.equal(l.decoraciones[0].precioPieza, 6.6, 'bordado $6 + 10%');
+  assert.equal(l.decoraciones[0].costoPieza, 4.5, 'el costo no cambia');
+  const manual = calcularLinea({ ...base, ajuste_pct: 0.1, price_mode: 'manual', manual_price: 9, decorations: [{ process: 'bordado', location: 'Frente', manual_price: 5 }] }, cfg);
+  assert.equal(manual.prenda.tallas[0].precio, 9);
+  assert.equal(manual.decoraciones[0].precioPieza, 5);
+});
+
 test('Prenda de $4.00 → $8.80 escalonado y $8.00 fijo; prenda de $10.00 → $20.00', () => {
   assert.equal(precioPrenda(4, cfg).precio, 8.8);
   assert.equal(precioPrenda(4, fijo).precio, 8.0);
@@ -102,11 +113,12 @@ test('Excepciones por producto: porcentaje propio y precio fijo', () => {
   assert.equal(precioPrenda(null, cfg, { tipo: 'precio_fijo', valor: 12.5 }).precio, 12.5);
 });
 
-test('Bordado: 10 prendas con un logo = $45.00; con dos ubicaciones = $90.00', () => {
+test('Bordado ($6 por logo): 10 prendas con un logo = $60.00; con dos ubicaciones = $120.00', () => {
   const uno = calcularLinea({ description: 'Polo', qty: 10, unit_cost: 10, decorations: [{ process: 'bordado', location: 'Pecho izquierdo' }] }, cfg);
-  assert.equal(uno.porProceso.bordado.venta, 45.0);
+  assert.equal(uno.porProceso.bordado.venta, 60.0);
+  assert.equal(uno.porProceso.bordado.costo, 45.0, 'el costo sigue en $4.50');
   const dos = calcularLinea({ description: 'Polo', qty: 10, unit_cost: 10, decorations: [{ process: 'bordado', location: 'Pecho izquierdo' }, { process: 'bordado', location: 'Manga' }] }, cfg);
-  assert.equal(dos.porProceso.bordado.venta, 90.0);
+  assert.equal(dos.porProceso.bordado.venta, 120.0);
 });
 
 test('Bordado: tabla lista para rangos de puntadas y cantidad', () => {
@@ -125,7 +137,7 @@ test('La decoración no lleva el markup de prendas y el precio manual queda marc
   const l = calcularLinea({ description: 'Tee', qty: 10, unit_cost: 4, price_mode: 'manual', manual_price: 7, decorations: [{ process: 'bordado', location: 'Frente' }] }, cfg);
   assert.equal(l.manual, true);
   assert.equal(l.prenda.venta, 70);
-  assert.equal(l.porProceso.bordado.venta, 45);
+  assert.equal(l.porProceso.bordado.venta, 60);
 });
 
 test('Heat transfer sin tarifa: costo y precio pendientes, nunca cero', () => {
@@ -137,10 +149,10 @@ test('Heat transfer sin tarifa: costo y precio pendientes, nunca cero', () => {
 test('Comisión 25% sobre venta neta: no incluye envío ni impuesto', () => {
   const l = calcularLinea({ description: 'Tee', qty: 10, unit_cost: 4, decorations: [{ process: 'bordado', location: 'Frente' }] }, cfg);
   const r = calcularRentabilidad({ lineas: [l], envioCobrado: 15, costoEnvio: 12, tasaImpuesto: 0.06, regla: { nombre: 'Bryan ventas', base: 'venta_neta', tasa: 0.25 }, margen: cfg.margen });
-  assert.equal(r.ventaProductos, 133); // 88 prendas + 45 bordado
-  assert.equal(r.impuesto, round(0.06 * (133 + 15)));
-  assert.equal(r.comision.base, 133);
-  assert.equal(r.comision.monto, 33.25);
+  assert.equal(r.ventaProductos, 148); // 88 prendas + 60 bordado
+  assert.equal(r.impuesto, round(0.06 * (148 + 15)));
+  assert.equal(r.comision.base, 148);
+  assert.equal(r.comision.monto, 37);
 });
 
 function round(n) { return Math.round(n * 100) / 100; }
