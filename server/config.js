@@ -1,7 +1,7 @@
 // Tarifas versionadas e historial de cambios.
 // Cada guardado de la matriz crea una versión nueva; las cotizaciones guardan el id de la versión
 // con la que se calcularon, así un cambio de tabla nunca altera una cotización existente.
-import { all, get, run, insert } from './db.js';
+import { all, get, run, insert, getSetting, setSetting } from './db.js';
 import { DEFAULT_PRICING } from '../shared/pricing.js';
 
 const fail = (status, msg) => Object.assign(new Error(msg), { status });
@@ -167,4 +167,28 @@ export function listRules() {
     ...r,
     tasas: all('SELECT * FROM commission_rates WHERE rule_id = ? ORDER BY effective_from DESC, id DESC', r.id),
   }));
+}
+
+/**
+ * Cambio pedido por la dueña: Bryan pasa de 25% de la venta a 40% de la ganancia de producto, desde el día en que se aplica.
+ * Se hace una sola vez: crea la regla «Bryan · Utilidad 40%» y desactiva «Bryan · Ventas» (las órdenes que ya la tienen la conservan).
+ * «Bryan · Wraps» no se toca. Queda en el historial.
+ */
+export const CAMBIO_BRYAN = 'cambio_bryan_utilidad_40';
+export function aplicarCambioComisionBryan(hoy = new Date().toLocaleDateString('en-CA', { timeZone: 'America/New_York' })) {
+  if (getSetting(CAMBIO_BRYAN)) return false;
+  const bryan = get("SELECT id FROM salespeople WHERE name = 'Bryan'");
+  const yaExiste = bryan && get("SELECT id FROM commission_rules WHERE salesperson_id = ? AND base = 'ganancia_producto' AND name NOT LIKE '%Wrap%' AND active = 1", bryan.id);
+  if (bryan && !yaExiste) {
+    const id = insert('commission_rules', { salesperson_id: bryan.id, name: 'Bryan · Utilidad 40%', base: 'ganancia_producto', client_type: null });
+    insert('commission_rates', { rule_id: id, rate: 0.4, effective_from: hoy, created_by: 'sistema (pedido de la dueña)' });
+    audit(null, 'comisiones', 'regla Bryan · Utilidad 40%', null, { base: 'ganancia_producto', tasa: 0.4, desde: hoy }, String(id));
+    const ventas = get("SELECT * FROM commission_rules WHERE salesperson_id = ? AND name = 'Bryan · Ventas'", bryan.id);
+    if (ventas?.active) {
+      run('UPDATE commission_rules SET active = 0 WHERE id = ?', ventas.id);
+      audit(null, 'comisiones', 'regla Bryan · Ventas', { activa: true, tasa: 0.25 }, { activa: false, motivo: `reemplazada por Bryan · Utilidad 40% desde ${hoy}` }, String(ventas.id));
+    }
+  }
+  setSetting(CAMBIO_BRYAN, hoy);
+  return true;
 }

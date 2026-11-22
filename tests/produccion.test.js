@@ -125,3 +125,25 @@ test('el ajuste a meta de una línea se guarda y se recalcula en el servidor', a
   assert.equal(q.items[0].calc.prenda.tallas[0].precio, 11, '$8.80 + 25%');
   assert.equal(q.items[0].calc.decoraciones[0].precioPieza, 9.38, 'bordado $7.50 + 25%');
 });
+
+test('Bryan queda en 40% de la utilidad desde el día del cambio; la regla de 25% se desactiva y wraps no se toca', async () => {
+  const reglas = await s.duena.get('/comisiones/reglas');
+  const nueva = reglas.find((r) => r.name === 'Bryan · Utilidad 40%');
+  assert.ok(nueva?.active, 'regla nueva activa');
+  assert.equal(nueva.base, 'ganancia_producto');
+  assert.equal(nueva.tasas[0].rate, 0.4);
+  assert.match(nueva.tasas[0].effective_from, /^\d{4}-\d{2}-\d{2}$/);
+  assert.equal(reglas.find((r) => r.name === 'Bryan · Ventas').active, 0, 'la de 25% ya no se sugiere');
+  assert.equal(reglas.find((r) => r.name === 'Bryan · Wraps').active, 1);
+  assert.equal(reglas.filter((r) => r.name === 'Bryan · Utilidad 40%').length, 1, 'se crea una sola vez');
+  const hist = await s.duena.get('/auditoria?area=comisiones');
+  assert.ok(hist.some((h) => h.field === 'regla Bryan · Utilidad 40%'));
+
+  // Orden de Bryan: comisión = 40% de la ganancia de producto
+  const bryan = (await s.duena.get('/vendedores')).find((v) => v.name === 'Bryan');
+  const prod = await s.duena.post('/products', { sku: 'BR40', name: 'Tee Bryan', base_cost: 4, sizes: ['M'], colors: ['Negro'] });
+  const q = await s.duena.post('/jobs', { title: 'Bryan 40', salesperson_id: bryan.id, commission_rule_id: nueva.id, items: [{ product_id: prod.id, sizes: { M: 10 } }] });
+  // venta 10 × $8.80 = $88 · costo $40 · ganancia $48 → comisión $19.20
+  assert.equal(q.finanzas.comision.base, 48);
+  assert.equal(q.finanzas.comision.monto, 19.2);
+});
