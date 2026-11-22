@@ -56,23 +56,81 @@ Variables de entorno opcionales:
 
 `npm run seed` borra la base y la vuelve a crear con los datos iniciales. `npm test` corre las pruebas.
 
-## SanMar (fotos reales en las pruebas)
+## SanMar (productos, fotos, precios e inventario · solo lectura)
 
-Copia `.env.example` a `.env` y pon tus datos de SanMar Web Services:
+La app solo **consulta** a SanMar. Nunca crea órdenes de compra ni envía datos.
+
+### Configuración
+
+Pon tus credenciales de SanMar Web Services en variables de entorno o en `.env` (ver `.env.example`). Nunca van en el código:
 
 ```
-SANMAR_CUSTOMER_NUMBER=tu_numero_de_cliente
-SANMAR_USERNAME=tu_usuario_sanmar.com
-SANMAR_PASSWORD=tu_contraseña
+SANMAR_CUSTOMER_NUMBER=...
+SANMAR_USERNAME=...
+SANMAR_PASSWORD=...
 ```
 
-Con eso:
-- **Catálogo → Importar de SanMar**: trae el estilo (ej. `PC54`) con nombre, marca, colores, tallas y costo.
-- **Decorador**: si el producto de la orden es de SanMar, carga sola la **foto real** (plana o con modelo, frente y espalda) en el color de la orden. Desde el decorador puedes cambiar de color o de estilo.
-- **Ajustar área**: la primera vez que uses un estilo, acomoda el recuadro del área de impresión sobre la foto y pulsa **Guardar para ese estilo**. Desde entonces las medidas en pulgadas salen bien en todas las pruebas de ese estilo.
-- Las fotos se descargan una vez y se guardan en `server/uploads/sanmar/`.
+Opcionales:
+- `SANMAR_BASE_URL`: por defecto `https://ws.sanmar.com:8080`, el servidor de producción.
+- `SANMAR_EXTRA_IMAGE_HOSTS`: otros dominios de los que se aceptan fotos.
 
-Se usa el servicio estándar de información de producto (`getProductInfoByStyleColorSize`). Si algo no carga, abre `/api/sanmar/raw/PC54` para ver la respuesta tal cual la manda SanMar. Si no hay conexión con SanMar, el decorador también acepta una foto propia de la prenda.
+### Prueba real
+
+```bash
+npm run sanmar:probar -- PC61               # resumen: colores, combinaciones, fotos, precio e inventario
+npm run sanmar:probar -- PC61 --estructura  # además, la estructura XML con los valores ocultos
+```
+
+No imprime la contraseña, los precios ni la respuesta completa. La salida de `--estructura` se puede compartir: solo trae los nombres de las etiquetas.
+
+### Módulo `services/sanmar/` (independiente de la app)
+
+```js
+import { createSanmarClient } from './services/sanmar/index.js';
+const sanmar = createSanmarClient();                     // lee SANMAR_* del entorno
+await sanmar.buscarEstilo('PC61');                       // { estilo, marca, descripcion, peso, colores:[{ nombre, codigo, swatch, fotos:{frente, espalda, lado, plana, modelo}, tallas }], tallas }
+await sanmar.obtenerColores('PC61');
+await sanmar.obtenerFotos('PC61', 'Navy');
+await sanmar.obtenerTallasYPrecios('PC61', 'Navy');      // [{ talla, costo, fuenteCosto, precioLista }]
+await sanmar.obtenerInventario('PC61', 'Navy', 'M');     // { total, almacenes:[{ id, nombre, cantidad }] }
+await sanmar.obtenerDetalleColor('PC61', 'Navy');        // tallas con costo e inventario
+```
+
+| Archivo | Qué hace |
+|---|---|
+| `index.js` | Cliente con las funciones, caché, conversión a JSON. |
+| `soap.js` | Llamadas SOAP, tiempo de espera, reintentos y oculta las credenciales en los mensajes. |
+| `xml.js` | Lector XML sin dependencias. |
+| `errors.js` | Códigos de error. |
+
+**Servicios.** Usa los servicios web propios de SanMar, no PromoStandards:
+
+| Servicio | Operación |
+|---|---|
+| `SanMarProductInfoServicePort` | `getProductInfoByStyleColorSize` |
+| `SanMarPricingServicePort` | `getPricing` |
+| `SanMarWebServicePort` | `getInventoryQtyForStyleColorSize` |
+
+**Caché.** Productos y fotos 24 h, precios 12 h, inventario 15 min. En la app la caché se guarda en SQLite y las fotos en `server/uploads/sanmar/`.
+
+**Errores.** Cada error trae un código: `NO_CONFIGURADO`, `CREDENCIALES`, `NO_ENCONTRADO`, `TIEMPO_AGOTADO`, `LIMITE`, `RED`, `RESPUESTA_INVALIDA` o `ERROR_SANMAR`. Si falla la red, se agota el tiempo o hay límite, reintenta hasta 3 veces esperando 0.8 s, luego 2 s y luego 5 s.
+
+### Endpoints de la app
+
+| Endpoint | Devuelve |
+|---|---|
+| `GET /api/sanmar/style/:estilo` | Descripción, marca, colores con fotos y tallas. |
+| `GET /api/sanmar/style/:estilo/:color` | Por talla: `costo` (de SanMar), `precioVenta` (calculado por la app), `inventario` y `almacenes`. |
+| `POST /api/sanmar/import` `{ style }` | Agrega el estilo al catálogo local. |
+
+`?refresh=1` en cualquiera de los dos `GET` ignora la caché.
+
+**Precio de venta.** Es `costo × (1 + markup)` y se calcula en la app, no en el módulo de SanMar. El markup por defecto es 100% (costo × 2) y se cambia en **Ajustes**.
+
+### En el decorador
+
+- Si el producto de la orden es de SanMar, carga sola la foto real (plana o con modelo).
+- **Ajustar área** sirve para calibrar el área de impresión sobre la foto. Se guarda por estilo.
 
 ## SMS y email reales
 

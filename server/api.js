@@ -7,7 +7,7 @@ import { all, get, run, insert, update, getSetting, setSetting, methodsMap, tran
 import { fire, registerHandler, TRIGGERS, ACTIONS } from './automations.js';
 import { priceItem, jobTotals } from '../shared/pricing.js';
 import { sendMessage } from './messaging.js';
-import { sanmarConfigured, getStyle, cacheImage, callSanmar, getStyleAreas, setStyleAreas } from './sanmar.js';
+import { sanmar, sanmarConfigured, cacheImage, getStyleAreas, setStyleAreas, getSanmarMarkup, precioVenta, clearSanmarCache } from './sanmar.js';
 
 export const UPLOAD_DIR = resolve(dirname(fileURLToPath(import.meta.url)), 'uploads');
 
@@ -30,8 +30,8 @@ const awrap = (fn) => async (req, res) => {
     const out = await fn(req, res);
     if (out !== undefined) res.json(out);
   } catch (e) {
-    console.error(e.message);
-    res.status(e.status || 500).json({ error: e.message });
+    console.error(e.codigo ? `[SanMar ${e.codigo}] ${e.message}` : e.message);
+    res.status(e.status || 500).json({ error: e.message, ...(e.codigo ? { codigo: e.codigo } : {}) });
   }
 };
 const fail = (status, msg) => Object.assign(new Error(msg), { status });
@@ -150,12 +150,13 @@ api.get('/meta', wrap(() => ({
     markup: getSetting('markup', 0.6),
     tax_rate: getSetting('tax_rate', 0),
     deposit_pct: getSetting('deposit_pct', 0.5),
+    sanmar_markup: getSanmarMarkup(),
   },
   integrations: { sanmar: sanmarConfigured() },
 })));
 
 api.put('/settings', wrap((req) => {
-  for (const k of ['business_name', 'markup', 'tax_rate', 'deposit_pct']) if (k in req.body) setSetting(k, req.body[k]);
+  for (const k of ['business_name', 'markup', 'tax_rate', 'deposit_pct', 'sanmar_markup']) if (k in req.body) setSetting(k, req.body[k]);
   return { ok: true };
 }));
 
@@ -412,19 +413,23 @@ api.post('/jobs/:id/payments', wrap((req) => {
 }));
 api.delete('/payments/:id', wrap((req) => { run('DELETE FROM payments WHERE id = ?', req.params.id); return { ok: true }; }));
 
-// ---------- SanMar ----------
-api.get('/sanmar/style/:style', awrap(async (req) => {
-  const data = await getStyle(req.params.style, { refresh: !!req.query.refresh });
-  return { ...data, areas: { flat: getStyleAreas(data.style, 'flat'), model: getStyleAreas(data.style, 'model') } };
+// ---------- SanMar (solo lectura) ----------
+// Estilo: descripción, marca, colores con fotos y tallas.
+api.get('/sanmar/style/:estilo', awrap(async (req) => {
+  if (req.query.refresh) clearSanmarCache(req.params.estilo);
+  const d = await sanmar.buscarEstilo(req.params.estilo);
+  return { ...d, areas: { flat: getStyleAreas(d.estilo, 'flat'), model: getStyleAreas(d.estilo, 'model') } };
 }));
-// Diagnóstico: muestra la respuesta XML tal cual (sirve para verificar nombres de campos con tu cuenta).
-api.get('/sanmar/raw/:style', awrap(async (req, res) => {
-  const xml = await callSanmar({ style: req.params.style, color: req.query.color || '', size: req.query.size || '' });
-  res.type('text/plain').send(xml.slice(0, 60000));
+// Color: tallas con costo SanMar, precio de venta (markup de la app) e inventario.
+api.get('/sanmar/style/:estilo/:color', awrap(async (req) => {
+  if (req.query.refresh) clearSanmarCache(req.params.estilo);
+  const d = await sanmar.obtenerDetalleColor(req.params.estilo, req.params.color);
+  const markup = getSanmarMarkup();
+  return { ...d, markup, tallas: d.tallas.map((t) => ({ ...t, precioVenta: precioVenta(t.costo, markup) })) };
 }));
 api.get('/sanmar/image', awrap(async (req, res) => {
   const file = await cacheImage(String(req.query.u || ''), UPLOAD_DIR);
-  res.set('Cache-Control', 'public, max-age=604800');
+  res.set('Cache-Control', 'public, max-age=86400');
   res.sendFile(file);
 }));
 api.put('/sanmar/areas/:style/:kind', wrap((req) => {
@@ -432,13 +437,23 @@ api.put('/sanmar/areas/:style/:kind', wrap((req) => {
   setStyleAreas(req.params.style, req.params.kind, req.body);
   return { ok: true };
 }));
+// Importa un estilo al catálogo local (no escribe nada en SanMar).
 api.post('/sanmar/import', awrap(async (req) => {
-  if (!req.body.style) throw fail(400, 'Indica el estilo (ej. PC54)');
-  const d = await getStyle(String(req.body.style).trim(), { refresh: true });
-  const data = { sku: d.style, name: d.title, brand: d.brand, base_cost: d.piecePrice ?? 0, colors: d.colors.map((c) => c.name), sizes: d.sizes, supplier: 'SanMar' };
-  const existing = get("SELECT id FROM products WHERE upper(sku) = upper(?) AND supplier = 'SanMar'", d.style);
+  if (!req.body.style) throw fail(400, 'Indica el estilo (ej. PC61)');
+  clearSanmarCache(req.body.style);
+  const d = await sanmar.buscarEstilo(req.body.style);
+  let costo = null;
+  try {
+    const precios = await sanmar.obtenerPrecios(d.estilo);
+    const costos = precios.map((p) => p.costo).filter((c) => c > 0);
+    if (costos.length) costo = Math.min(...costos);
+  } catch (e) {
+    if (e.codigo === 'CREDENCIALES') throw e; // otros errores de precios no impiden importar el producto
+  }
+  const data = { sku: d.estilo, name: d.titulo || d.estilo, brand: d.marca, base_cost: costo ?? 0, colors: d.colores.map((c) => c.nombre), sizes: d.tallas, supplier: 'SanMar' };
+  const existing = get("SELECT id FROM products WHERE upper(sku) = upper(?) AND supplier = 'SanMar'", d.estilo);
   if (existing) update('products', existing.id, data);
-  const id = existing ? existing.id : insert('products', { ...data, category: req.body.category || d.category || 'SanMar' });
+  const id = existing ? existing.id : insert('products', { ...data, category: req.body.category || 'SanMar' });
   return get('SELECT * FROM products WHERE id = ?', id);
 }));
 

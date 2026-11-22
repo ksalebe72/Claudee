@@ -83,18 +83,14 @@ const inches = (units, area) => (units / area.w) * area.inW;
 const areaOf = (design, loc) => design.areas?.[loc] || areaFor(design.garment, loc);
 
 // Fotos de SanMar por vista
-const VIEW_FIELDS = {
-  flat: { front: ['frontFlat', 'colorProductImage', 'productImage', 'frontModel'], back: ['backFlat', 'backModel'], side: ['sideModel', 'threeQModel'] },
-  model: { front: ['frontModel', 'colorProductImage', 'frontFlat'], back: ['backModel', 'backFlat'], side: ['sideModel', 'threeQModel'] },
-};
 const proxied = (u) => `/api/sanmar/image?u=${encodeURIComponent(u)}`;
+/** Fotos del color (formato services/sanmar) → vistas del decorador. */
 function viewsFromColor(color, kind) {
-  const views = {};
-  for (const [v, fields] of Object.entries(VIEW_FIELDS[kind])) {
-    const f = fields.find((k) => color.images?.[k]);
-    if (f) views[v] = proxied(color.images[f]);
-  }
-  return views;
+  const f = color.fotos || {};
+  const src = kind === 'model'
+    ? { front: f.modelo?.frente || f.frente, back: f.modelo?.espalda || f.espalda, side: f.lado }
+    : { front: f.plana?.frente || f.frente, back: f.plana?.espalda || f.espalda, side: f.lado };
+  return Object.fromEntries(Object.entries(src).filter(([, u]) => u).map(([v, u]) => [v, proxied(u)]));
 }
 const blobToDataUrl = (blob) => new Promise((ok, ko) => { const r = new FileReader(); r.onload = () => ok(r.result); r.onerror = ko; r.readAsDataURL(blob); });
 const photoCache = new Map();
@@ -453,13 +449,13 @@ export default function ProofDesigner({ job, methods, business, initialDesign, o
     try {
       const data = await api.get(`/sanmar/style/${encodeURIComponent(style.trim())}${refresh ? '?refresh=1' : ''}`);
       setSm(data);
-      setStyleInput(data.style);
+      setStyleInput(data.estilo);
       setSmState({ loading: false, error: null });
       if (apply) {
         const want = String(preferColor || '').toLowerCase().trim();
-        const color = data.colors.find((c) => c.name.toLowerCase() === want)
-          || data.colors.find((c) => want && (c.name.toLowerCase().includes(want) || want.includes(c.name.toLowerCase())))
-          || data.colors[0];
+        const color = data.colores.find((c) => c.nombre.toLowerCase() === want || String(c.codigo).toLowerCase() === want)
+          || data.colores.find((c) => want && (c.nombre.toLowerCase().includes(want) || want.includes(c.nombre.toLowerCase())))
+          || data.colores[0];
         if (color) applyColor(color, design.photo?.kind || 'flat', data);
       }
     } catch (e) {
@@ -468,16 +464,16 @@ export default function ProofDesigner({ job, methods, business, initialDesign, o
   }
   function applyColor(color, kind, data = sm) {
     const views = viewsFromColor(color, kind);
-    if (!Object.keys(views).length) { notify(`SanMar no tiene fotos para ${color.name}`, true); return; }
+    if (!Object.keys(views).length) { notify(`SanMar no tiene fotos para ${color.nombre}`, true); return; }
     const calibrated = data?.areas?.[kind];
     commit((d) => ({
-      ...d, colorName: color.name, color: colorHex(color.name),
-      photo: { source: 'sanmar', style: data.style, color: color.name, kind, views },
-      areas: calibrated || (d.photo?.style === data.style && d.photo?.kind === kind ? d.areas : undefined),
+      ...d, colorName: color.nombre, color: colorHex(color.nombre),
+      photo: { source: 'sanmar', style: data.estilo, color: color.nombre, kind, views },
+      areas: calibrated || (d.photo?.style === data.estilo && d.photo?.kind === kind ? d.areas : undefined),
     }));
   }
   function setPhotoKind(kind) {
-    const c = sm?.colors.find((x) => x.name === design.photo?.color);
+    const c = sm?.colores.find((x) => x.nombre === design.photo?.color);
     if (c) applyColor(c, kind);
   }
   async function uploadOwnPhoto(file) {
@@ -487,7 +483,7 @@ export default function ProofDesigner({ job, methods, business, initialDesign, o
   }
   function togglePhotoMode(on) {
     if (!on) { commit((d) => ({ ...d, photo: null, areas: undefined })); setEditArea(false); return; }
-    if (sm) { const c = sm.colors.find((x) => x.name === design.colorName) || sm.colors[0]; applyColor(c, 'flat'); }
+    if (sm) { const c = sm.colores.find((x) => x.nombre === design.colorName) || sm.colores[0]; applyColor(c, 'flat'); }
     else if (styleInput) loadSanmar(styleInput, design.colorName);
   }
   async function saveAreas() {
@@ -667,11 +663,11 @@ export default function ProofDesigner({ job, methods, business, initialDesign, o
             {smState.error && <p className="danger small">{smState.error}</p>}
             {sm && (
               <>
-                <div className="muted small">{sm.brand} {sm.style} · {sm.title}</div>
+                <div className="muted small">{sm.marca} {sm.estilo} · {sm.titulo}</div>
                 <div className="sm-colors">
-                  {sm.colors.map((c) => (
-                    <button key={c.name} title={c.name} className={`sm-color ${design.photo?.color === c.name ? 'on' : ''}`} onClick={() => applyColor(c, design.photo?.kind || 'flat')}>
-                      {c.swatch ? <img src={proxied(c.swatch)} alt="" /> : <span style={{ background: colorHex(c.name) }} />}
+                  {sm.colores.map((c) => (
+                    <button key={c.codigo || c.nombre} title={c.nombre} className={`sm-color ${design.photo?.color === c.nombre ? 'on' : ''}`} onClick={() => applyColor(c, design.photo?.kind || 'flat')}>
+                      {c.swatch ? <img src={proxied(c.swatch)} alt="" /> : <span style={{ background: colorHex(c.nombre) }} />}
                     </button>
                   ))}
                 </div>
@@ -680,7 +676,7 @@ export default function ProofDesigner({ job, methods, business, initialDesign, o
                   <button className={design.photo?.kind !== 'model' ? 'on' : ''} onClick={() => setPhotoKind('flat')}>Plana</button>
                   <button className={design.photo?.kind === 'model' ? 'on' : ''} onClick={() => setPhotoKind('model')}>Con modelo</button>
                 </div>
-                <button className="link-btn small" onClick={() => loadSanmar(sm.style, design.photo?.color, { refresh: true })}>↻ Actualizar desde SanMar</button>
+                <button className="link-btn small" onClick={() => loadSanmar(sm.estilo, design.photo?.color, { refresh: true })}>↻ Actualizar desde SanMar</button>
               </>
             )}
             <button className="link-btn small" onClick={() => photoRef.current.click()}>Usar mi propia foto para «{GARMENTS[design.garment].views[view]?.label}»</button>
