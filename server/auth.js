@@ -70,12 +70,19 @@ const wrap = (fn) => (req, res) => {
 
 authRouter.get('/auth/estado', wrap((req) => ({
   necesitaConfiguracion: get('SELECT COUNT(*) AS c FROM users').c === 0,
+  requiereCodigo: !!process.env.SETUP_CODE,
   marca: getBrand(),
   usuario: userFromRequest(req),
 })));
 
 authRouter.post('/auth/configurar', wrap((req, res) => {
   if (get('SELECT COUNT(*) AS c FROM users').c > 0) throw fail(400, 'La cuenta de la dueña ya existe.');
+  // En un servidor público, solo quien tenga el código de instalación (SETUP_CODE) puede crear la cuenta de la dueña.
+  if (process.env.SETUP_CODE) {
+    const a = Buffer.from(String(req.body.codigo || ''));
+    const b = Buffer.from(process.env.SETUP_CODE);
+    if (a.length !== b.length || !timingSafeEqual(a, b)) throw fail(403, 'Código de instalación incorrecto.');
+  }
   const { name, username, password } = req.body;
   if (!name || !username || String(password || '').length < 8) throw fail(400, 'Nombre, usuario y contraseña de al menos 8 caracteres.');
   const id = insert('users', { name, username: String(username).trim().toLowerCase(), password_hash: hashPassword(password), role: 'duena' });

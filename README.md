@@ -43,6 +43,12 @@ npm run demo
 
 Abre **http://localhost:3001**. La primera vez pide crear la cuenta de la dueña. El modo de prueba usa una base aparte (`data/demo.db`) con datos de ejemplo y **simuladores** de SanMar y de la IA (respuestas fijas), así que se puede probar todo sin claves. `npm run demo -- --reset` empieza de cero.
 
+## Publicarla en internet (Render)
+
+El repositorio ya trae `render.yaml`: en Render, **New → Blueprint**, eliges este repositorio y la rama, y Render crea el servicio con un disco persistente para la base, los archivos y los respaldos. La cuenta de la dueña solo se crea con el código de instalación (`SETUP_CODE`), que Render genera. Los respaldos se hacen cada día y se descargan desde **Ajustes → General → Respaldos**.
+
+Paso a paso completo: **[DESPLEGAR-EN-RENDER.md](DESPLEGAR-EN-RENDER.md)**.
+
 ## Cómo correrla
 
 Requiere **Node.js 22.13 o superior**. No usa base de datos externa: trae SQLite integrado y guarda todo en `data/taller.db`.

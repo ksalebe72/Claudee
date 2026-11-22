@@ -1,0 +1,39 @@
+# ColorPlus OS en Render (Blueprint). Render lee este archivo al crear el servicio con «New → Blueprint».
+# Guía paso a paso: DESPLEGAR-EN-RENDER.md
+services:
+  - type: web
+    name: colorplus-os
+    runtime: node
+    region: virginia            # el más cercano a Maryland
+    plan: starter               # el disco permanente requiere un plan de pago
+    branch: claude/hgl-deconetwork-app-mix-wnz1nc   # cámbialo a «main» si unes la rama
+    buildCommand: npm ci && npm run build
+    startCommand: npm start
+    healthCheckPath: /api/salud
+    autoDeploy: true            # publica solo cada vez que hay cambios en la rama
+    disk:
+      name: datos
+      mountPath: /var/data      # base de datos, archivos y respaldos viven aquí y no se borran
+      sizeGB: 1
+    envVars:
+      - key: NODE_VERSION
+        value: "22"
+      - key: DB_PATH
+        value: /var/data/colorplus.db
+      - key: UPLOAD_DIR
+        value: /var/data/uploads
+      - key: BACKUP_DIR
+        value: /var/data/respaldos
+      - key: SEED_DEMO
+        value: "0"              # sin datos de ejemplo
+      - key: SETUP_CODE
+        generateValue: true     # código para crear la cuenta de la dueña (lo ves en Environment)
+      # Secretos: Render los pide al crear el servicio; nunca van en el código.
+      - key: ANTHROPIC_API_KEY
+        sync: false
+      - key: SANMAR_CUSTOMER_NUMBER
+        sync: false
+      - key: SANMAR_USERNAME
+        sync: false
+      - key: SANMAR_PASSWORD
+        sync: false

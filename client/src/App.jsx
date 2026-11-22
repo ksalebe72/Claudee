@@ -66,7 +66,7 @@ export default function App() {
     return <Routes><Route path="/portal/:token" element={<Portal />} /></Routes>;
   }
   if (!auth) return <div className="loading">Cargando…</div>;
-  if (!auth.usuario) return <Login setup={auth.necesitaConfiguracion} brand={auth.marca} onDone={(u) => setAuth((a) => ({ ...a, necesitaConfiguracion: false, usuario: u }))} />;
+  if (!auth.usuario) return <Login setup={auth.necesitaConfiguracion} requiereCodigo={auth.requiereCodigo} brand={auth.marca} onDone={(u) => setAuth((a) => ({ ...a, necesitaConfiguracion: false, usuario: u }))} />;
   if (!meta) return <div className="loading">Cargando…</div>;
 
   const user = auth.usuario;

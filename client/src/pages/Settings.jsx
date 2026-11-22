@@ -307,6 +307,7 @@ function General({ notify }) {
     <div className="settings-grid">
       <Marca notify={notify} />
       <EstadoIA />
+      <Respaldos notify={notify} />
       <form className="card form" onSubmit={save}>
         <h3>Negocio</h3>
         <Field label="Nombre del negocio"><input value={f.business_name} onChange={(e) => setF({ ...f, business_name: e.target.value })} /></Field>
@@ -392,6 +393,29 @@ function EstadoIA() {
         </table>
       )}
       <p className="muted small">La IA arma borradores y responde preguntas; no guarda, no envía ni cobra nada por su cuenta. Límite: 40 consultas por hora por usuario. El costo se ve en console.anthropic.com.</p>
+    </section>
+  );
+}
+
+function Respaldos({ notify }) {
+  const [lista, reload] = useLoad(() => api.get('/respaldos'));
+  const [busy, setBusy] = useState(false);
+  async function ahora() {
+    setBusy(true);
+    try { await api.post('/respaldos'); notify('Respaldo creado'); reload(); } catch (e) { notify(e.message, true); }
+    setBusy(false);
+  }
+  const mb = (b) => `${(b / 1024 / 1024).toFixed(2)} MB`;
+  return (
+    <section className="card">
+      <div className="row between"><h3>Respaldos de la base de datos</h3><button className="btn" disabled={busy} onClick={ahora}>{busy ? 'Creando…' : 'Respaldar ahora'}</button></div>
+      <p className="muted small">Se crea uno automático cada día y se guardan los últimos 14 en el servidor. <strong>Descarga uno cada semana</strong> y guárdalo en tu Drive: así tienes una copia fuera del servidor.</p>
+      <ul className="list">
+        {lista?.map((r) => (
+          <li key={r.nombre}><span>{r.nombre}</span><span className="muted small">{mb(r.bytes)}</span><a className="btn" href={`/api/respaldos/${encodeURIComponent(r.nombre)}`}>⬇ Descargar</a></li>
+        ))}
+        {lista && !lista.length && <li className="muted">Todavía no hay respaldos.</li>}
+      </ul>
     </section>
   );
 }

@@ -4,14 +4,14 @@ import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
-export async function startServer({ env = {}, port } = {}) {
+export async function startServer({ env = {}, port, skipSetup = false } = {}) {
   const dir = mkdtempSync(join(tmpdir(), 'colorplus-'));
   const PORT = port || 4100 + Math.floor(Math.random() * 800);
   const B = `http://localhost:${PORT}/api`;
   let salida = '';
   const proc = spawn(process.execPath, ['server/index.js'], {
     stdio: ['ignore', 'pipe', 'pipe'],
-    env: { ...process.env, PORT, DB_PATH: join(dir, 't.db'), SANMAR_CUSTOMER_NUMBER: '', SANMAR_USERNAME: '', SANMAR_PASSWORD: '', ...env },
+    env: { ...process.env, PORT, DB_PATH: join(dir, 't.db'), SANMAR_CUSTOMER_NUMBER: '', SANMAR_USERNAME: '', SANMAR_PASSWORD: '', SETUP_CODE: '', BACKUP_DISABLED: '1', ...env },
   });
   proc.stdout.on('data', (d) => (salida += d));
   proc.stderr.on('data', (d) => (salida += d));
@@ -34,8 +34,11 @@ export async function startServer({ env = {}, port } = {}) {
   };
 
   const cookieOf = (res) => res.headers.get('set-cookie').split(';')[0];
-  const setup = await fetch(B + '/auth/configurar', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ name: 'Dueña', username: 'duena', password: 'ClaveDuena123' }) });
-  const duena = client(cookieOf(setup));
+  let duena = null;
+  if (!skipSetup) {
+    const setup = await fetch(B + '/auth/configurar', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ name: 'Dueña', username: 'duena', password: 'ClaveDuena123', codigo: env.SETUP_CODE }) });
+    duena = client(cookieOf(setup));
+  }
 
   async function userWithRole(role, salesperson_id = null) {
     const username = `${role}${Math.floor(Math.random() * 1e6)}`;
@@ -45,7 +48,7 @@ export async function startServer({ env = {}, port } = {}) {
   }
 
   return {
-    B, duena, anon: client(null), userWithRole, salida: () => salida,
+    B, dir, duena, anon: client(null), userWithRole, salida: () => salida,
     stop() { proc.kill(); rmSync(dir, { recursive: true, force: true }); },
   };
 }

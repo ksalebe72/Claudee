@@ -1,6 +1,6 @@
 import express from 'express';
 import { randomBytes } from 'node:crypto';
-import { writeFileSync } from 'node:fs';
+import { writeFileSync, mkdirSync } from 'node:fs';
 import { resolve, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { all, get, run, insert, update, getSetting, setSetting, transaction } from './db.js';
@@ -14,7 +14,9 @@ import { iaConfigurada } from './ia.js';
 import { sendMessage } from './messaging.js';
 import { sanmar, sanmarConfigured, cacheImage, getStyleAreas, setStyleAreas, clearSanmarCache } from './sanmar.js';
 
-export const UPLOAD_DIR = resolve(dirname(fileURLToPath(import.meta.url)), 'uploads');
+// Carpeta de archivos (pruebas de arte, logos, fotos de SanMar). En producción va en el disco permanente.
+export const UPLOAD_DIR = process.env.UPLOAD_DIR || resolve(dirname(fileURLToPath(import.meta.url)), 'uploads');
+mkdirSync(UPLOAD_DIR, { recursive: true });
 
 export const OPP_STAGES = ['nuevo', 'contactado', 'cotizado', 'negociacion', 'ganado', 'perdido'];
 export const QUOTE_STATUSES = ['borrador', 'enviada', 'aprobada', 'rechazada'];
