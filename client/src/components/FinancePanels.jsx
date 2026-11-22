@@ -90,7 +90,9 @@ export function VendedorCard({ job, set, vendedores, reglas, editable }) {
         <label className="field"><span>Vendedor</span>
           <select disabled={!editable} value={job.salesperson_id || ''} onChange={(e) => {
             const sp = e.target.value ? Number(e.target.value) : null;
-            const propias = reglas.filter((r) => r.active && r.salesperson_id === sp);
+            // Las reglas especiales (wraps) no se sugieren solas: se eligen a mano en la orden
+            const especial = (r) => /wrap/i.test(r.name);
+            const propias = reglas.filter((r) => r.active && r.salesperson_id === sp).sort((a, b) => especial(a) - especial(b));
             const sugerida = propias.find((r) => !r.client_type || r.client_type === job.client_status) || propias[0] || reglas.find((r) => r.name === 'Sin comisión');
             set({ salesperson_id: sp, commission_rule_id: sugerida?.id || null });
           }}>
