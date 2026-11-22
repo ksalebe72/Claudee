@@ -24,22 +24,51 @@ export function snapshotFromProduct(p, prev = {}) {
 const blank = (v) => (v == null ? '' : v);
 const pend = (v, txt = 'pendiente') => (v == null ? <span className="warn-txt">{txt}</span> : money(v));
 
-/** Escribe un estilo de SanMar (ej. PC61) y lo trae al catálogo y a la línea. */
-function TraerSanmar({ onImport, onPick }) {
-  const [estilo, setEstilo] = React.useState('');
-  const [estado, setEstado] = React.useState({ cargando: false, error: '' });
-  const traer = async () => {
-    if (!estilo.trim()) return;
-    setEstado({ cargando: true, error: '' });
-    try { onPick(await onImport(estilo.trim())); setEstilo(''); setEstado({ cargando: false, error: '' }); }
-    catch (e) { setEstado({ cargando: false, error: e.message }); }
+/**
+ * Casilla única para la prenda: escribes el código (ej. PC61) y la línea se llena sola.
+ * Primero busca en el catálogo; si no está y SanMar está conectado, lo trae de SanMar.
+ */
+function CodigoPrenda({ idx, item, products, editable, onImport, onPick }) {
+  const prendas = products.filter((p) => p.kind !== 'servicio');
+  const actual = prendas.find((p) => p.id === Number(item.product_id));
+  const [codigo, setCodigo] = React.useState(actual?.sku || '');
+  const [estado, setEstado] = React.useState({ tipo: '', texto: '' });
+  const ultimo = React.useRef(actual?.sku?.toUpperCase() || '');
+
+  React.useEffect(() => { if (actual) { setCodigo(actual.sku); ultimo.current = actual.sku.toUpperCase(); } }, [actual?.id]);
+
+  const buscar = async (valor = codigo) => {
+    const c = valor.trim().toUpperCase();
+    if (c.length < 2 || c === ultimo.current) return;
+    ultimo.current = c;
+    const enCatalogo = prendas.find((p) => String(p.sku).toUpperCase() === c);
+    if (enCatalogo) { onPick(enCatalogo); setEstado({ tipo: '', texto: '' }); return; }
+    if (!onImport) { setEstado({ tipo: 'warn', texto: 'No está en el catálogo (SanMar no está conectado).' }); return; }
+    setEstado({ tipo: 'info', texto: 'Buscando en SanMar…' });
+    try {
+      const p = await onImport(c);
+      if (ultimo.current !== c) return; // el usuario ya escribió otro código
+      onPick(p); setEstado({ tipo: '', texto: '' });
+    } catch (e) {
+      if (ultimo.current === c) setEstado({ tipo: 'warn', texto: e.message });
+    }
   };
+
+  // Busca sola cuando dejas de escribir
+  React.useEffect(() => {
+    if (!editable) return undefined;
+    const t = setTimeout(() => buscar(), 900);
+    return () => clearTimeout(t);
+  }, [codigo]);
+
   return (
-    <div className="row gap wrap sanmar-traer">
-      <input value={estilo} placeholder="Estilo SanMar (ej. PC61)" onChange={(e) => setEstilo(e.target.value.toUpperCase())}
-        onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); traer(); } }} style={{ maxWidth: 200 }} />
-      <button type="button" className="btn" disabled={estado.cargando || !estilo.trim()} onClick={traer}>{estado.cargando ? 'Buscando…' : '⬇ Traer de SanMar'}</button>
-      {estado.error && <span className="warn-txt">{estado.error}</span>}
+    <div className="codigo-prenda">
+      <input list={`prendas-${idx}`} disabled={!editable} value={codigo} placeholder="Código de prenda (ej. PC61)"
+        onChange={(e) => { setCodigo(e.target.value.toUpperCase()); setEstado({ tipo: '', texto: '' }); }}
+        onBlur={() => buscar()} onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); buscar(); } }} />
+      <datalist id={`prendas-${idx}`}>{prendas.map((p) => <option key={p.id} value={p.sku}>{p.brand} · {p.name}</option>)}</datalist>
+      {estado.texto ? <small className={estado.tipo === 'warn' ? 'warn-txt' : 'muted'}>{estado.texto}</small>
+        : actual ? <small className="muted">{actual.brand} · {actual.name}</small> : null}
     </div>
   );
 }
@@ -86,10 +115,7 @@ export function LineEditor({ idx, item, calc, products, editable, onChange, onRe
     <section className="card item">
       <div className="item-head">
         <span className="item-n">{idx + 1}</span>
-        <select disabled={!editable} value={item.product_id || ''} onChange={(e) => set(snapshotFromProduct(products.find((p) => p.id === Number(e.target.value)), item))}>
-          <option value="">— Prenda del catálogo —</option>
-          {products.filter((p) => p.kind !== 'servicio').map((p) => <option key={p.id} value={p.id}>{p.brand} {p.sku} · {p.name}</option>)}
-        </select>
+        <CodigoPrenda idx={idx} item={item} products={products} editable={editable} onImport={onImportSanmar} onPick={(p) => set(snapshotFromProduct(p, item))} />
         {product?.colors?.length > 0 && (
           <select disabled={!editable} value={item.color} onChange={(e) => set({ color: e.target.value })}>
             {product.colors.map((c) => <option key={c}>{c}</option>)}
@@ -100,7 +126,6 @@ export function LineEditor({ idx, item, calc, products, editable, onChange, onRe
           {editable && <button className="icon-btn" title="Quitar" onClick={onRemove}>🗑</button>}
         </div>
       </div>
-      {editable && onImportSanmar && <TraerSanmar onImport={onImportSanmar} onPick={(p) => set(snapshotFromProduct(p, item))} />}
       <input className="desc" disabled={!editable} value={item.description} placeholder="Descripción" onChange={(e) => set({ description: e.target.value })} />
 
       <div className="sizes">

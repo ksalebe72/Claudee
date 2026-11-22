@@ -230,6 +230,9 @@ input.mini { width: 76px; text-align: right; padding: 4px 6px; }
 .item { display: flex; flex-direction: column; gap: 10px; }
 .item-head { display: flex; gap: 8px; align-items: center; }
 .item-head select:first-of-type { flex: 1; }
+.codigo-prenda { flex: 1; display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.codigo-prenda input { width: 100%; font-weight: 600; letter-spacing: .02em; }
+.item-head .codigo-prenda + select { flex: 0 0 auto; min-width: 150px; }
 .item-n { width: 26px; height: 26px; border-radius: 50%; background: var(--primary-soft); color: var(--primary); display: grid; place-items: center; font-weight: 700; flex-shrink: 0; }
 .item-actions { display: flex; }
 .desc { width: 100%; }
