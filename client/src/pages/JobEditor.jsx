@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
+import { Link, useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { api, fileToDataUrl } from '../api.js';
 import { money, fmtDate, fmtDateTime, label, today, useLoad } from '../utils.js';
 import { Badge, Field, PageHeader, useMeta, useToast } from '../components/ui.jsx';
@@ -25,6 +25,7 @@ export default function JobEditor() {
   const { id } = useParams();
   const [params] = useSearchParams();
   const nav = useNavigate();
+  const ubicacion = useLocation();
   const meta = useMeta();
   const user = meta.user;
   const [products, , setProducts] = useLoad(() => api.get('/products'));
@@ -61,6 +62,14 @@ export default function JobEditor() {
     }
   }, [id]);
 
+  // Viene de «🎨 Proof» en una orden nueva: al guardarse, se abre el decorador
+  useEffect(() => {
+    if (id && job?.id === Number(id) && ubicacion.state?.abrirDecorador) {
+      setDesigner({ initialDesign: null });
+      nav(ubicacion.pathname, { replace: true, state: null });
+    }
+  }, [id, job?.id, ubicacion.state]);
+
   const cfg = job?.pricing?.config || tarifas?.config;
   const calcs = useMemo(() => (job && cfg ? job.items.map((it) => calcularLinea(it, cfg)) : []), [job, cfg]);
   const finPreview = useMemo(() => {
@@ -85,7 +94,7 @@ export default function JobEditor() {
   const set = (patch) => { setJob((j) => ({ ...j, ...patch })); setDirty(true); };
   const setItem = (idx, patch) => set({ items: job.items.map((it, i) => (i === idx ? { ...it, ...patch } : it)) });
 
-  async function save() {
+  async function save({ abrirDecorador = false } = {}) {
     const body = {
       title: job.title || 'Cotización', contact_id: job.contact_id || null, opportunity_id: job.opportunity_id || null,
       due_date: job.due_date || null, priority: job.priority, assignee: job.assignee, notes: job.notes,
@@ -97,7 +106,7 @@ export default function JobEditor() {
     try {
       const saved = id ? await api.put(`/jobs/${id}`, body) : await api.post('/jobs', body);
       setJob(saved); setDirty(false); notify('Guardado');
-      if (!id) nav(`/trabajos/${saved.id}`, { replace: true });
+      if (!id) nav(`/trabajos/${saved.id}`, { replace: true, state: abrirDecorador ? { abrirDecorador: true } : undefined });
       return saved;
     } catch (e) { notify(e.message, true); return null; }
   }
@@ -118,6 +127,16 @@ export default function JobEditor() {
     try { setJob(await api.put(`/jobs/${job.id}`, { invoice_date: v })); notify('Fecha de factura actualizada'); } catch (e) { notify(e.message, true); }
   }
 
+  async function abrirDecorador(proof = null) {
+    if (!job.items.some((it) => it.product_id || it.description)) return notify('Agrega primero la prenda a la orden.', true);
+    if (!id) { await save({ abrirDecorador: true }); return; } // al guardar se abre solo
+    if (dirty && !(await save())) return;
+    try {
+      const initialDesign = proof ? await api.get(`/proofs/${proof.id}/design`) : null;
+      setDesigner({ initialDesign });
+    } catch (e) { notify(e.message, true); }
+  }
+
   const contactOpps = (opps || []).filter((o) => o.contact_id === Number(job.contact_id));
   const docNumber = isOrder ? job.order_number : job.number;
   const bloqueado = !fin.aprobacion.ok;
@@ -125,6 +144,7 @@ export default function JobEditor() {
   return (
     <div className="job-editor">
       <PageHeader title={id ? `${docNumber} · ${job.title}` : 'Nueva cotización'} subtitle={id && <>{isOrder ? `De la cotización ${job.number}` : 'Cotización'} · <Badge status={job.status} /> · tarifas v{job.pricing_version_id}</>}>
+        <button className="btn primary" onClick={() => abrirDecorador()}>🎨 Proof</button>
         {id && meta.integrations?.ia && <button className="btn ia-btn" onClick={() => setRedactar(true)}>✨ Redactar mensaje</button>}
         {id && <button className="btn" onClick={() => window.print()}>Imprimir</button>}
         {id && <button className="btn" onClick={duplicate}>Duplicar</button>}
@@ -225,6 +245,7 @@ export default function JobEditor() {
         </div>
 
         <div className="stack sticky">
+          {id && <Proofs job={job} setJob={setJob} notify={notify} onDesign={abrirDecorador} />}
           <RentabilidadCard fin={fin} preview={dirty} margen={cfg.margen} user={user} jobId={job.id} notify={notify} onUpdated={reload} />
           {id && isOrder && (
             <section className="card">
@@ -237,13 +258,6 @@ export default function JobEditor() {
           {id && <Payments job={job} setJob={setJob} notify={notify} deposit={meta.settings.deposit_pct} canDelete={finanzasRol} />}
           {id && isOrder && <CostosRealesCard job={job} user={user} onUpdated={reload} notify={notify} />}
           {id && isOrder && <CreditosCard job={job} user={user} onUpdated={reload} notify={notify} />}
-          {id && <Proofs job={job} setJob={setJob} notify={notify} onDesign={async (proof) => {
-            if (dirty && !(await save())) return;
-            try {
-              const initialDesign = proof ? await api.get(`/proofs/${proof.id}/design`) : null;
-              setDesigner({ initialDesign });
-            } catch (e) { notify(e.message, true); }
-          }} />}
           {id && job.contact && (
             <section className="card">
               <h3>Cliente</h3>
