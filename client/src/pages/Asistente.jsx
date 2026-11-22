@@ -43,20 +43,21 @@ export default function Asistente() {
   if (!meta.integrations?.ia) {
     return (
       <>
-        <PageHeader title="Asistente del negocio" />
-        <div className="card narrow"><p>La IA no está configurada en el servidor. Falta la variable <code>ANTHROPIC_API_KEY</code> (ver README → Inteligencia artificial).</p></div>
+        <PageHeader title="Don Pixel" />
+        <div className="card narrow"><p>Don Pixel todavía no está conectado: falta la clave de la IA (<code>ANTHROPIC_API_KEY</code>) en Render → Environment. Cuando la pongas, Render reinicia la app y Don Pixel queda listo.</p></div>
       </>
     );
   }
 
   return (
     <>
-      <PageHeader title="✨ Asistente del negocio" subtitle="Pregunta sobre ventas, márgenes, cobros y comisiones. Solo lee los datos: no cambia nada." >
+      <PageHeader title="✨ Don Pixel" subtitle="Tu asistente del negocio: pregúntale sobre ventas, márgenes, cobros y comisiones. Solo lee los datos; no cambia nada." >
         {chat.length > 0 && <button className="btn" onClick={() => setChat([])}>Nueva conversación</button>}
       </PageHeader>
       <div className="assistant">
         {chat.length === 0 && (
           <div className="suggestions">
+            <p className="don-pixel-saludo">¡Hola, soy <strong>Don Pixel</strong>! Conozco las cotizaciones, órdenes, cobros y comisiones de Color Plus. ¿Qué quieres saber?</p>
             {SUGERENCIAS.map((s) => <button key={s} className="chip" onClick={() => preguntar(s)}>{s}</button>)}
           </div>
         )}
@@ -66,14 +67,14 @@ export default function Asistente() {
               {m.role === 'assistant' ? <Markdown text={m.content} /> : m.content}
             </div>
           ))}
-          {busy && <div className="msg assistant typing">Revisando los datos…</div>}
+          {busy && <div className="msg assistant typing">Don Pixel está revisando los datos…</div>}
           <div ref={fin} />
         </div>
         <form className="ask" onSubmit={(e) => { e.preventDefault(); preguntar(); }}>
-          <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Escribe tu pregunta…" disabled={busy} autoFocus />
+          <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Pregúntale a Don Pixel…" disabled={busy} autoFocus />
           <button className="btn primary" disabled={busy || !q.trim()}>Preguntar</button>
         </form>
-        <p className="muted small">Las respuestas usan los datos de ColorPlus OS al momento de preguntar (últimos ~13 meses). La IA puede equivocarse: verifica las cifras importantes en Reportes.</p>
+        <p className="muted small">Las respuestas usan los datos de ColorPlus OS al momento de preguntar (últimos ~13 meses). Don Pixel puede equivocarse: verifica las cifras importantes en Reportes.</p>
       </div>
       {toast}
     </>

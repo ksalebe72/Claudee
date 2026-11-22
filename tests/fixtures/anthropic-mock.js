@@ -31,7 +31,7 @@ export function startAnthropicMock(port) {
           notas: 'Logo en blanco', dudas: ['¿Tienen el logo en vector?'], idiomaCliente: 'es',
         });
       } else if (sistema.includes('analista interno')) {
-        texto = 'Respuesta del **simulador** (no es la IA real):\n\n| Orden | Cliente | Contribución |\n|---|---|---|\n| OT-2001 | Iglesia Vida Nueva | 28.9% |\n\n- Está bajo el mínimo de 30% por la comisión de 25%.\n- Ya tiene aprobación de la dueña.';
+        texto = 'Respuesta del **simulador** (no es la IA real):\n\n| Orden | Cliente | Contribución |\n|---|---|---|\n| OT-2001 | Iglesia Vida Nueva | 28.9% |\n\n- Está bajo el mínimo de 30% por la comisión de 25%.\n- Ya tiene aprobación del dueño.';
       } else {
         texto = JSON.stringify({ asunto: 'Tu cotización de Color Plus', mensaje: 'Hola, aquí tienes tu cotización. El equipo de Color Plus', canalSugerido: 'email' });
       }
