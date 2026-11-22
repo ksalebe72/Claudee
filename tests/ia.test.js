@@ -137,3 +137,17 @@ test('Don Pixel responde emails: borrador sin costos, el email va aislado y resp
   await logi.post('/ia/ideas-venta', {});
   assert.ok(!mock.peticiones[antes].raw.includes('totalComprado'), 'Logística sin montos');
 });
+
+test('probar conexión: el dueño confirma que la clave funciona; otros no pueden', async () => {
+  const r = await s.duena.post('/ia/probar');
+  assert.equal(r.ok, true);
+  assert.match(r.respuesta, /Don Pixel/);
+  assert.equal((await ventas.call('POST', '/ia/probar')).status, 403);
+  assert.equal((await sinClave.duena.call('POST', '/ia/probar')).status, 503);
+  mock.setModo('auth');
+  try {
+    const mal = await s.duena.call('POST', '/ia/probar');
+    assert.equal(mal.status, 502);
+    assert.match(mal.body.error, /Render → Environment/);
+  } finally { mock.setModo('normal'); }
+});

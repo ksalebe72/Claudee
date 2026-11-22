@@ -414,13 +414,26 @@ function Marca({ notify }) {
 }
 
 function EstadoIA() {
+  const meta = useMeta();
   const [e] = useLoad(() => api.get('/ia/estado'));
+  const [prueba, setPrueba] = useState(null);
   if (!e) return null;
-  const NOMBRES = { cotizar: 'Cotizar desde mensaje', preguntar: 'Don Pixel (preguntas)', redactar: 'Redactar mensajes', email: 'Don Pixel (responder emails)', ideas: 'Don Pixel (ideas de venta)' };
+  async function probar() {
+    setPrueba({ cargando: true });
+    try { setPrueba(await api.post('/ia/probar')); } catch (err) { setPrueba({ error: err.message }); }
+  }
+  const NOMBRES = { prueba: 'Prueba de conexión', cotizar: 'Cotizar desde mensaje', preguntar: 'Don Pixel (preguntas)', redactar: 'Redactar mensajes', email: 'Don Pixel (responder emails)', ideas: 'Don Pixel (ideas de venta)' };
   return (
     <section className="card">
       <h3>✨ Inteligencia artificial</h3>
-      {e.configurada ? <p className="ok">Activa · modelo <code>{e.modelo}</code></p> : <p className="warn-txt">Desactivada: falta ANTHROPIC_API_KEY en el servidor (ver README).</p>}
+      {e.configurada ? <p className="ok">Clave cargada · modelo <code>{e.modelo}</code></p> : <p className="warn-txt">Don Pixel no está conectado: falta <code>ANTHROPIC_API_KEY</code> en Render → Environment.</p>}
+      {e.configurada && meta.user.role === 'duena' && (
+        <div className="row gap wrap">
+          <button className="btn" onClick={probar} disabled={prueba?.cargando}>{prueba?.cargando ? 'Probando…' : '🔌 Probar conexión'}</button>
+          {prueba?.ok && <span className="ok small">✓ Conectado. Don Pixel dice: «{prueba.respuesta}»</span>}
+          {prueba?.error && <span className="danger small">✗ {prueba.error}</span>}
+        </div>
+      )}
       {e.usoDelMes?.length > 0 && (
         <table className="table mini-table">
           <thead><tr><th>Uso de este mes</th><th className="num">Consultas</th><th className="num">Tokens</th></tr></thead>

@@ -2,7 +2,7 @@
 import express from 'express';
 import { get, insert } from './db.js';
 import { requireRole } from './auth.js';
-import { iaConfigurada, IA_MODEL, cotizarDesdeMensaje, preguntarAlNegocio, redactarMensaje, TIPOS_MENSAJE, usoDelMes, responderEmail, ideasDeVenta, ENFOQUES_IDEAS } from './ia.js';
+import { iaConfigurada, IA_MODEL, cotizarDesdeMensaje, preguntarAlNegocio, redactarMensaje, TIPOS_MENSAJE, usoDelMes, responderEmail, ideasDeVenta, ENFOQUES_IDEAS, probarConexion } from './ia.js';
 
 const r = express.Router();
 const wrap = (fn) => async (req, res) => {
@@ -17,6 +17,8 @@ r.get('/ia/estado', wrap((req) => ({
   configurada: iaConfigurada(), modelo: IA_MODEL, tiposMensaje: TIPOS_MENSAJE,
   ...(req.user.role === 'duena' ? { usoDelMes: usoDelMes() } : {}),
 })));
+
+r.post('/ia/probar', wrap((req) => { requireRole(req, 'duena'); return probarConexion(req.user); }));
 
 r.post('/ia/cotizar', wrap((req) => cotizarDesdeMensaje(req.body.texto, req.user)));
 

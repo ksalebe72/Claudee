@@ -50,8 +50,9 @@ function registrarUso(feature, user, response) {
 /** Traduce los errores del SDK a mensajes claros (sin exponer detalles internos). */
 function errorIA(e) {
   if (e.status && !e.error && !(e instanceof Anthropic.APIError)) return e; // errores propios
-  if (e instanceof Anthropic.AuthenticationError || e instanceof Anthropic.PermissionDeniedError) return fail(502, 'La clave de IA no es válida o no tiene permiso. Revisa ANTHROPIC_API_KEY.');
+  if (e instanceof Anthropic.AuthenticationError || e instanceof Anthropic.PermissionDeniedError) return fail(502, 'La clave de IA no es válida o no tiene permiso. Revisa ANTHROPIC_API_KEY en Render → Environment (que esté completa y sin espacios).');
   if (e instanceof Anthropic.RateLimitError) return fail(429, 'La IA está recibiendo demasiadas consultas. Intenta en un minuto.');
+  if (e instanceof Anthropic.BadRequestError && /credit|balance|billing/i.test(e.message || '')) return fail(402, 'Tu cuenta de Anthropic no tiene crédito. Recárgala en console.anthropic.com → Billing.');
   if (e instanceof Anthropic.BadRequestError) return fail(502, 'La IA rechazó la petición (formato no válido).');
   if (e instanceof Anthropic.APIConnectionTimeoutError || e instanceof Anthropic.APIConnectionError) return fail(504, 'No se pudo conectar con la IA. Revisa la conexión a internet del servidor.');
   if (e instanceof Anthropic.APIError) return fail(502, `La IA respondió con un error (${e.status ?? 'sin código'}).`);
@@ -439,6 +440,20 @@ export async function ideasDeVenta({ enfoque, extra }, user) {
     registrarUso('ideas', user, r);
     revisarRespuesta(r);
     return { ideas: textoDe(r) };
+  } catch (e) { throw errorIA(e); }
+}
+
+/** Prueba real de conexión (unos pocos tokens): confirma que la clave, el crédito y el modelo funcionan. */
+export async function probarConexion(user) {
+  try {
+    const r = await cliente().beta.messages.create({
+      ...BASE,
+      max_tokens: 200,
+      system: 'Eres Don Pixel, el asistente de Color Plus LLC. Esto es una prueba de conexión.',
+      messages: [{ role: 'user', content: 'Saluda al equipo en una sola frase corta, en español.' }],
+    });
+    registrarUso('prueba', user, r);
+    return { ok: true, respuesta: textoDe(r), modelo: r.model };
   } catch (e) { throw errorIA(e); }
 }
 

@@ -30,6 +30,8 @@ export function startAnthropicMock(port) {
           }],
           notas: 'Logo en blanco', dudas: ['¿Tienen el logo en vector?'], idiomaCliente: 'es',
         });
+      } else if (sistema.includes('prueba de conexión')) {
+        texto = '¡Hola equipo! Soy Don Pixel (simulador) y estoy listo para ayudar.';
       } else if (sistema.includes('responder correos')) {
         texto = JSON.stringify({ asunto: 'Re: Camisetas para el evento', respuesta: 'Hola Ana, gracias por escribirnos. Con gusto te preparamos la cotización. — Color Plus', puntosAConfirmar: ['Cantidad por talla', 'Fecha del evento'], idioma: 'es' });
       } else if (sistema.includes('ideas de venta')) {
