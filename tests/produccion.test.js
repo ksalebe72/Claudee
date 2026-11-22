@@ -90,6 +90,7 @@ test('una base con tarifas anteriores pasa a «aplicación DTF una vez por prend
     // tabla de precios original (con el salto a $25)
     cfg.dtf.primera = [{ hasta: 15, precio: 6 }, { hasta: 95, precio: 10.5 }, { hasta: 105, precio: 11.5 }, { hasta: null, precio: 25 }];
     cfg.dtf.adicional = [{ hasta: 15, precio: 1 }, { hasta: 95, precio: 5.5 }, { hasta: null, precio: 25 }];
+    cfg.bordado.filas = [{ puntadasHasta: null, cantidadDesde: 1, costo: 4.5, precio: 6 }];
     db.prepare("INSERT INTO pricing_versions (config, note, created_by) VALUES (?, 'antigua', 'sistema')").run(JSON.stringify(cfg));
     const vieja = Number(db.prepare('SELECT max(id) AS id FROM pricing_versions').get().id);
     db.close();
@@ -103,6 +104,7 @@ test('una base con tarifas anteriores pasa a «aplicación DTF una vez por prend
       assert.equal(actual.config.dtf.aplicacionPor, 'prenda');
       assert.ok(actual.id > vieja);
       assert.equal(actual.config.dtf.costoModo, 'hoja');
+      assert.deepEqual(actual.config.bordado.filas, [{ puntadasHasta: null, cantidadDesde: 1, costo: 4.5, precio: 7.5 }], 'bordado a $7.50');
       assert.equal(actual.config.dtf.primera.find((f) => f.hasta === 144).precio, 13, 'sin el salto a $25');
       assert.ok(!actual.config.dtf.primera.some((f) => f.precio === 25) && !actual.config.dtf.adicional.some((f) => f.precio === 25));
       assert.deepEqual(actual.config.dtf.hoja, { ancho: 12, alto: 12, costo: 4, aprovechamiento: 1 });
@@ -121,5 +123,5 @@ test('el ajuste a meta de una línea se guarda y se recalcula en el servidor', a
   const q = await s.duena.post('/jobs', { title: 'Ajuste', items: [{ product_id: prod.id, sizes: { M: 10 }, ajuste_pct: 0.25, decorations: [{ process: 'bordado', location: 'Pecho izquierdo' }] }] });
   assert.equal(q.items[0].ajuste_pct, 0.25);
   assert.equal(q.items[0].calc.prenda.tallas[0].precio, 11, '$8.80 + 25%');
-  assert.equal(q.items[0].calc.decoraciones[0].precioPieza, 7.5, 'bordado $6 + 25%');
+  assert.equal(q.items[0].calc.decoraciones[0].precioPieza, 9.38, 'bordado $7.50 + 25%');
 });

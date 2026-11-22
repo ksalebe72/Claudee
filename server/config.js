@@ -49,10 +49,11 @@ export function ensurePricing() {
     cfg.dtf.adicional = structuredClone(DEFAULT_PRICING.dtf.adicional);
     notas.push('precios DTF sin el salto a $25');
   }
-  const BORDADO_ORIGINAL = [{ puntadasHasta: null, cantidadDesde: 1, costo: 4.5, precio: 4.5 }];
-  if (igual(raw.bordado?.filas, BORDADO_ORIGINAL)) {
+  // Bordado: precio al cliente $7.50 por logo (antes $4.50 y luego $6); solo si la tabla no fue editada a mano
+  const bordadoAnteriores = [4.5, 6].map((precio) => [{ puntadasHasta: null, cantidadDesde: 1, costo: 4.5, precio }]);
+  if (bordadoAnteriores.some((t) => igual(raw.bordado?.filas, t))) {
     cfg.bordado.filas = structuredClone(DEFAULT_PRICING.bordado.filas);
-    notas.push('bordado a $6 por logo para el cliente');
+    notas.push('bordado a $7.50 por logo para el cliente');
   }
   if (!notas.length) return;
   migrando = true;

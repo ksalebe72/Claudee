@@ -20,7 +20,7 @@ export const DEFAULT_PRICING = {
   },
   bordado: {
     // puntadasHasta null = cualquier cantidad de puntadas; cantidadDesde = desde N piezas.
-    filas: [{ puntadasHasta: null, cantidadDesde: 1, costo: 4.5, precio: 6.0 }], // costo $4.50 · precio al cliente $6 (dueña)
+    filas: [{ puntadasHasta: null, cantidadDesde: 1, costo: 4.5, precio: 7.5 }], // costo $4.50 · precio al cliente $7.50 (dueña)
   },
   dtf: {
     // Costo del material: 'hoja' = hojas de 12×12 (se cuentan las hojas que necesita la línea completa) · 'area' = por pie² del diseño

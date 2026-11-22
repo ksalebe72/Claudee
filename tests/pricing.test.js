@@ -93,7 +93,7 @@ test('Ajuste a meta: sube por igual prenda y decoraciones automáticas; no toca 
   const base = { line_type: 'prenda', description: 'Tee', qty: 10, unit_cost: 4, decorations: [{ process: 'bordado', location: 'Pecho izquierdo' }] };
   const l = calcularLinea({ ...base, ajuste_pct: 0.1 }, cfg);
   assert.equal(l.prenda.tallas[0].precio, 9.68, '$8.80 + 10%');
-  assert.equal(l.decoraciones[0].precioPieza, 6.6, 'bordado $6 + 10%');
+  assert.equal(l.decoraciones[0].precioPieza, 8.25, 'bordado $7.50 + 10%');
   assert.equal(l.decoraciones[0].costoPieza, 4.5, 'el costo no cambia');
   const manual = calcularLinea({ ...base, ajuste_pct: 0.1, price_mode: 'manual', manual_price: 9, decorations: [{ process: 'bordado', location: 'Frente', manual_price: 5 }] }, cfg);
   assert.equal(manual.prenda.tallas[0].precio, 9);
@@ -113,12 +113,12 @@ test('Excepciones por producto: porcentaje propio y precio fijo', () => {
   assert.equal(precioPrenda(null, cfg, { tipo: 'precio_fijo', valor: 12.5 }).precio, 12.5);
 });
 
-test('Bordado ($6 por logo): 10 prendas con un logo = $60.00; con dos ubicaciones = $120.00', () => {
+test('Bordado ($7.50 por logo): 10 prendas con un logo = $75.00; con dos ubicaciones = $150.00', () => {
   const uno = calcularLinea({ description: 'Polo', qty: 10, unit_cost: 10, decorations: [{ process: 'bordado', location: 'Pecho izquierdo' }] }, cfg);
-  assert.equal(uno.porProceso.bordado.venta, 60.0);
+  assert.equal(uno.porProceso.bordado.venta, 75.0);
   assert.equal(uno.porProceso.bordado.costo, 45.0, 'el costo sigue en $4.50');
   const dos = calcularLinea({ description: 'Polo', qty: 10, unit_cost: 10, decorations: [{ process: 'bordado', location: 'Pecho izquierdo' }, { process: 'bordado', location: 'Manga' }] }, cfg);
-  assert.equal(dos.porProceso.bordado.venta, 120.0);
+  assert.equal(dos.porProceso.bordado.venta, 150.0);
 });
 
 test('Bordado: tabla lista para rangos de puntadas y cantidad', () => {
@@ -137,7 +137,7 @@ test('La decoración no lleva el markup de prendas y el precio manual queda marc
   const l = calcularLinea({ description: 'Tee', qty: 10, unit_cost: 4, price_mode: 'manual', manual_price: 7, decorations: [{ process: 'bordado', location: 'Frente' }] }, cfg);
   assert.equal(l.manual, true);
   assert.equal(l.prenda.venta, 70);
-  assert.equal(l.porProceso.bordado.venta, 60);
+  assert.equal(l.porProceso.bordado.venta, 75);
 });
 
 test('Heat transfer sin tarifa: costo y precio pendientes, nunca cero', () => {
@@ -149,10 +149,10 @@ test('Heat transfer sin tarifa: costo y precio pendientes, nunca cero', () => {
 test('Comisión 25% sobre venta neta: no incluye envío ni impuesto', () => {
   const l = calcularLinea({ description: 'Tee', qty: 10, unit_cost: 4, decorations: [{ process: 'bordado', location: 'Frente' }] }, cfg);
   const r = calcularRentabilidad({ lineas: [l], envioCobrado: 15, costoEnvio: 12, tasaImpuesto: 0.06, regla: { nombre: 'Bryan ventas', base: 'venta_neta', tasa: 0.25 }, margen: cfg.margen });
-  assert.equal(r.ventaProductos, 148); // 88 prendas + 60 bordado
-  assert.equal(r.impuesto, round(0.06 * (148 + 15)));
-  assert.equal(r.comision.base, 148);
-  assert.equal(r.comision.monto, 37);
+  assert.equal(r.ventaProductos, 163); // 88 prendas + 75 bordado
+  assert.equal(r.impuesto, round(0.06 * (163 + 15)));
+  assert.equal(r.comision.base, 163);
+  assert.equal(r.comision.monto, 40.75);
 });
 
 function round(n) { return Math.round(n * 100) / 100; }
