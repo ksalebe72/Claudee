@@ -30,6 +30,10 @@ export function startAnthropicMock(port) {
           }],
           notas: 'Logo en blanco', dudas: ['¿Tienen el logo en vector?'], idiomaCliente: 'es',
         });
+      } else if (sistema.includes('responder correos')) {
+        texto = JSON.stringify({ asunto: 'Re: Camisetas para el evento', respuesta: 'Hola Ana, gracias por escribirnos. Con gusto te preparamos la cotización. — Color Plus', puntosAConfirmar: ['Cantidad por talla', 'Fecha del evento'], idioma: 'es' });
+      } else if (sistema.includes('ideas de venta')) {
+        texto = '**Simulador** (no es la IA real):\n\n1. **A quién:** Gym FitZone · **Qué ofrecer:** sudaderas bordadas · **Por qué:** compró camisetas DTF.';
       } else if (sistema.includes('analista interno')) {
         texto = 'Respuesta del **simulador** (no es la IA real):\n\n| Orden | Cliente | Contribución |\n|---|---|---|\n| OT-2001 | Iglesia Vida Nueva | 28.9% |\n\n- Está bajo el mínimo de 30% por la comisión de 25%.\n- Ya tiene aprobación del dueño.';
       } else {

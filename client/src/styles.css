@@ -609,3 +609,10 @@ input[type=color] { min-width: 40px; height: 32px; padding: 2px; }
 .titulo-seccion .muted { font-size: 12px; }
 @media (max-width: 760px) { .titulo-grande { font-size: 24px; } }
 .don-pixel-saludo { width: 100%; margin: 0 0 6px; font-size: 15px; }
+.pixel-tabs { margin-bottom: 14px; }
+.pixel-grid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 14px; align-items: start; }
+.pixel-grid h3 { margin-top: 0; }
+.enfoques { display: flex; flex-direction: column; gap: 6px; }
+.enfoque { display: flex; gap: 8px; align-items: center; border: 1px solid var(--border); border-radius: 8px; padding: 8px 10px; cursor: pointer; font-size: 14px; }
+.enfoque.on { border-color: var(--tb-morado); background: var(--tono-lila-bg); }
+@media (max-width: 900px) { .pixel-grid { grid-template-columns: 1fr; } }

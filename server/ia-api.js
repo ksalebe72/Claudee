@@ -2,7 +2,7 @@
 import express from 'express';
 import { get, insert } from './db.js';
 import { requireRole } from './auth.js';
-import { iaConfigurada, IA_MODEL, cotizarDesdeMensaje, preguntarAlNegocio, redactarMensaje, TIPOS_MENSAJE, usoDelMes } from './ia.js';
+import { iaConfigurada, IA_MODEL, cotizarDesdeMensaje, preguntarAlNegocio, redactarMensaje, TIPOS_MENSAJE, usoDelMes, responderEmail, ideasDeVenta, ENFOQUES_IDEAS } from './ia.js';
 
 const r = express.Router();
 const wrap = (fn) => async (req, res) => {
@@ -23,6 +23,10 @@ r.post('/ia/cotizar', wrap((req) => cotizarDesdeMensaje(req.body.texto, req.user
 r.post('/ia/preguntar', wrap((req) => {
   return preguntarAlNegocio(req.body.pregunta, req.body.historial, req.user);
 }));
+
+r.post('/ia/responder-email', wrap((req) => responderEmail(req.body || {}, req.user)));
+r.post('/ia/ideas-venta', wrap((req) => ideasDeVenta(req.body || {}, req.user)));
+r.get('/ia/enfoques-ideas', wrap(() => ENFOQUES_IDEAS));
 
 r.post('/ia/redactar', wrap((req) => redactarMensaje({
   jobId: req.body.jobId, tipo: req.body.tipo, idioma: req.body.idioma, instrucciones: req.body.instrucciones,

@@ -416,7 +416,7 @@ function Marca({ notify }) {
 function EstadoIA() {
   const [e] = useLoad(() => api.get('/ia/estado'));
   if (!e) return null;
-  const NOMBRES = { cotizar: 'Cotizar desde mensaje', preguntar: 'Don Pixel (asistente)', redactar: 'Redactar mensajes' };
+  const NOMBRES = { cotizar: 'Cotizar desde mensaje', preguntar: 'Don Pixel (preguntas)', redactar: 'Redactar mensajes', email: 'Don Pixel (responder emails)', ideas: 'Don Pixel (ideas de venta)' };
   return (
     <section className="card">
       <h3>✨ Inteligencia artificial</h3>
