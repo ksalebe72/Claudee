@@ -8,6 +8,14 @@ const PNG = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJA
 before(async () => { s = await startServer({ env: { SEED_DEMO: '0' } }); ventas = await s.userWithRole('ventas'); });
 after(() => s.stop());
 
+test('sin configurar nada, la marca es Color Plus', async () => {
+  const meta = await s.duena.get('/meta');
+  assert.equal(meta.brand.primary, '#613bbb');
+  assert.equal(meta.brand.logo, '/brand/colorplus-logo.png');
+  assert.equal(meta.brand.icon, '/brand/colorplus-mark.png');
+  assert.equal(meta.brand.personalizada, false);
+});
+
 test('la dueña sube el logo y define colores; se ven en meta, login y portal', async () => {
   const b = await s.duena.post('/settings/logo', { file: PNG });
   assert.match(b.logo, /^\/uploads\/brand-logo-\d+\.png$/);
@@ -29,6 +37,11 @@ test('validación y permisos', async () => {
   const svg = 'data:image/svg+xml;base64,' + Buffer.from('<svg xmlns="http://www.w3.org/2000/svg"><script>alert(1)</script></svg>').toString('base64');
   assert.equal((await s.duena.call('POST', '/settings/logo', { file: svg })).status, 400);
   assert.equal((await s.duena.call('POST', '/settings/logo', { file: 'data:text/html;base64,PGgxPg==' })).status, 400);
+  await s.duena.del('/settings/logo?tipo=logo');
+  await s.duena.put('/settings', { brand_primary: null, brand_sidebar: null });
+  const meta = await s.duena.get('/meta');
+  assert.equal(meta.brand.logo, '/brand/colorplus-logo.png', 'restaurar vuelve al logo de Color Plus');
+  assert.equal(meta.brand.primary, '#613bbb');
   const hist = await s.duena.get('/auditoria?area=ajustes');
   assert.ok(hist.some((h) => h.field === 'colores de marca'));
 });

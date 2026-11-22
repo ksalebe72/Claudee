@@ -6,7 +6,7 @@ const css = (rgb) => `rgb(${rgb.join(',')})`;
 
 export function applyBrand(brand) {
   const root = document.documentElement.style;
-  const props = ['--primary', '--primary-soft', '--on-primary', '--sidebar', '--sidebar-text', '--sidebar-active'];
+  const props = ['--primary', '--primary-soft', '--on-primary', '--sidebar', '--sidebar-text', '--sidebar-strong', '--sidebar-active', '--brand-gradient'];
   props.forEach((p) => root.removeProperty(p));
   if (!brand) return;
   const dark = window.matchMedia?.('(prefers-color-scheme: dark)').matches;
@@ -24,16 +24,22 @@ export function applyBrand(brand) {
     root.setProperty('--sidebar-strong', claro ? '#111' : '#fff');
     root.setProperty('--sidebar-active', claro ? 'rgba(0,0,0,.08)' : 'rgba(255,255,255,.14)');
   }
-  if (brand.logo) {
-    let link = document.querySelector("link[rel='icon']");
-    if (link) link.href = brand.logo;
-  }
+  if (brand.gradient?.length) root.setProperty('--brand-gradient', `linear-gradient(90deg, ${brand.gradient.join(', ')})`);
+  const icon = brand.icon || brand.logo;
+  const link = document.querySelector("link[rel='icon']");
+  if (link && icon) link.href = icon;
   if (brand.name) document.title = `${brand.name} · ColorPlus OS`;
 }
 
-/** Logo de la marca, o el distintivo «CP» si no se ha cargado. */
+/** Símbolo de la marca (para el menú). */
 export function BrandMark({ brand, className = '' }) {
-  return brand?.logo
-    ? <img src={brand.logo} alt={brand.name || 'Logo'} className={`brand-logo ${className}`} />
+  const src = brand?.icon || brand?.logo;
+  return src
+    ? <img src={src} alt={brand.name || 'Logo'} className={`brand-mark ${className}`} />
     : <div className={`logo ${className}`}>CP</div>;
+}
+
+/** Logo completo (inicio de sesión, portal). */
+export function BrandLogo({ brand, className = '' }) {
+  return brand?.logo ? <img src={brand.logo} alt={brand.name || 'Logo'} className={`brand-logo-full ${className}`} /> : <BrandMark brand={brand} />;
 }

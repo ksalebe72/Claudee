@@ -320,44 +320,57 @@ function General({ notify }) {
 function Marca({ notify }) {
   const meta = useMeta();
   const b = meta.brand || {};
-  const [colores, setColores] = useState({ primary: b.primary || '#4f46e5', sidebar: b.sidebar || '#161a2e' });
-  const [busy, setBusy] = useState(false);
-  async function subirLogo(file) {
+  const [colores, setColores] = useState({ primary: b.primary, sidebar: b.sidebar });
+  const [busy, setBusy] = useState(null);
+  async function subir(file, tipo) {
     if (!file) return;
-    setBusy(true);
+    setBusy(tipo);
     try {
       const data = await new Promise((ok, ko) => { const r = new FileReader(); r.onload = () => ok(r.result); r.onerror = ko; r.readAsDataURL(file); });
-      await api.post('/settings/logo', { file: data });
+      await api.post('/settings/logo', { file: data, tipo });
       await meta.reloadMeta();
-      notify('Logo actualizado');
+      notify(tipo === 'icon' ? 'Ícono actualizado' : 'Logo actualizado');
     } catch (e) { notify(e.message, true); }
-    setBusy(false);
+    setBusy(null);
   }
-  async function quitarLogo() { if (confirm('¿Quitar el logo?')) { await api.del('/settings/logo'); await meta.reloadMeta(); } }
+  async function restaurar(tipo) { await api.del(`/settings/logo?tipo=${tipo}`); await meta.reloadMeta(); notify('Restaurado al de Color Plus'); }
   async function guardarColores(valores) {
     try { await api.put('/settings', { brand_primary: valores.primary, brand_sidebar: valores.sidebar }); await meta.reloadMeta(); notify('Colores guardados'); } catch (e) { notify(e.message, true); }
   }
+  const esPropio = (u) => u?.startsWith('/uploads/');
   return (
     <section className="card brand-card">
       <h3>Marca: logo y colores</h3>
-      <p className="muted small">Se usan en el menú, el inicio de sesión y el portal del cliente. Ideal: logo en PNG o SVG con fondo transparente, versión clara si el menú es oscuro.</p>
+      <p className="muted small">Por defecto el sistema usa la marca de Color Plus. Aquí puedes reemplazar el logo, el ícono o los colores; cada cambio queda en el historial.</p>
       <div className="brand-preview" style={{ background: colores.sidebar }}>
-        {b.logo ? <img src={b.logo} alt="Logo" className="brand-logo" /> : <div className="logo">CP</div>}
-        <strong style={{ color: '#fff', mixBlendMode: 'difference' }}>{meta.settings.business_name}</strong>
+        <img src={b.icon} alt="Ícono" className="brand-mark" />
+        <strong style={{ color: '#fff' }}>{meta.settings.business_name}</strong>
         <span className="btn primary" style={{ background: colores.primary, borderColor: colores.primary, marginLeft: 'auto' }}>Botón</span>
       </div>
-      <label className="logo-drop">
-        {busy ? 'Subiendo…' : b.logo ? 'Cambiar logo (PNG, JPG, SVG o WEBP, máx. 3 MB)' : 'Subir logo (PNG, JPG, SVG o WEBP, máx. 3 MB)'}
-        <input type="file" accept="image/png,image/jpeg,image/svg+xml,image/webp" hidden onChange={(e) => { subirLogo(e.target.files[0]); e.target.value = ''; }} />
-      </label>
-      {b.logo && <button className="link-btn danger" onClick={quitarLogo}>Quitar logo</button>}
+      <div className="brand-assets">
+        <div>
+          <div className="asset-box"><img src={b.logo} alt="Logo completo" /></div>
+          <strong className="small">Logo completo</strong>
+          <div className="muted small">Inicio de sesión, portal del cliente y PDF</div>
+          <label className="link-btn">{busy === 'logo' ? 'Subiendo…' : 'Cambiar'}<input type="file" accept="image/png,image/jpeg,image/svg+xml,image/webp" hidden onChange={(e) => { subir(e.target.files[0], 'logo'); e.target.value = ''; }} /></label>
+          {esPropio(b.logo) && <button className="link-btn" onClick={() => restaurar('logo')}>Volver al de Color Plus</button>}
+        </div>
+        <div>
+          <div className="asset-box dark" style={{ background: colores.sidebar }}><img src={b.icon} alt="Ícono" /></div>
+          <strong className="small">Ícono</strong>
+          <div className="muted small">Menú lateral y pestaña del navegador</div>
+          <label className="link-btn">{busy === 'icon' ? 'Subiendo…' : 'Cambiar'}<input type="file" accept="image/png,image/jpeg,image/svg+xml,image/webp" hidden onChange={(e) => { subir(e.target.files[0], 'icon'); e.target.value = ''; }} /></label>
+          {esPropio(b.icon) && <button className="link-btn" onClick={() => restaurar('icon')}>Volver al de Color Plus</button>}
+        </div>
+      </div>
       <div className="row gap wrap">
         <label className="inline">Color principal <input type="color" value={colores.primary} onChange={(e) => setColores({ ...colores, primary: e.target.value })} /> <code>{colores.primary}</code></label>
         <label className="inline">Menú lateral <input type="color" value={colores.sidebar} onChange={(e) => setColores({ ...colores, sidebar: e.target.value })} /> <code>{colores.sidebar}</code></label>
       </div>
-      <div className="row gap">
+      <div className="brand-strip" title="Colores del logo" />
+      <div className="row gap wrap">
         <button className="btn primary" onClick={() => guardarColores(colores)}>Guardar colores</button>
-        {(b.primary || b.sidebar) && <button className="btn" onClick={() => { setColores({ primary: '#4f46e5', sidebar: '#161a2e' }); guardarColores({ primary: null, sidebar: null }); }}>Volver al tema neutro</button>}
+        <button className="btn" onClick={() => { guardarColores({ primary: null, sidebar: null }).then(() => meta.reloadMeta()).then(() => {}); setColores({ primary: '#613bbb', sidebar: '#1c1340' }); }}>Colores de Color Plus</button>
       </div>
     </section>
   );

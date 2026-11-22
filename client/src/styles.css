@@ -402,3 +402,22 @@ input[type=color] { min-width: 40px; height: 32px; padding: 2px; }
 .brand-card { display: flex; flex-direction: column; gap: 12px; }
 .brand-card h3 { margin: 0; }
 .brand-card .muted { margin: 0; }
+
+/* ---------- marca Color Plus ---------- */
+:root { --brand-gradient: linear-gradient(90deg, #1ec5da, #613bbb, #bd68d4, #f8822b, #facc59); }
+.sidebar { border-top: 4px solid transparent; border-image: var(--brand-gradient) 1; }
+.brand-mark { width: 38px; height: 38px; object-fit: contain; flex-shrink: 0; }
+.logo { background: var(--brand-gradient); }
+.login { background: radial-gradient(circle at 20% 10%, rgba(30,197,218,.18), transparent 40%), radial-gradient(circle at 85% 90%, rgba(248,130,43,.18), transparent 40%), var(--sidebar); }
+.login-card { border-top: 5px solid transparent; border-image: var(--brand-gradient) 1; border-radius: 4px 4px 16px 16px; }
+.login-brand { display: flex; flex-direction: column; align-items: center; gap: 4px; padding-bottom: 4px; }
+.brand-logo-full { height: 120px; max-width: 100%; object-fit: contain; }
+.login-brand small { color: var(--muted); font-size: 12px; letter-spacing: .04em; }
+.portal-card { border-top: 5px solid transparent; border-image: var(--brand-gradient) 1; }
+.portal-logo { height: 72px; max-width: 200px; object-fit: contain; display: block; margin-bottom: 4px; }
+.brand-assets { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+.brand-assets > div { display: flex; flex-direction: column; gap: 4px; align-items: flex-start; }
+.asset-box { width: 100%; height: 110px; border: 1px solid var(--border); border-radius: 10px; display: grid; place-items: center; background: #fff; padding: 8px; }
+.asset-box img { max-height: 92px; max-width: 100%; object-fit: contain; }
+.brand-strip { height: 8px; border-radius: 4px; background: var(--brand-gradient); }
+@media (prefers-color-scheme: dark) { .brand-logo-full, .portal-logo { background: #fff; border-radius: 10px; padding: 6px; } }

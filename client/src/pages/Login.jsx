@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { api } from '../api.js';
-import { BrandMark } from '../brand.jsx';
+import { BrandLogo } from '../brand.jsx';
 
 /** Inicio de sesión. Si no existe ningún usuario, crea la cuenta de la dueña. */
 export default function Login({ setup, onDone, brand }) {
@@ -24,7 +24,7 @@ export default function Login({ setup, onDone, brand }) {
   return (
     <div className="login">
       <form className="login-card" onSubmit={submit}>
-        <div className="brand dark"><BrandMark brand={brand} /><div><strong>{brand?.name || 'Color Plus LLC'}</strong><small>ColorPlus OS</small></div></div>
+        <div className="login-brand"><BrandLogo brand={brand} /><small>ColorPlus OS · sistema interno</small></div>
         <h2>{setup ? 'Crear la cuenta de la dueña' : 'Iniciar sesión'}</h2>
         {setup && <p className="muted">Es la primera vez que se abre el sistema. Esta cuenta tendrá acceso a Ajustes, tarifas y aprobaciones.</p>}
         {setup && <label className="field"><span>Nombre</span><input required value={f.name} onChange={set('name')} autoFocus /></label>}

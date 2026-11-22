@@ -192,14 +192,16 @@ api.put('/settings', wrap((req) => {
 // Logo de la empresa (solo la dueña)
 api.post('/settings/logo', express.json({ limit: '5mb' }), wrap((req) => {
   requireRole(req, 'duena');
-  const url = saveLogo(req.body.file, UPLOAD_DIR);
-  audit(req.user, 'ajustes', 'logo', null, url);
+  const tipo = req.body.tipo === 'icon' ? 'icon' : 'logo';
+  const url = saveLogo(req.body.file, UPLOAD_DIR, tipo);
+  audit(req.user, 'ajustes', tipo === 'icon' ? 'ícono' : 'logo', null, url);
   return getBrand();
 }));
 api.delete('/settings/logo', wrap((req) => {
   requireRole(req, 'duena');
-  removeLogo(UPLOAD_DIR);
-  audit(req.user, 'ajustes', 'logo', 'logo anterior', null);
+  const tipo = req.query.tipo === 'icon' ? 'icon' : 'logo';
+  removeLogo(UPLOAD_DIR, tipo);
+  audit(req.user, 'ajustes', tipo === 'icon' ? 'ícono' : 'logo', 'personalizado', 'Color Plus por defecto');
   return getBrand();
 }));
 

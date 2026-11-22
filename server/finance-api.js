@@ -8,6 +8,8 @@ import {
   profitabilityReport, commissionReport, today,
 } from './finance.js';
 import { liquidationPdf, liquidationXlsx } from './exports.js';
+import { logoFilePath } from './brand.js';
+import { UPLOAD_DIR } from './api.js';
 import { CATEGORIAS_COSTO } from '../shared/pricing.js';
 
 const r = express.Router();
@@ -196,7 +198,7 @@ r.get('/liquidaciones/:periodo/:vendedor/exportar.:formato', wrap(async (req, re
   if (req.params.formato === 'pdf') {
     res.setHeader('Content-Type', 'application/pdf');
     res.setHeader('Content-Disposition', `attachment; filename="${nombre}.pdf"`);
-    liquidationPdf(v, business, res);
+    liquidationPdf(v, business, res, logoFilePath(UPLOAD_DIR));
     return undefined;
   }
   if (req.params.formato === 'xlsx') {

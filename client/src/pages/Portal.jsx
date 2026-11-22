@@ -26,7 +26,8 @@ export default function Portal() {
       <div className="portal-card">
         <header className="portal-head">
           <div>
-            {j.brand?.logo ? <img src={j.brand.logo} alt={j.business_name} className="portal-logo" /> : <div className="muted">{j.business_name}</div>}
+            {j.brand?.logo ? <img src={j.brand.logo} alt={j.business_name} className="portal-logo" /> : null}
+            <div className="muted">{j.business_name}</div>
             <h1>{isQuote ? `Cotización ${j.number}` : `Orden ${j.order_number}`}</h1>
             <div>{j.title}</div>
           </div>
