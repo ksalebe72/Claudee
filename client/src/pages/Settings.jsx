@@ -305,7 +305,7 @@ function Usuarios({ notify }) {
         <select value={f.salesperson_id} onChange={(e) => setF({ ...f, salesperson_id: e.target.value })}><option value="">Sin vendedor</option>{vend.map((v) => <option key={v.id} value={v.id}>{v.name}</option>)}</select>
         <button className="btn primary">Crear</button>
       </form>
-      <p className="muted small"><strong>Dueño:</strong> todo · <strong>Finanzas (CFO):</strong> costos reales, confirmar costos, revisar y marcar liquidaciones pagadas, reportes · <strong>Gerencia:</strong> aprobar márgenes bajos, ver reportes y liquidaciones · <strong>Coordinación de ventas:</strong> vende, ve todos los clientes y órdenes, asigna clientes a los vendedores y manda a producción · <strong>Ventas:</strong> solo sus propios clientes y órdenes · <strong>Logística:</strong> órdenes y producción, sin costos ni márgenes.</p>
+      <p className="muted small"><strong>Dueño:</strong> todo · <strong>Finanzas (CFO):</strong> costos reales, confirmar costos, revisar y marcar liquidaciones pagadas, reportes · <strong>Gerencia:</strong> aprobar márgenes bajos, ver reportes y liquidaciones · <strong>Coordinación de ventas:</strong> vende y ve todo (clientes, órdenes, márgenes, liquidaciones y reportes), aprueba márgenes bajos, asigna clientes a los vendedores y manda a producción · <strong>Ventas:</strong> solo sus propios clientes y órdenes · <strong>Logística:</strong> órdenes y producción, sin costos ni márgenes.</p>
     </section>
   );
 }

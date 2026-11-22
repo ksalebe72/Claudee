@@ -141,7 +141,7 @@ export function approveMargin(jobId, user, nota) {
   const req = fin.aprobacion.requerida;
   if (!req) throw fail(400, 'Esta orden no necesita aprobación de margen.');
   if (req === 'duena' && user.role !== 'duena') throw fail(403, 'La contribución es negativa: solo el dueño puede autorizar una excepción.');
-  if (req === 'gerencia' && !['gerencia', 'duena'].includes(user.role)) throw fail(403, 'Solo gerencia o el dueño pueden aprobar márgenes bajos.');
+  if (req === 'gerencia' && !['gerencia', 'coordinacion', 'duena'].includes(user.role)) throw fail(403, 'Solo gerencia, coordinación de ventas o el dueño pueden aprobar márgenes bajos.');
   if (req === 'duena' && !nota) throw fail(400, 'Escribe el motivo de la excepción.');
   const aprob = { nivel: user.role === 'duena' ? 'duena' : 'gerencia', por: user.name, rol: user.role, fecha: new Date().toISOString(), nota: nota || null, contribucionPct: fin.contribucionPct, contribucion: fin.contribucion };
   run('UPDATE jobs SET margin_approval = ? WHERE id = ?', JSON.stringify(aprob), jobId);

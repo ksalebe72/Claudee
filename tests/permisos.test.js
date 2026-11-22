@@ -115,3 +115,19 @@ test('tablero y búsqueda: cada quien ve lo suyo; Logística sin montos', async 
   assert.ok((await s.duena.get('/buscar?q=Orden')).trabajos.some((j) => j.title === 'Orden Isabel'));
   assert.ok(Array.isArray(await logi.get('/avisos')));
 });
+
+test('Coordinación de ventas (Ana Isabel) ve todo: liquidaciones, reportes, márgenes; aprueba márgenes bajos', async () => {
+  assert.equal((await coord.call('GET', '/liquidaciones')).status, 200);
+  assert.equal((await coord.call('GET', '/reportes/rentabilidad')).status, 200);
+  const t = await coord.get('/tablero');
+  assert.notEqual(t.kpis.utilidad, null);
+  assert.notEqual(t.kpis.contribucion, null);
+  assert.ok(t.avisos.some((a) => a.clave === 'margenes'));
+  const bajo = await s.duena.post('/jobs', { title: 'Margen bajo coord', items: [{ product_id: prod.id, sizes: { M: 10 }, price_mode: 'manual', manual_price: 5.4 }] });
+  assert.equal(bajo.finanzas.aprobacion.requerida, 'gerencia');
+  const f = await coord.post(`/jobs/${bajo.id}/aprobar-margen`, {});
+  assert.equal(f.aprobacion.ok, true);
+  // Lo que sigue siendo solo del dueño
+  assert.equal((await coord.call('PUT', '/tarifas', { config: {} })).status, 403);
+  assert.equal((await coord.call('GET', '/usuarios')).status, 403);
+});

@@ -8,7 +8,7 @@ import { filtroJobs, filtroContactos, soloPropios, esLogistica, tareaPermitida }
 const fail = (status, msg) => Object.assign(new Error(msg), { status });
 const wrap = (fn) => (req, res) => { try { res.json(fn(req, res)); } catch (e) { res.status(e.status || 500).json({ error: e.message }); } };
 const r2 = (n) => Math.round((Number(n) || 0) * 100) / 100;
-const VEN_FINANZAS = ['duena', 'finanzas', 'gerencia'];
+const VEN_FINANZAS = ['duena', 'finanzas', 'gerencia', 'coordinacion'];
 
 /** Fecha local de Maryland (YYYY-MM-DD). */
 const hoyMD = () => new Date().toLocaleDateString('en-CA', { timeZone: 'America/New_York' });
@@ -34,7 +34,7 @@ export function avisos(user) {
       COALESCE((SELECT SUM(amount) FROM payments p WHERE p.job_id = j.id),0) AS pagado
     FROM jobs j WHERE ${fj.sql}`, ...fj.params);
 
-  if (['duena', 'gerencia'].includes(rol)) {
+  if (['duena', 'gerencia', 'coordinacion'].includes(rol)) {
     const n = trabajos.filter((j) => j.fin?.aprobacion?.requerida && !j.fin.aprobacion.ok && !['rechazada', 'entregado'].includes(j.status)).length;
     add('margenes', 'Márgenes por aprobar', 'Bajo el 30% o con contribución negativa', n, '/cotizaciones');
   }

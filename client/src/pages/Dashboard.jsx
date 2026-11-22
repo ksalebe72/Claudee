@@ -7,7 +7,7 @@ import { Empty, useMeta } from '../components/ui.jsx';
 import { BarrasMensuales, TablaMensual, DonaContribucion } from '../components/Graficas.jsx';
 
 const PERIODOS = { 1: 'Este mes', 3: 'Últimos 3 meses', 6: 'Últimos 6 meses', 12: 'Últimos 12 meses' };
-const GESTION = ['duena', 'finanzas', 'gerencia'];
+const GESTION = ['duena', 'finanzas', 'gerencia', 'coordinacion'];
 
 const I = {
   dolar: <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9" /><path d="M14.5 9.5c-.4-.9-1.4-1.5-2.5-1.5-1.5 0-2.5.8-2.5 2s1 1.7 2.5 2 2.5.8 2.5 2-1 2-2.5 2c-1.1 0-2.1-.6-2.5-1.5M12 6.5v11" /></svg>,

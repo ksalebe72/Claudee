@@ -84,7 +84,7 @@ La primera vez que se abre la app, pide crear la **cuenta del dueño**. No hay c
 | Dueño | Todo. Es el único que cambia la matriz, las comisiones y los usuarios, autoriza excepciones por contribución negativa y aprueba liquidaciones. |
 | Finanzas (CFO) | Registrar costos reales y créditos, confirmar costos, revisar liquidaciones y marcarlas como pagadas, ver reportes. |
 | Gerencia | Aprobar órdenes con contribución bajo el mínimo y ver reportes y liquidaciones. |
-| Coordinación de ventas | Vende, ve todos los clientes y órdenes, asigna clientes a cada vendedor y manda a producción. |
+| Coordinación de ventas | Vende y ve todo: clientes, órdenes, márgenes, liquidaciones y reportes. Aprueba márgenes bajos, asigna clientes a cada vendedor y manda a producción. No cambia la matriz ni los usuarios ni aprueba pagos de comisiones (eso es del dueño). |
 | Ventas | Solo **sus** clientes (los que creó o le asignaron) y las órdenes de esos clientes o a su nombre. Cotiza siempre a su nombre y con su regla de comisión automática. |
 | Logística | Órdenes, producción, tareas y datos de entrega del cliente. No ve costos, márgenes ni comisiones; no cotiza ni cambia precios. |
 
@@ -249,7 +249,7 @@ Tres funciones, todas de **solo lectura o borrador**: la IA no guarda, no envía
 | Función | Dónde | Qué hace |
 |---|---|---|
 | Cotizar desde un mensaje | Cotizaciones → ✨ Cotizar desde mensaje | Pegas el email, SMS o WhatsApp del cliente y arma un borrador: cliente (reconoce contactos existentes), prendas del catálogo, tallas, decoraciones, ubicaciones, fecha y lo que falta preguntar. **Los precios los calcula la matriz, nunca la IA.** Revisas y pulsas «Crear borrador». |
-| Don Pixel (asistente del negocio) | Menú → ✨ Don Pixel (todos los usuarios) · pestañas Preguntar, Responder un email e Ideas de venta | Responde preguntas con los datos de los últimos ~13 meses, recortados al acceso de quien pregunta: el vendedor solo sus clientes y su comisión; Logística sin montos; Coordinación sin liquidaciones. No puede cambiar nada. |
+| Don Pixel (asistente del negocio) | Menú → ✨ Don Pixel (todos los usuarios) · pestañas Preguntar, Responder un email e Ideas de venta | Responde preguntas con los datos de los últimos ~13 meses, recortados al acceso de quien pregunta: el vendedor solo sus clientes y su comisión; Logística sin montos. No puede cambiar nada. |
 | Redactar mensajes | En cada cotización u orden → ✨ Redactar mensaje | Borradores (enviar cotización, seguimiento, aprobar arte, orden lista, recordatorio de pago o libre) en español o inglés, con el tono de Color Plus. Se copian o se guardan como nota; **no se envían**. La IA nunca recibe costos ni márgenes. |
 
 ### Activarla

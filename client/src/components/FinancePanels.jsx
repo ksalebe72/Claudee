@@ -22,7 +22,7 @@ export function RentabilidadCard({ fin, preview, margen, user, jobId, onUpdated,
   const req = fin.aprobacion?.requerida ?? fin.aprobacionRequerida;
   const otorgada = fin.aprobacion?.otorgada;
   const ok = fin.aprobacion ? fin.aprobacion.ok : !req;
-  const puede = req === 'duena' ? user.role === 'duena' : ['gerencia', 'duena'].includes(user.role);
+  const puede = req === 'duena' ? user.role === 'duena' : ['gerencia', 'coordinacion', 'duena'].includes(user.role);
   async function aprobar() {
     try { await api.post(`/jobs/${jobId}/aprobar-margen`, { nota }); setNota(''); onUpdated(); notify('Aprobación registrada'); } catch (e) { notify(e.message, true); }
   }

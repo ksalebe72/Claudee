@@ -191,7 +191,7 @@ function fotoDelNegocio(user) {
   const vendedores = Object.fromEntries(all('SELECT id, name FROM salespeople').map((s) => [s.id, s.name]));
   const fj = filtroJobs(user, 'j');
   const logistica = esLogistica(user);
-  const gestion = ['duena', 'finanzas', 'gerencia'].includes(user?.role);
+  const gestion = ['duena', 'finanzas', 'gerencia', 'coordinacion'].includes(user?.role);
   const jobs = all(`SELECT j.*, c.name AS contacto, c.company AS empresa,
                       (SELECT SUM(qty) FROM job_items i WHERE i.job_id = j.id) AS piezas FROM jobs j LEFT JOIN contacts c ON c.id = j.contact_id
                     WHERE (j.kind = 'order' OR j.status IN ('borrador','enviada')) AND ${fj.sql} ORDER BY j.id DESC LIMIT 400`, ...fj.params);

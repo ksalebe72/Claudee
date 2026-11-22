@@ -22,7 +22,7 @@ import Reportes from './pages/Reportes.jsx';
 import Portal from './pages/Portal.jsx';
 import Asistente from './pages/Asistente.jsx';
 
-const GESTION = ['duena', 'finanzas', 'gerencia'];
+const GESTION = ['duena', 'finanzas', 'gerencia', 'coordinacion'];
 const SIN_LOGISTICA = ['duena', 'finanzas', 'gerencia', 'coordinacion', 'ventas'];
 const NAV = [
   { group: 'General', items: [{ to: '/', label: 'Tablero', icon: '◧', end: true }, { to: '/asistente', label: 'Don Pixel', icon: '✨' }] },
