@@ -1,3 +1,4 @@
+/* La app va siempre en modo claro con fondo blanco (pedido del dueño), aunque el equipo esté en modo oscuro. */
 :root {
   --bg: #ffffff; /* fondo blanco, como la muestra del tablero */
   --surface: #ffffff;
@@ -17,12 +18,6 @@
   font-family: Inter, system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
   font-size: 14px;
   color: var(--text);
-}
-@media (prefers-color-scheme: dark) {
-  :root {
-    --bg: #0f1220; --surface: #171b2d; --surface-2: #1f2438; --border: #2a3048; --text: #e6e8f2; --muted: #9096b3;
-    --primary: #7c74ff; --primary-soft: #262a4a; --sidebar: #0b0d18; --shadow: none;
-  }
 }
 * { box-sizing: border-box; }
 body { margin: 0; background: var(--bg); color: var(--text); }
@@ -144,9 +139,6 @@ code { background: var(--surface-2); padding: 1px 5px; border-radius: 4px; }
 .tone-green { background: #dcf7ea; color: #047857; }
 .tone-red { background: #fde2e2; color: #b91c1c; }
 .tone-teal { background: #d8f5f3; color: #0f766e; }
-@media (prefers-color-scheme: dark) {
-  .badge { filter: saturate(0.9) brightness(0.9); }
-}
 
 /* timeline / conversation */
 .timeline { list-style: none; margin: 12px 0 0; padding: 0; display: flex; flex-direction: column; gap: 12px; }
@@ -352,16 +344,13 @@ input[type=color] { min-width: 40px; height: 32px; padding: 2px; }
 .user-box .link-btn { color: #b9bdd6; }
 .warn-txt { color: var(--warn); font-weight: 600; }
 .notice { background: #fff7e6; border: 1px solid #f5d38b; color: #7a4b00; border-radius: var(--radius); padding: 10px 14px; margin-bottom: 16px; display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
-@media (prefers-color-scheme: dark) { .notice { background: #3a2c10; border-color: #6b5220; color: #f5d38b; } }
 .semaforo { font-size: 12px; padding: 4px 10px; }
 .missing { margin: 6px 0 0; padding-left: 18px; font-size: 12px; color: var(--warn); width: 100%; }
 .missing-box { background: #fff7e6; border-radius: 8px; padding: 8px 12px; margin-top: 8px; font-size: 12px; color: #7a4b00; }
 .missing-box ul { margin: 4px 0 0; padding-left: 18px; }
-@media (prefers-color-scheme: dark) { .missing-box { background: #3a2c10; color: #f5d38b; } }
 .approval { border: 1px solid #f3b4b4; background: #fff1f1; border-radius: 8px; padding: 10px 12px; margin-top: 10px; font-size: 13px; }
 .approval.ok { border-color: #a7e3c8; background: #effaf4; }
 .approval p { margin: 0 0 6px; }
-@media (prefers-color-scheme: dark) { .approval { background: #3a1818; border-color: #6b2b2b; } .approval.ok { background: #12301f; border-color: #1f5a3a; } }
 .totals hr { border: none; border-top: 1px solid var(--border); margin: 6px 0; }
 .mini-field input { width: 110px; }
 .price-row { align-items: flex-end; }
@@ -383,7 +372,6 @@ input[type=color] { min-width: 40px; height: 32px; padding: 2px; }
 .kpi.clickable { text-align: left; cursor: pointer; font: inherit; }
 .kpi.selected { border-color: var(--primary); box-shadow: 0 0 0 2px var(--primary-soft); }
 .adjust-row td { background: #fff5f5; }
-@media (prefers-color-scheme: dark) { .adjust-row td { background: #2a1515; } }
 .total-row td { font-weight: 700; background: var(--surface-2); }
 @media (max-width: 800px) { .settings-grid { grid-template-columns: minmax(0, 1fr); } }
 
@@ -423,7 +411,6 @@ input[type=color] { min-width: 40px; height: 32px; padding: 2px; }
 .asset-box { width: 100%; height: 110px; border: 1px solid var(--border); border-radius: 10px; display: grid; place-items: center; background: #fff; padding: 8px; }
 .asset-box img { max-height: 92px; max-width: 100%; object-fit: contain; }
 .brand-strip { height: 8px; border-radius: 4px; background: var(--brand-gradient); }
-@media (prefers-color-scheme: dark) { .brand-logo-full, .portal-logo { background: #fff; border-radius: 10px; padding: 6px; } }
 
 /* ---------- IA ---------- */
 .ia-btn { border-color: transparent; background: linear-gradient(var(--surface), var(--surface)) padding-box, var(--brand-gradient) border-box; border: 1.5px solid transparent; }
@@ -468,18 +455,6 @@ input[type=color] { min-width: 40px; height: 32px; padding: 2px; }
   --estado-ok: #2e9e5b; --estado-medio: #c98500; --estado-bajo: #d9534f;
   --font-titulo: 'Bebas Neue', 'Oswald', Impact, sans-serif;
   --font-num: 'JetBrains Mono', ui-monospace, 'SFMono-Regular', Menlo, monospace;
-}
-@media (prefers-color-scheme: dark) {
-  :root:where(:not([data-theme="light"])) {
-    --tb-tinta: #e6e8f2; --tb-ceja: #6aa8f0;
-    --serie-ventas: #4a90d0; --serie-utilidad: #3f9f6e;
-    --tono-azul-bg: #15233a; --tono-azul-borde: #24406a; --tono-azul-ico: #6aa8f0;
-    --tono-verde-bg: #14281f; --tono-verde-borde: #24503a; --tono-verde-ico: #5cc08a;
-    --tono-celeste-bg: #162433; --tono-celeste-borde: #27435e; --tono-celeste-ico: #6fb0e8;
-    --tono-lila-bg: #231c36; --tono-lila-borde: #3f3263; --tono-lila-ico: #b195ef;
-    --tono-durazno-bg: #2e2416; --tono-durazno-borde: #5a4322; --tono-durazno-ico: #f0b057;
-    --tb-banner-bg: #14223a; --tb-banner-borde: #24406a;
-  }
 }
 
 /* Barra superior */

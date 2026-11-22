@@ -9,7 +9,7 @@ export function applyBrand(brand) {
   const props = ['--primary', '--primary-soft', '--on-primary', '--sidebar', '--sidebar-text', '--sidebar-strong', '--sidebar-active', '--brand-gradient'];
   props.forEach((p) => root.removeProperty(p));
   if (!brand) return;
-  const dark = window.matchMedia?.('(prefers-color-scheme: dark)').matches;
+  const dark = false; // la app va siempre en modo claro
   if (brand.primary) {
     const p = hexToRgb(brand.primary);
     root.setProperty('--primary', brand.primary);
