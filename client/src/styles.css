@@ -624,6 +624,12 @@ input[type=color] { min-width: 40px; height: 32px; padding: 2px; }
 .tarjeta-graf .card-head { flex-wrap: wrap; gap: 8px; }
 .grafica { overflow: visible; }
 .grafica svg { max-width: 100%; }
-.tablero a:not(.btn):not(.kpi-color):not(.aviso-fila), .tablero .link-btn { color: var(--tb-azul); }
+.tablero a:not(.btn):not(.kpi-color):not(.aviso-fila):not(.fila-atencion), .tablero .link-btn { color: var(--tb-azul); }
 .topbar .aviso-fila, .topbar a { color: var(--text); }
 .tablero .atencion li a { color: var(--text); }
+/* Títulos más chicos (pedido del dueño) */
+:root { --font-titulo: 'Bebas Neue', 'Oswald', 'Arial Narrow', 'Roboto Condensed', sans-serif; }
+.titulo-grande { font-size: 30px; margin: 2px 0 4px; }
+.titulo-seccion { font-size: 16px; letter-spacing: .04em; }
+.titulo-seccion .muted { font-size: 12px; }
+@media (max-width: 760px) { .titulo-grande { font-size: 24px; } }

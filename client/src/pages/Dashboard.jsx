@@ -114,7 +114,7 @@ export default function Dashboard() {
           <ul className="atencion">
             {t.avisos.filter((a) => a.n > 0).map((a) => (
               <li key={a.clave}>
-                <Link to={a.to}>
+                <Link to={a.to} className="fila-atencion">
                   <span className="atencion-icono activo">{ICONO_AVISO[a.clave] || I.doc}</span>
                   <span className="grow"><strong>{a.titulo}</strong><small className="muted">{a.detalle}</small></span>
                   <span className="atencion-n">{a.n} ›</span>
