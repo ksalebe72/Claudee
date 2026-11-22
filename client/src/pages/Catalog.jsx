@@ -28,12 +28,22 @@ export default function Catalog() {
     if (editM.id) await api.put(`/methods/${editM.id}`, body); else await api.post('/methods', body);
     setEditM(null); reloadM();
   }
+  async function importSanmar() {
+    const style = prompt('Estilo de SanMar a importar (ej. PC54, K500, ST350):');
+    if (!style) return;
+    try {
+      const p = await api.post('/sanmar/import', { style });
+      alert(`Importado: ${p.brand} ${p.sku} · ${p.name}\n${p.colors.length} colores · costo desde $${p.base_cost}`);
+      reloadP();
+    } catch (e) { alert(e.message); }
+  }
   async function delP() { if (confirm('¿Eliminar producto?')) { await api.del(`/products/${editP.id}`); setEditP(null); reloadP(); } }
   async function delM() { if (confirm('¿Eliminar método?')) { await api.del(`/methods/${editM.id}`); setEditM(null); reloadM(); } }
 
   return (
     <>
       <PageHeader title="Catálogo y precios" subtitle={`Precio de venta del blank = costo × ${(1 + meta.settings.markup).toFixed(2)} (markup ${Math.round(meta.settings.markup * 100)}%, cámbialo en Ajustes)`}>
+        {tab === 'products' && meta.integrations?.sanmar && <button className="btn" onClick={importSanmar}>⬇ Importar de SanMar</button>}
         {tab === 'products'
           ? <button className="btn primary" onClick={() => setEditP({ sku: '', name: '', brand: '', category: '', base_cost: '', supplier: '', colorsTxt: '', sizesTxt: 'S, M, L, XL, 2XL' })}>+ Producto</button>
           : <button className="btn primary" onClick={() => setEditM({ code: '', name: '', setup_fee: 0, color_price: 0, setup_per_color: 0, tiers: [{ min: 1, price: '' }] })}>+ Método</button>}

@@ -186,7 +186,7 @@ export default function JobEditor() {
         </div>
       </div>
       {designer && (
-        <ProofDesigner job={job} methods={methodsList} business={meta.settings.business_name} initialDesign={designer.initialDesign}
+        <ProofDesigner job={job} methods={methodsList} business={meta.settings.business_name} sanmarEnabled={!!meta.integrations?.sanmar} initialDesign={designer.initialDesign}
           notify={notify} onClose={() => setDesigner(null)} onSent={(j) => { setJob(j); setDesigner(null); }} />
       )}
       {toast}

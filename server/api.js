@@ -7,6 +7,7 @@ import { all, get, run, insert, update, getSetting, setSetting, methodsMap, tran
 import { fire, registerHandler, TRIGGERS, ACTIONS } from './automations.js';
 import { priceItem, jobTotals } from '../shared/pricing.js';
 import { sendMessage } from './messaging.js';
+import { sanmarConfigured, getStyle, cacheImage, callSanmar, getStyleAreas, setStyleAreas } from './sanmar.js';
 
 export const UPLOAD_DIR = resolve(dirname(fileURLToPath(import.meta.url)), 'uploads');
 
@@ -21,6 +22,15 @@ const wrap = (fn) => (req, res) => {
     if (out !== undefined) res.json(out);
   } catch (e) {
     console.error(e);
+    res.status(e.status || 500).json({ error: e.message });
+  }
+};
+const awrap = (fn) => async (req, res) => {
+  try {
+    const out = await fn(req, res);
+    if (out !== undefined) res.json(out);
+  } catch (e) {
+    console.error(e.message);
     res.status(e.status || 500).json({ error: e.message });
   }
 };
@@ -41,7 +51,7 @@ function loadJob(id) {
   const job = get('SELECT * FROM jobs WHERE id = ?', id);
   if (!job) throw fail(404, 'No encontrado');
   job.items = all(
-    'SELECT i.*, p.name AS product_name, p.sku AS product_sku, p.category AS product_category, p.brand AS product_brand FROM job_items i LEFT JOIN products p ON p.id = i.product_id WHERE job_id = ? ORDER BY position, id',
+    'SELECT i.*, p.name AS product_name, p.sku AS product_sku, p.category AS product_category, p.brand AS product_brand, p.supplier AS product_supplier FROM job_items i LEFT JOIN products p ON p.id = i.product_id WHERE job_id = ? ORDER BY position, id',
     id
   );
   job.proofs = all('SELECT id, job_id, version, file_url, note, status, customer_comment, created_at, decided_at, design IS NOT NULL AS has_design FROM proofs WHERE job_id = ? ORDER BY version DESC', id);
@@ -141,6 +151,7 @@ api.get('/meta', wrap(() => ({
     tax_rate: getSetting('tax_rate', 0),
     deposit_pct: getSetting('deposit_pct', 0.5),
   },
+  integrations: { sanmar: sanmarConfigured() },
 })));
 
 api.put('/settings', wrap((req) => {
@@ -400,6 +411,36 @@ api.post('/jobs/:id/payments', wrap((req) => {
   return loadJob(job.id);
 }));
 api.delete('/payments/:id', wrap((req) => { run('DELETE FROM payments WHERE id = ?', req.params.id); return { ok: true }; }));
+
+// ---------- SanMar ----------
+api.get('/sanmar/style/:style', awrap(async (req) => {
+  const data = await getStyle(req.params.style, { refresh: !!req.query.refresh });
+  return { ...data, areas: { flat: getStyleAreas(data.style, 'flat'), model: getStyleAreas(data.style, 'model') } };
+}));
+// Diagnóstico: muestra la respuesta XML tal cual (sirve para verificar nombres de campos con tu cuenta).
+api.get('/sanmar/raw/:style', awrap(async (req, res) => {
+  const xml = await callSanmar({ style: req.params.style, color: req.query.color || '', size: req.query.size || '' });
+  res.type('text/plain').send(xml.slice(0, 60000));
+}));
+api.get('/sanmar/image', awrap(async (req, res) => {
+  const file = await cacheImage(String(req.query.u || ''), UPLOAD_DIR);
+  res.set('Cache-Control', 'public, max-age=604800');
+  res.sendFile(file);
+}));
+api.put('/sanmar/areas/:style/:kind', wrap((req) => {
+  if (!['flat', 'model'].includes(req.params.kind)) throw fail(400, 'Tipo inválido');
+  setStyleAreas(req.params.style, req.params.kind, req.body);
+  return { ok: true };
+}));
+api.post('/sanmar/import', awrap(async (req) => {
+  if (!req.body.style) throw fail(400, 'Indica el estilo (ej. PC54)');
+  const d = await getStyle(String(req.body.style).trim(), { refresh: true });
+  const data = { sku: d.style, name: d.title, brand: d.brand, base_cost: d.piecePrice ?? 0, colors: d.colors.map((c) => c.name), sizes: d.sizes, supplier: 'SanMar' };
+  const existing = get("SELECT id FROM products WHERE upper(sku) = upper(?) AND supplier = 'SanMar'", d.style);
+  if (existing) update('products', existing.id, data);
+  const id = existing ? existing.id : insert('products', { ...data, category: req.body.category || d.category || 'SanMar' });
+  return get('SELECT * FROM products WHERE id = ?', id);
+}));
 
 // ---------- automatizaciones ----------
 const AUTO_FIELDS = ['name', 'trigger', 'condition', 'action', 'params', 'active'];

@@ -80,6 +80,32 @@ function unionBox(layers) {
 }
 const outside = (b, a) => b.x < a.x - 1 || b.y < a.y - 1 || b.x + b.w > a.x + a.w + 1 || b.y + b.h > a.y + a.h + 1;
 const inches = (units, area) => (units / area.w) * area.inW;
+const areaOf = (design, loc) => design.areas?.[loc] || areaFor(design.garment, loc);
+
+// Fotos de SanMar por vista
+const VIEW_FIELDS = {
+  flat: { front: ['frontFlat', 'colorProductImage', 'productImage', 'frontModel'], back: ['backFlat', 'backModel'], side: ['sideModel', 'threeQModel'] },
+  model: { front: ['frontModel', 'colorProductImage', 'frontFlat'], back: ['backModel', 'backFlat'], side: ['sideModel', 'threeQModel'] },
+};
+const proxied = (u) => `/api/sanmar/image?u=${encodeURIComponent(u)}`;
+function viewsFromColor(color, kind) {
+  const views = {};
+  for (const [v, fields] of Object.entries(VIEW_FIELDS[kind])) {
+    const f = fields.find((k) => color.images?.[k]);
+    if (f) views[v] = proxied(color.images[f]);
+  }
+  return views;
+}
+const blobToDataUrl = (blob) => new Promise((ok, ko) => { const r = new FileReader(); r.onload = () => ok(r.result); r.onerror = ko; r.readAsDataURL(blob); });
+const photoCache = new Map();
+async function toDataUrl(url) {
+  if (!url || url.startsWith('data:')) return url;
+  if (!photoCache.has(url)) {
+    photoCache.set(url, fetch(url).then((r) => { if (!r.ok) throw new Error('No se pudo cargar la foto de la prenda'); return r.blob(); }).then(blobToDataUrl)
+      .catch((e) => { photoCache.delete(url); throw e; }));
+  }
+  return photoCache.get(url);
+}
 
 export function designFromItem(item) {
   const garment = garmentFromCategory(item?.product_category, item?.product_name || item?.description);
@@ -90,13 +116,13 @@ export function designFromItem(item) {
 }
 
 // ---------- vista de prenda (SVG) ----------
-function GarmentView({ garment, color, view, design, activeLoc, selectedId, interactive, showDims, svgRef, onLayerDown, onBackground }) {
+function GarmentView({ garment, color, view, design, activeLoc, selectedId, interactive, showDims, svgRef, onLayerDown, onBackground, photo, editArea, onAreaDown }) {
   const rid = useId().replace(/[^a-zA-Z0-9]/g, '');
   const g = GARMENTS[garment] || GARMENTS.tshirt;
   const v = g.views[view] || Object.values(g.views)[0];
   const line = isDark(color) ? shade(color, 0.2) : shade(color, -0.28);
-  const layers = design.layers.filter((l) => areaFor(garment, l.location).view === view);
-  const locsHere = Object.keys(design.placements).filter((loc) => areaFor(garment, loc).view === view);
+  const layers = design.layers.filter((l) => areaOf(design, l.location).view === view);
+  const locsHere = Object.keys(design.placements).filter((loc) => areaOf(design, loc).view === view);
 
   return (
     <svg ref={svgRef} viewBox={`0 0 ${VB_W} ${VB_H}`} xmlns="http://www.w3.org/2000/svg" className="garment-svg"
@@ -109,6 +135,8 @@ function GarmentView({ garment, color, view, design, activeLoc, selectedId, inte
           <stop offset="1" stopColor="#000" stopOpacity="0.12" />
         </linearGradient>
       </defs>
+      {photo && <image href={photo} x="0" y="0" width={VB_W} height={VB_H} preserveAspectRatio="xMidYMid meet" />}
+      {!photo && <>
       {v.handles?.map((d, i) => <path key={`h${i}`} d={d} fill="none" stroke={shade(color, -0.12)} strokeWidth="12" strokeLinecap="round" />)}
       {v.under?.map((d, i) => <path key={`u${i}`} d={d} fill={shade(color, -0.1)} stroke={line} strokeWidth="1.5" />)}
       {v.body.map((d, i) => <path key={`b${i}`} d={d} fill={color} stroke={line} strokeWidth="1.8" strokeLinejoin="round" />)}
@@ -117,15 +145,20 @@ function GarmentView({ garment, color, view, design, activeLoc, selectedId, inte
       {v.top?.map((d, i) => <path key={`t${i}`} d={d} fill={shade(color, isDark(color) ? 0.05 : -0.05)} stroke={line} strokeWidth="1.5" />)}
       {v.strings?.map((d, i) => <path key={`r${i}`} d={d} stroke={shade(color, -0.2)} strokeWidth="3" strokeLinecap="round" />)}
       {v.buttons?.map(([x, y], i) => <circle key={`c${i}`} cx={x} cy={y} r="3.5" fill={shade(color, -0.15)} stroke={line} />)}
+      </>}
 
       {interactive && locsHere.map((loc) => {
-        const a = areaFor(garment, loc);
+        const a = areaOf(design, loc);
         const active = loc === activeLoc;
+        const editing = active && editArea;
         return (
-          <g key={loc} pointerEvents="none">
-            <rect x={a.x} y={a.y} width={a.w} height={a.h} fill="none" stroke={active ? '#6366f1' : '#94a3b8'}
-              strokeDasharray="4 3" strokeWidth={active ? 1.4 : 0.8} opacity={active ? 0.9 : 0.5} />
-            {active && <text x={a.x + 2} y={a.y - 4} fontSize="8" fill="#6366f1" fontFamily="Arial">{loc} · {a.inW}" ancho máx.</text>}
+          <g key={loc} pointerEvents={editing ? 'all' : 'none'}>
+            <rect x={a.x} y={a.y} width={a.w} height={a.h} fill={editing ? 'rgba(99,102,241,0.12)' : 'none'} stroke={active ? '#6366f1' : '#94a3b8'}
+              strokeDasharray="4 3" strokeWidth={active ? 1.4 : 0.8} opacity={active ? 0.9 : 0.5}
+              onPointerDown={editing ? (e) => onAreaDown(e, loc, 'move') : undefined} style={editing ? { cursor: 'move' } : undefined} />
+            {active && <text x={a.x + 2} y={a.y - 4} fontSize="8" fill="#6366f1" fontFamily="Arial" stroke="#fff" strokeWidth="2" paintOrder="stroke">{loc} · {a.inW}" ancho máx.</text>}
+            {editing && <rect x={a.x + a.w - 6} y={a.y + a.h - 6} width="12" height="12" rx="2" fill="#6366f1" stroke="#fff"
+              onPointerDown={(e) => onAreaDown(e, loc, 'resize')} style={{ cursor: 'nwse-resize' }} />}
           </g>
         );
       })}
@@ -134,10 +167,11 @@ function GarmentView({ garment, color, view, design, activeLoc, selectedId, inte
         const sel = interactive && l.id === selectedId;
         const w = l.baseW * l.scale;
         const h = l.baseH * l.scale;
-        const warn = interactive && outside(layerBox(l), areaFor(garment, l.location));
+        const warn = interactive && outside(layerBox(l), areaOf(design, l.location));
         return (
           <g key={l.id} transform={`translate(${l.cx} ${l.cy}) rotate(${l.rot})`}
-            onPointerDown={interactive ? (e) => onLayerDown(e, l, 'move') : undefined}
+            onPointerDown={interactive && !editArea ? (e) => onLayerDown(e, l, 'move') : undefined}
+            pointerEvents={editArea ? 'none' : undefined}
             style={interactive ? { cursor: 'move' } : undefined}>
             <g transform={`scale(${l.scale})`}>
               {l.type === 'image' ? (
@@ -168,7 +202,7 @@ function GarmentView({ garment, color, view, design, activeLoc, selectedId, inte
         const ls = layers.filter((l) => l.location === loc);
         const u = unionBox(ls);
         if (!u) return null;
-        const a = areaFor(garment, loc);
+        const a = areaOf(design, loc);
         const y = u.y + u.h + 9;
         const x = u.x + u.w + 9;
         const dim = { fontSize: 9, fontFamily: 'Arial', fontWeight: 'bold', fill: '#e11d48', stroke: '#fff', strokeWidth: 2.5, paintOrder: 'stroke' };
@@ -188,6 +222,10 @@ function GarmentView({ garment, color, view, design, activeLoc, selectedId, inte
 // ---------- hoja de prueba (canvas) ----------
 async function svgToImage(svgEl) {
   const clone = svgEl.cloneNode(true);
+  for (const img of clone.querySelectorAll('image')) {
+    const h = img.getAttribute('href');
+    if (h && !h.startsWith('data:')) img.setAttribute('href', await toDataUrl(h));
+  }
   clone.setAttribute('width', VB_W * 2);
   clone.setAttribute('height', VB_H * 2);
   const s = new XMLSerializer().serializeToString(clone);
@@ -209,7 +247,7 @@ function wrapText(ctx, text, x, y, maxW, lh) {
 
 async function buildSheet({ design, job, item, methodName, business, version, svgs }) {
   const g = GARMENTS[design.garment];
-  const views = Object.keys(g.views).filter((v) => design.layers.some((l) => areaFor(design.garment, l.location).view === v));
+  const views = Object.keys(g.views).filter((v) => design.layers.some((l) => areaOf(design, l.location).view === v));
   const imgs = await Promise.all(views.map((v) => svgToImage(svgs[v])));
 
   const W = 1800, H = 1200, PAD = 40;
@@ -222,6 +260,7 @@ async function buildSheet({ design, job, item, methodName, business, version, sv
   ctx.fillStyle = '#161a2e'; ctx.fillRect(0, 0, W, 110);
   ctx.fillStyle = '#fff'; ctx.font = 'bold 36px Arial'; ctx.textAlign = 'left';
   ctx.fillText(business, PAD, 68);
+  if (design.photo?.style) { ctx.font = '20px Arial'; ctx.fillStyle = '#c7cbe0'; ctx.fillText(`Prenda: SanMar ${design.photo.style} · ${design.photo.color}`, PAD, 96); }
   ctx.textAlign = 'right'; ctx.font = 'bold 32px Arial'; ctx.fillText('PRUEBA DE ARTE', W - PAD, 52);
   ctx.font = '22px Arial'; ctx.fillStyle = '#c7cbe0';
   ctx.fillText(`${job.order_number || job.number} · Versión ${version} · ${fmtDate(new Date().toISOString().slice(0, 10))}`, W - PAD, 88);
@@ -265,7 +304,7 @@ async function buildSheet({ design, job, item, methodName, business, version, sv
     const ls = design.layers.filter((l) => l.location === loc);
     if (!ls.length) continue;
     const u = unionBox(ls);
-    const a = areaFor(design.garment, loc);
+    const a = areaOf(design, loc);
     decoLines.push([`${loc}`, true]);
     decoLines.push([`${methodName(p.method) || 'Decoración'} · ${inches(u.w, a).toFixed(1)}" × ${inches(u.h, a).toFixed(1)}"`]);
     if (p.inks) decoLines.push([`Colores: ${p.inks}`]);
@@ -281,12 +320,12 @@ async function buildSheet({ design, job, item, methodName, business, version, sv
 }
 
 // ---------- componente principal ----------
-export default function ProofDesigner({ job, methods, business, initialDesign, onClose, onSent, notify }) {
+export default function ProofDesigner({ job, methods, business, initialDesign, onClose, onSent, notify, sanmarEnabled }) {
   const items = job.items || [];
   const [itemIdx, setItemIdx] = useState(initialDesign?.itemIdx ?? 0);
   const [design, setDesign] = useState(() => initialDesign || designFromItem(items[0]));
   const [activeLoc, setActiveLoc] = useState(() => Object.keys((initialDesign || designFromItem(items[0])).placements)[0]);
-  const [view, setView] = useState(() => areaFor(design.garment, activeLoc).view);
+  const [view, setView] = useState(() => areaOf(design, activeLoc).view);
   const [selectedId, setSelectedId] = useState(null);
   const [preview, setPreview] = useState(null);
   const [busy, setBusy] = useState(false);
@@ -295,9 +334,14 @@ export default function ProofDesigner({ job, methods, business, initialDesign, o
   const svgRef = useRef(null);
   const exportSvgs = useRef({});
   const fileRef = useRef(null);
+  const photoRef = useRef(null);
+  const [sm, setSm] = useState(null); // estilo de SanMar cargado
+  const [smState, setSmState] = useState({ loading: false, error: null });
+  const [styleInput, setStyleInput] = useState(() => initialDesign?.photo?.style || items[initialDesign?.itemIdx ?? 0]?.product_sku || '');
+  const [editArea, setEditArea] = useState(false);
 
   const item = items[itemIdx];
-  const area = areaFor(design.garment, activeLoc);
+  const area = areaOf(design, activeLoc);
   const selected = design.layers.find((l) => l.id === selectedId);
   const methodName = useCallback((code) => methods.find((m) => m.code === code)?.name || code, [methods]);
   const views = Object.entries(GARMENTS[design.garment].views);
@@ -318,13 +362,13 @@ export default function ProofDesigner({ job, methods, business, initialDesign, o
 
   function selectLoc(loc) {
     setActiveLoc(loc);
-    setView(areaFor(design.garment, loc).view);
+    setView(areaOf(design, loc).view);
   }
   function switchView(v) {
     setView(v);
-    const here = Object.keys(design.placements).find((loc) => areaFor(design.garment, loc).view === v);
+    const here = Object.keys(design.placements).find((loc) => areaOf(design, loc).view === v);
     if (here) { setActiveLoc(here); return; }
-    const loc = locationsFor(design.garment).find((l) => areaFor(design.garment, l).view === v);
+    const loc = locationsFor(design.garment).find((l) => areaOf(design, l).view === v);
     if (loc) {
       commit((d) => ({ ...d, placements: { ...d.placements, [loc]: { method: Object.values(d.placements)[0]?.method || '', inks: '' } } }));
       setActiveLoc(loc);
@@ -400,6 +444,77 @@ export default function ProofDesigner({ job, methods, business, initialDesign, o
     return { ...d, layers: ls };
   });
 
+  // ---------- fotos de la prenda (SanMar o propias) ----------
+  const photoFor = (v) => design.photo?.views?.[v] || null;
+
+  async function loadSanmar(style, preferColor, { apply = true, refresh = false } = {}) {
+    if (!style) return;
+    setSmState({ loading: true, error: null });
+    try {
+      const data = await api.get(`/sanmar/style/${encodeURIComponent(style.trim())}${refresh ? '?refresh=1' : ''}`);
+      setSm(data);
+      setStyleInput(data.style);
+      setSmState({ loading: false, error: null });
+      if (apply) {
+        const want = String(preferColor || '').toLowerCase().trim();
+        const color = data.colors.find((c) => c.name.toLowerCase() === want)
+          || data.colors.find((c) => want && (c.name.toLowerCase().includes(want) || want.includes(c.name.toLowerCase())))
+          || data.colors[0];
+        if (color) applyColor(color, design.photo?.kind || 'flat', data);
+      }
+    } catch (e) {
+      setSmState({ loading: false, error: e.message });
+    }
+  }
+  function applyColor(color, kind, data = sm) {
+    const views = viewsFromColor(color, kind);
+    if (!Object.keys(views).length) { notify(`SanMar no tiene fotos para ${color.name}`, true); return; }
+    const calibrated = data?.areas?.[kind];
+    commit((d) => ({
+      ...d, colorName: color.name, color: colorHex(color.name),
+      photo: { source: 'sanmar', style: data.style, color: color.name, kind, views },
+      areas: calibrated || (d.photo?.style === data.style && d.photo?.kind === kind ? d.areas : undefined),
+    }));
+  }
+  function setPhotoKind(kind) {
+    const c = sm?.colors.find((x) => x.name === design.photo?.color);
+    if (c) applyColor(c, kind);
+  }
+  async function uploadOwnPhoto(file) {
+    if (!file) return;
+    const { src } = await normalizeImage(await fileToDataUrl(file));
+    commit((d) => ({ ...d, photo: { source: d.photo?.source || 'propia', style: d.photo?.style, color: d.photo?.color || d.colorName, kind: d.photo?.kind || 'flat', views: { ...(d.photo?.views || {}), [view]: src } } }));
+  }
+  function togglePhotoMode(on) {
+    if (!on) { commit((d) => ({ ...d, photo: null, areas: undefined })); setEditArea(false); return; }
+    if (sm) { const c = sm.colors.find((x) => x.name === design.colorName) || sm.colors[0]; applyColor(c, 'flat'); }
+    else if (styleInput) loadSanmar(styleInput, design.colorName);
+  }
+  async function saveAreas() {
+    const all = Object.fromEntries(Object.keys(design.placements).map((loc) => [loc, areaOf(design, loc)]));
+    const merged = { ...(sm?.areas?.[design.photo.kind] || {}), ...design.areas, ...all };
+    try {
+      await api.put(`/sanmar/areas/${encodeURIComponent(design.photo.style)}/${design.photo.kind}`, merged);
+      setSm((x) => x && { ...x, areas: { ...x.areas, [design.photo.kind]: merged } });
+      notify(`Áreas guardadas para ${design.photo.style}: se usarán en las próximas pruebas`);
+    } catch (e) { notify(e.message, true); }
+  }
+  const setArea = (loc, patch, record = true) => {
+    const fn = (d) => ({ ...d, areas: { ...(d.areas || {}), [loc]: { ...areaOf(d, loc), ...patch } } });
+    record ? commit(fn) : setDesign(fn);
+  };
+  function resetArea(loc) {
+    commit((d) => { const areas = { ...(d.areas || {}) }; delete areas[loc]; return { ...d, areas }; });
+  }
+
+  // al abrir: si el producto es de SanMar, carga la foto real automáticamente
+  useEffect(() => {
+    if (!sanmarEnabled) return;
+    if (design.photo?.source === 'sanmar' && design.photo.style) { loadSanmar(design.photo.style, design.photo.color, { apply: false }); return; }
+    if (!design.photo && item?.product_sku && /sanmar/i.test(item.product_supplier || '')) loadSanmar(item.product_sku, item.color);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [itemIdx]);
+
   // arrastre
   const toSvg = (e) => {
     const svg = svgRef.current;
@@ -415,13 +530,25 @@ export default function ProofDesigner({ job, methods, business, initialDesign, o
     history.current.push(design);
     drag.current = { id: layer.id, mode, p0: toSvg(e), l0: { ...layer } };
   }
+  function onAreaDown(e, loc, mode) {
+    e.stopPropagation();
+    e.preventDefault();
+    history.current.push(design);
+    drag.current = { area: true, loc, mode, p0: toSvg(e), a0: { ...areaOf(design, loc) } };
+  }
   useEffect(() => {
     const move = (e) => {
       const dr = drag.current;
       if (!dr) return;
       const p = toSvg(e);
+      if (dr.area) {
+        const { a0, p0: q } = dr;
+        const dx = p.x - q.x, dy = p.y - q.y;
+        setArea(dr.loc, dr.mode === 'move' ? { x: a0.x + dx, y: a0.y + dy } : { w: Math.max(12, a0.w + dx), h: Math.max(12, a0.h + dy) }, false);
+        return;
+      }
       const { l0, p0 } = dr;
-      const a = areaFor(design.garment, l0.location);
+      const a = areaOf(design, l0.location);
       if (dr.mode === 'move') {
         let cx = l0.cx + p.x - p0.x;
         const cy = l0.cy + p.y - p0.y;
@@ -485,7 +612,7 @@ export default function ProofDesigner({ job, methods, business, initialDesign, o
     setBusy(false);
   }
 
-  const outOfArea = design.layers.filter((l) => outside(layerBox(l), areaFor(design.garment, l.location)));
+  const outOfArea = design.layers.filter((l) => outside(layerBox(l), areaOf(design, l.location)));
   const usedLocs = Object.keys(design.placements);
   const freeLocs = locationsFor(design.garment).filter((l) => !usedLocs.includes(l));
   const pxPerIn = area.w / area.inW;
@@ -516,19 +643,57 @@ export default function ProofDesigner({ job, methods, business, initialDesign, o
           <select value={design.garment} onChange={(e) => {
             const garment = e.target.value;
             const loc = DEFAULT_LOCATION[garment];
-            commit((d) => ({ ...d, garment, placements: { [loc]: Object.values(d.placements)[0] || { method: '', inks: '' } }, layers: d.layers.map((l) => ({ ...l, location: loc })) }));
+            commit((d) => ({ ...d, garment, areas: undefined, placements: { [loc]: Object.values(d.placements)[0] || { method: '', inks: '' } }, layers: d.layers.map((l) => ({ ...l, location: loc })) }));
             setActiveLoc(loc); setView(areaFor(garment, loc).view);
           }}>
             {Object.entries(GARMENTS).map(([k, g]) => <option key={k} value={k}>{g.name}</option>)}
           </select>
         </label>
-        <div className="field"><span>Color de la prenda</span>
+        <div className="field"><span>Imagen de la prenda</span>
+          <div className="seg">
+            <button className={!design.photo ? 'on' : ''} onClick={() => togglePhotoMode(false)}>Silueta</button>
+            <button className={design.photo ? 'on' : ''} onClick={() => togglePhotoMode(true)}>Foto real</button>
+          </div>
+        </div>
+        {(design.photo || smState.loading || smState.error) && (
+          <div className="loc-settings">
+            <label className="field"><span>Estilo SanMar</span>
+              <form className="row gap" onSubmit={(e) => { e.preventDefault(); loadSanmar(styleInput, design.colorName); }}>
+                <input value={styleInput} onChange={(e) => setStyleInput(e.target.value.toUpperCase())} placeholder="Ej. PC54, K500" />
+                <button className="btn" disabled={!sanmarEnabled || smState.loading}>{smState.loading ? '…' : 'Cargar'}</button>
+              </form>
+            </label>
+            {!sanmarEnabled && <p className="muted small">SanMar no está conectado en el servidor (ver README). Puedes subir tu propia foto abajo.</p>}
+            {smState.error && <p className="danger small">{smState.error}</p>}
+            {sm && (
+              <>
+                <div className="muted small">{sm.brand} {sm.style} · {sm.title}</div>
+                <div className="sm-colors">
+                  {sm.colors.map((c) => (
+                    <button key={c.name} title={c.name} className={`sm-color ${design.photo?.color === c.name ? 'on' : ''}`} onClick={() => applyColor(c, design.photo?.kind || 'flat')}>
+                      {c.swatch ? <img src={proxied(c.swatch)} alt="" /> : <span style={{ background: colorHex(c.name) }} />}
+                    </button>
+                  ))}
+                </div>
+                <div className="muted small">Color: <strong>{design.photo?.color || '—'}</strong></div>
+                <div className="seg">
+                  <button className={design.photo?.kind !== 'model' ? 'on' : ''} onClick={() => setPhotoKind('flat')}>Plana</button>
+                  <button className={design.photo?.kind === 'model' ? 'on' : ''} onClick={() => setPhotoKind('model')}>Con modelo</button>
+                </div>
+                <button className="link-btn small" onClick={() => loadSanmar(sm.style, design.photo?.color, { refresh: true })}>↻ Actualizar desde SanMar</button>
+              </>
+            )}
+            <button className="link-btn small" onClick={() => photoRef.current.click()}>Usar mi propia foto para «{GARMENTS[design.garment].views[view]?.label}»</button>
+            <input ref={photoRef} type="file" accept="image/*" hidden onChange={(e) => { uploadOwnPhoto(e.target.files[0]); e.target.value = ''; }} />
+          </div>
+        )}
+        {!design.photo && <div className="field"><span>Color de la prenda</span>
           <div className="swatches">
             {SWATCHES.map((c) => <button key={c} className={`swatch ${design.color === c ? 'on' : ''}`} style={{ background: c }} onClick={() => commit((d) => ({ ...d, color: c }))} aria-label={c} />)}
             <input type="color" value={design.color} onChange={(e) => setDesign((d) => ({ ...d, color: e.target.value }))} title="Otro color" />
           </div>
           <input value={design.colorName} placeholder="Nombre del color (ej. Navy)" onChange={(e) => setDesign((d) => ({ ...d, colorName: e.target.value }))} />
-        </div>
+        </div>}
 
         <div className="field"><span>Ubicaciones</span>
           <div className="loc-list">
@@ -585,13 +750,16 @@ export default function ProofDesigner({ job, methods, business, initialDesign, o
             <button className="btn" onClick={() => fileRef.current.click()}>⬆ Subir logo</button>
             <input ref={fileRef} type="file" accept="image/png,image/jpeg,image/svg+xml,image/webp" hidden onChange={(e) => { addImage(e.target.files[0]); e.target.value = ''; }} />
             <button className="btn" onClick={addText}>T Agregar texto</button>
+            <button className={`btn ${editArea ? 'primary' : ''}`} onClick={() => { setEditArea(!editArea); setSelectedId(null); }} title="Mover y ajustar el área de impresión sobre la foto">📐 {editArea ? 'Listo' : 'Ajustar área'}</button>
           </div>
         </div>
         <div className="stage"
           onDragOver={(e) => e.preventDefault()}
           onDrop={(e) => { e.preventDefault(); addImage(e.dataTransfer.files[0]); }}>
           <GarmentView garment={design.garment} color={design.color} view={view} design={design} activeLoc={activeLoc}
-            selectedId={selectedId} interactive showDims svgRef={svgRef} onLayerDown={onLayerDown} onBackground={() => setSelectedId(null)} />
+            selectedId={selectedId} interactive showDims svgRef={svgRef} onLayerDown={onLayerDown} onBackground={() => setSelectedId(null)}
+            photo={photoFor(view)} editArea={editArea} onAreaDown={onAreaDown} />
+          {smState.loading && <div className="stage-hint">Cargando foto de SanMar…</div>}
           {!design.layers.length && <div className="stage-hint">Arrastra aquí el logo del cliente o usa «Subir logo»</div>}
         </div>
         {outOfArea.length > 0 && <p className="danger small">⚠ {outOfArea.length} elemento(s) se salen del área de impresión (contorno rojo).</p>}
@@ -599,7 +767,22 @@ export default function ProofDesigner({ job, methods, business, initialDesign, o
       </main>
 
       <aside className="designer-right">
-        {!selected && <p className="muted">Selecciona un elemento para editarlo, o agrega un logo o texto.</p>}
+        {editArea && (
+          <div className="stack-sm area-editor">
+            <h3>Área de impresión · {activeLoc}</h3>
+            <p className="muted small">Arrastra el recuadro morado para colocarlo sobre la prenda y usa la esquina para cambiar su tamaño. El recuadro debe representar el ancho real indicado.</p>
+            <label className="field"><span>Ancho real del área (pulg.)</span>
+              <input type="number" step="0.5" min="1" value={area.inW} onChange={(e) => setArea(activeLoc, { inW: Number(e.target.value) || area.inW })} />
+            </label>
+            <div className="row gap wrap">
+              <button className="btn" onClick={() => resetArea(activeLoc)}>Restablecer</button>
+              {design.photo?.style && <button className="btn primary" onClick={saveAreas}>Guardar para {design.photo.style}</button>}
+            </div>
+            {design.photo?.style && <p className="muted small">Al guardar, todas las pruebas futuras de {design.photo.style} ({design.photo.kind === 'model' ? 'con modelo' : 'plana'}) usarán estas áreas.</p>}
+            <hr />
+          </div>
+        )}
+        {!selected && !editArea && <p className="muted">Selecciona un elemento para editarlo, o agrega un logo o texto.</p>}
         {selected && (
           <div className="stack-sm">
             <h3>{selected.type === 'image' ? 'Logo / imagen' : 'Texto'}</h3>
@@ -660,7 +843,7 @@ export default function ProofDesigner({ job, methods, business, initialDesign, o
       <div className="export-hidden" aria-hidden="true">
         {views.map(([k]) => (
           <GarmentView key={k} garment={design.garment} color={design.color} view={k} design={design} showDims
-            svgRef={(el) => { exportSvgs.current[k] = el; }} />
+            svgRef={(el) => { exportSvgs.current[k] = el; }} photo={photoFor(k)} />
         ))}
       </div>
 

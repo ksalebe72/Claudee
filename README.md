@@ -56,6 +56,24 @@ Variables de entorno opcionales:
 
 `npm run seed` borra la base y la vuelve a crear con los datos iniciales. `npm test` corre las pruebas.
 
+## SanMar (fotos reales en las pruebas)
+
+Copia `.env.example` a `.env` y pon tus datos de SanMar Web Services:
+
+```
+SANMAR_CUSTOMER_NUMBER=tu_numero_de_cliente
+SANMAR_USERNAME=tu_usuario_sanmar.com
+SANMAR_PASSWORD=tu_contraseña
+```
+
+Con eso:
+- **Catálogo → Importar de SanMar**: trae el estilo (ej. `PC54`) con nombre, marca, colores, tallas y costo.
+- **Decorador**: si el producto de la orden es de SanMar, carga sola la **foto real** (plana o con modelo, frente y espalda) en el color de la orden. Desde el decorador puedes cambiar de color o de estilo.
+- **Ajustar área**: la primera vez que uses un estilo, acomoda el recuadro del área de impresión sobre la foto y pulsa **Guardar para ese estilo**. Desde entonces las medidas en pulgadas salen bien en todas las pruebas de ese estilo.
+- Las fotos se descargan una vez y se guardan en `server/uploads/sanmar/`.
+
+Se usa el servicio estándar de información de producto (`getProductInfoByStyleColorSize`). Si algo no carga, abre `/api/sanmar/raw/PC54` para ver la respuesta tal cual la manda SanMar. Si no hay conexión con SanMar, el decorador también acepta una foto propia de la prenda.
+
 ## SMS y email reales
 
 Por ahora los mensajes **se registran** en la conversación del contacto, pero no salen. Para enviarlos de verdad hay que conectar un proveedor en `server/messaging.js`: Twilio para SMS, SMTP o SendGrid para email, o la API de HighLevel si quieres seguir usando sus números.
