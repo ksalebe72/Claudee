@@ -13,8 +13,15 @@ const SUGERENCIAS = [
 ];
 
 /** Asistente de solo lectura: responde con los datos del negocio. */
+const SUGERENCIAS_ROL = {
+  ventas: ['¿Cuánto llevo vendido este mes?', '¿Cuál es mi comisión de este mes?', '¿Cuáles de mis clientes tienen saldo pendiente?', '¿Qué cotizaciones mías siguen abiertas?'],
+  logistica: ['¿Qué órdenes se entregan esta semana?', '¿Qué órdenes están atrasadas?', '¿Cuántas piezas hay en producción?', '¿Qué tareas tengo pendientes?'],
+  coordinacion: ['¿Cuánto ha vendido cada vendedor este mes?', '¿Qué órdenes están atrasadas o vencen esta semana?', '¿Qué cotizaciones siguen abiertas y de quién son?', '¿Qué clientes tienen saldo pendiente?'],
+};
+
 export default function Asistente() {
   const meta = useMeta();
+  const sugerencias = SUGERENCIAS_ROL[meta.user.role] || SUGERENCIAS;
   const [chat, setChat] = useState([]);
   const [q, setQ] = useState('');
   const [busy, setBusy] = useState(false);
@@ -58,7 +65,7 @@ export default function Asistente() {
         {chat.length === 0 && (
           <div className="suggestions">
             <p className="don-pixel-saludo">¡Hola, soy <strong>Don Pixel</strong>! Conozco las cotizaciones, órdenes, cobros y comisiones de Color Plus. ¿Qué quieres saber?</p>
-            {SUGERENCIAS.map((s) => <button key={s} className="chip" onClick={() => preguntar(s)}>{s}</button>)}
+            {sugerencias.map((s) => <button key={s} className="chip" onClick={() => preguntar(s)}>{s}</button>)}
           </div>
         )}
         <div className="chat">

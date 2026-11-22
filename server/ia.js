@@ -5,7 +5,7 @@
 //   3. redactarMensaje: escribe un borrador para el cliente (no se envía; nunca incluye costos).
 // La clave va en ANTHROPIC_API_KEY (variable de entorno). Nunca se registra el contenido de los mensajes.
 import Anthropic from '@anthropic-ai/sdk';
-import { filtroContactos } from './scope.js';
+import { filtroContactos, filtroJobs, soloPropios, esLogistica, tareaPermitida } from './scope.js';
 import { z } from 'zod';
 import { betaZodOutputFormat } from '@anthropic-ai/sdk/helpers/beta/zod';
 import { all, get, insert, run, getSetting } from './db.js';
@@ -169,20 +169,32 @@ function validarBorrador(out, user = null) {
 }
 
 // ============ 2. Preguntarle al negocio ============
-const SISTEMA_NEGOCIO = `Eres Don Pixel, el analista interno de Color Plus LLC. Si te preguntan tu nombre, eres Don Pixel. Hablas en español, con un tono amable y directo. Respondes preguntas del dueño, Finanzas y Gerencia sobre los datos del negocio que se te entregan en <datos>.
+const SISTEMA_NEGOCIO = `Eres Don Pixel, el analista interno de Color Plus LLC. Si te preguntan tu nombre, eres Don Pixel. Hablas en español, con un tono amable y directo. Respondes preguntas de cualquier persona del equipo sobre los datos del negocio que se te entregan en <datos>. En <datos>.quienPregunta está quién pregunta y qué alcance tiene.
 Reglas:
 - Responde solo con base en <datos>. Si algo no está en los datos, dilo claramente; no inventes cifras.
 - Montos en USD con dos decimales. Cita los números de orden (OT-xxxx) o cotización (COT-xxxx) cuando hables de casos concretos.
 - Una orden "incompleta" tiene costos desconocidos: no la cuentes como ganancia cero; menciónala aparte.
 - Contribución = ganancia bruta − comisión; objetivo y mínimo vienen en los datos.
 - Responde en español, breve y directo, con listas o tablas simples en Markdown cuando ayuden.
-- Solo puedes leer: si te piden cambiar algo, explica qué pantalla usar.`;
+- Solo puedes leer: si te piden cambiar algo, explica qué pantalla usar.
+- Respeta el alcance de quien pregunta: si pide algo que no está en sus datos (otros vendedores, totales del negocio, montos para Logística), dile amablemente que eso no está en su acceso y que lo consulte con el dueño. Nunca adivines esos datos.`;
 
-function fotoDelNegocio() {
+/**
+ * Datos que se le dan a Don Pixel, recortados según quién pregunta (mismos permisos que en la app):
+ * · Vendedor: solo sus clientes y órdenes, y sus propias liquidaciones.
+ * · Logística: órdenes y entregas sin montos, sin cotizaciones ni comisiones.
+ * · Coordinación: todas las órdenes y cotizaciones, sin liquidaciones.
+ * · Dueño, Finanzas y Gerencia: todo.
+ */
+function fotoDelNegocio(user) {
   const desde = new Date(Date.now() - 400 * 86400000).toISOString().slice(0, 10);
   const vendedores = Object.fromEntries(all('SELECT id, name FROM salespeople').map((s) => [s.id, s.name]));
-  const jobs = all(`SELECT j.*, c.name AS contacto, c.company AS empresa FROM jobs j LEFT JOIN contacts c ON c.id = j.contact_id
-                    WHERE j.kind = 'order' OR j.status IN ('borrador','enviada') ORDER BY j.id DESC LIMIT 400`);
+  const fj = filtroJobs(user, 'j');
+  const logistica = esLogistica(user);
+  const gestion = ['duena', 'finanzas', 'gerencia'].includes(user?.role);
+  const jobs = all(`SELECT j.*, c.name AS contacto, c.company AS empresa,
+                      (SELECT SUM(qty) FROM job_items i WHERE i.job_id = j.id) AS piezas FROM jobs j LEFT JOIN contacts c ON c.id = j.contact_id
+                    WHERE (j.kind = 'order' OR j.status IN ('borrador','enviada')) AND ${fj.sql} ORDER BY j.id DESC LIMIT 400`, ...fj.params);
   const ordenes = [];
   const cotizaciones = [];
   for (const j of jobs) {
@@ -190,6 +202,10 @@ function fotoDelNegocio() {
     if (j.kind === 'order' && fecha < desde && j.status === 'entregado') continue;
     const { fin } = computeJob(j, { persist: false });
     const base = { cliente: j.empresa || j.contacto || '—', vendedor: vendedores[j.salesperson_id] || '—', titulo: j.title };
+    if (logistica) {
+      if (j.kind === 'order') ordenes.push({ orden: j.order_number, ...base, entrega: j.due_date, estado: label(j.status), piezas: j.piezas || 0 });
+      continue;
+    }
     if (j.kind === 'order') {
       ordenes.push({
         orden: j.order_number, ...base, fechaFactura: j.invoice_date, entrega: j.due_date, estado: label(j.status),
@@ -202,10 +218,17 @@ function fotoDelNegocio() {
       cotizaciones.push({ cotizacion: j.number, ...base, estado: label(j.status), creada: j.created_at?.slice(0, 10), total: fin.total, contribucionPct: fin.contribucionPct, semaforo: fin.semaforo });
     }
   }
-  const liquidaciones = all('SELECT l.period, l.status, l.total, l.paid_at, s.name AS vendedor FROM liquidations l JOIN salespeople s ON s.id = l.salesperson_id ORDER BY l.period DESC LIMIT 60');
-  const tareas = all("SELECT t.title, t.due_date, t.assignee, c.name AS cliente FROM tasks t LEFT JOIN contacts c ON c.id = t.contact_id WHERE t.done = 0 ORDER BY t.due_date LIMIT 100");
-  const margen = currentPricing().config.margen;
-  return { hoy: today(), negocio: getSetting('business_name', 'Color Plus LLC'), margen, ordenes, cotizacionesAbiertas: cotizaciones, liquidacionesDeComisiones: liquidaciones, tareasPendientes: tareas };
+  const liquidaciones = gestion
+    ? all('SELECT l.period, l.status, l.total, l.paid_at, s.name AS vendedor FROM liquidations l JOIN salespeople s ON s.id = l.salesperson_id ORDER BY l.period DESC LIMIT 60')
+    : soloPropios(user) ? all('SELECT l.period, l.status, l.total, l.paid_at FROM liquidations l WHERE l.salesperson_id = ? ORDER BY l.period DESC LIMIT 24', user.salesperson_id ?? -1) : [];
+  const tareas = all("SELECT t.title, t.due_date, t.assignee, t.contact_id, t.job_id, c.name AS cliente FROM tasks t LEFT JOIN contacts c ON c.id = t.contact_id WHERE t.done = 0 ORDER BY t.due_date LIMIT 300")
+    .filter((t) => tareaPermitida(user, t)).slice(0, 100).map(({ contact_id: _c, job_id: _j, ...t }) => t);
+  const alcance = logistica ? 'Logística: solo órdenes, entregas y tareas; no tiene acceso a montos, costos, márgenes ni comisiones.'
+    : soloPropios(user) ? `Vendedor: solo ve SUS clientes y órdenes y su propia comisión. No tiene datos de otros vendedores ni del total del negocio.`
+      : gestion ? 'Acceso completo.' : 'Coordinación de ventas: todas las órdenes y cotizaciones; no ve liquidaciones de comisiones.';
+  const datos = { hoy: today(), negocio: getSetting('business_name', 'Color Plus LLC'), quienPregunta: { nombre: user?.name, rol: user?.role, alcance }, ordenes, tareasPendientes: tareas };
+  if (!logistica) Object.assign(datos, { margen: currentPricing().config.margen, cotizacionesAbiertas: cotizaciones, liquidacionesDeComisiones: liquidaciones });
+  return datos;
 }
 
 export async function preguntarAlNegocio(pregunta, historial, user) {
@@ -215,7 +238,7 @@ export async function preguntarAlNegocio(pregunta, historial, user) {
   const previos = (Array.isArray(historial) ? historial : []).slice(-10)
     .filter((m) => (m.role === 'user' || m.role === 'assistant') && typeof m.content === 'string')
     .map((m) => ({ role: m.role, content: limpiar(m.content, 8000) }));
-  const datos = JSON.stringify(fotoDelNegocio());
+  const datos = JSON.stringify(fotoDelNegocio(user));
   try {
     const r = await cliente().beta.messages.create({
       ...BASE,

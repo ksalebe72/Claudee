@@ -21,7 +21,6 @@ r.get('/ia/estado', wrap((req) => ({
 r.post('/ia/cotizar', wrap((req) => cotizarDesdeMensaje(req.body.texto, req.user)));
 
 r.post('/ia/preguntar', wrap((req) => {
-  requireRole(req, 'duena', 'finanzas', 'gerencia');
   return preguntarAlNegocio(req.body.pregunta, req.body.historial, req.user);
 }));
 

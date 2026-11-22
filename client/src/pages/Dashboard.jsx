@@ -128,7 +128,7 @@ export default function Dashboard() {
         </section>
 
         <div className="stack">
-          {GESTION.includes(user.role) && (
+          {(
             <section className="card tarjeta-asistente">
               <div className="row gap"><span className="asistente-icono">{I.chispa}</span><div><h3 className="titulo-seccion">Don Pixel</h3><p className="muted small">Tu asistente interno · solo lectura</p></div></div>
               <div className="asistente-burbuja"><span className="asistente-robot">{I.robot}</span>¡Hola! Soy Don Pixel. Pregúntame sobre clientes, cotizaciones, órdenes, márgenes o comisiones. Solo consulto; no creo ni modifico nada.</div>

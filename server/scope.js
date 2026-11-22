@@ -61,6 +61,7 @@ const LOGISTICA = [
   ['GET', /^\/proofs\/\d+\/design$/],
   ['GET', /^\/sanmar\//],
   ['POST', /^\/jobs\/\d+\/status$/],
+  ['POST', /^\/ia\/preguntar$/], // Don Pixel: con datos recortados a su alcance
   ['POST', /^\/tasks$/], ['PUT', /^\/tasks\/\d+$/],
   ['POST', /^\/contacts\/\d+\/activities$/],
 ];

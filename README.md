@@ -249,7 +249,7 @@ Tres funciones, todas de **solo lectura o borrador**: la IA no guarda, no envía
 | Función | Dónde | Qué hace |
 |---|---|---|
 | Cotizar desde un mensaje | Cotizaciones → ✨ Cotizar desde mensaje | Pegas el email, SMS o WhatsApp del cliente y arma un borrador: cliente (reconoce contactos existentes), prendas del catálogo, tallas, decoraciones, ubicaciones, fecha y lo que falta preguntar. **Los precios los calcula la matriz, nunca la IA.** Revisas y pulsas «Crear borrador». |
-| Don Pixel (asistente del negocio) | Menú → ✨ Don Pixel (dueño, Finanzas, Gerencia) | Responde preguntas sobre órdenes, márgenes, cobros, comisiones y tareas con los datos de los últimos ~13 meses. No puede cambiar nada. |
+| Don Pixel (asistente del negocio) | Menú → ✨ Don Pixel (todos los usuarios) | Responde preguntas con los datos de los últimos ~13 meses, recortados al acceso de quien pregunta: el vendedor solo sus clientes y su comisión; Logística sin montos; Coordinación sin liquidaciones. No puede cambiar nada. |
 | Redactar mensajes | En cada cotización u orden → ✨ Redactar mensaje | Borradores (enviar cotización, seguimiento, aprobar arte, orden lista, recordatorio de pago o libre) en español o inglés, con el tono de Color Plus. Se copian o se guardan como nota; **no se envían**. La IA nunca recibe costos ni márgenes. |
 
 ### Activarla

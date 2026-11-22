@@ -25,7 +25,7 @@ import Asistente from './pages/Asistente.jsx';
 const GESTION = ['duena', 'finanzas', 'gerencia'];
 const SIN_LOGISTICA = ['duena', 'finanzas', 'gerencia', 'coordinacion', 'ventas'];
 const NAV = [
-  { group: 'General', items: [{ to: '/', label: 'Tablero', icon: '◧', end: true }, { to: '/asistente', label: 'Don Pixel', icon: '✨', roles: GESTION }] },
+  { group: 'General', items: [{ to: '/', label: 'Tablero', icon: '◧', end: true }, { to: '/asistente', label: 'Don Pixel', icon: '✨' }] },
   { group: 'Ventas y CRM', items: [
     { to: '/contactos', label: 'Contactos', icon: '☺' },
     { to: '/pipeline', label: 'Pipeline', icon: '⇶', roles: SIN_LOGISTICA },

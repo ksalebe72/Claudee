@@ -47,8 +47,7 @@ test('cotizar desde un mensaje: borrador sin precios, cliente reconocido y talla
   assert.ok(!p.raw.includes('3.37'), 'no envía costos del catálogo');
 });
 
-test('preguntarle al negocio: solo gestión; envía datos de solo lectura', async () => {
-  assert.equal((await ventas.call('POST', '/ia/preguntar', { pregunta: '¿Cuánto vendí?' })).status, 403);
+test('Don Pixel: el dueño pregunta con todos los datos de solo lectura', async () => {
   const antes = mock.peticiones.length;
   const r = await s.duena.post('/ia/preguntar', { pregunta: '¿Qué orden tiene menor margen?', historial: [{ role: 'user', content: 'hola' }, { role: 'assistant', content: 'hola' }] });
   assert.match(r.respuesta, /simulador/);
@@ -88,4 +87,26 @@ test('el dueño ve el uso del mes', async () => {
   assert.ok(e.usoDelMes.find((u) => u.feature === 'cotizar').consultas >= 1);
   const ev = await ventas.get('/ia/estado');
   assert.equal(ev.usoDelMes, undefined);
+});
+
+test('Don Pixel para todos: cada quien solo le manda sus datos a la IA', async () => {
+  const vend = await s.duena.get('/vendedores');
+  const bryanId = vend.find((v) => v.name === 'Bryan').id;
+  const bryan = await s.userWithRole('ventas', bryanId);
+  const logi = await s.userWithRole('logistica');
+  const suyo = await bryan.post('/contacts', { name: 'Cliente Propio Bryan' });
+  await bryan.post('/jobs', { contact_id: suyo.id, title: 'Gorras Bryan', items: [{ product_id: producto.id, sizes: { M: 5 } }] });
+
+  let antes = mock.peticiones.length;
+  await bryan.post('/ia/preguntar', { pregunta: '¿Cuánto vendí?' });
+  let p = mock.peticiones[antes].raw;
+  assert.match(p, /Gorras Bryan/, 've lo suyo');
+  assert.doesNotMatch(p, /Gym FitZone|Camisetas staff/, 'no recibe clientes ni órdenes ajenas');
+  assert.match(p, /Vendedor: solo ve SUS clientes/);
+
+  antes = mock.peticiones.length;
+  await logi.post('/ia/preguntar', { pregunta: '¿Qué se entrega esta semana?' });
+  p = mock.peticiones[antes].raw;
+  for (const prohibido of ['ingresoSinImpuesto', 'gananciaBruta', 'comision', 'contribucion', 'total', 'saldo', 'liquidacionesDeComisiones', 'cotizacionesAbiertas']) assert.ok(!p.includes(`\\"${prohibido}\\"`), `Logística no recibe ${prohibido}`);
+  assert.match(p, /Logística: solo órdenes/);
 });
