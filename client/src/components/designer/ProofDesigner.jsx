@@ -106,7 +106,7 @@ async function toDataUrl(url) {
 export function designFromItem(item) {
   const garment = garmentFromCategory(item?.product_category, item?.product_name || item?.description);
   const placements = {};
-  for (const d of item?.decorations || []) placements[d.location || DEFAULT_LOCATION[garment]] = { method: d.method, inks: '' };
+  for (const d of item?.decorations || []) placements[d.location || DEFAULT_LOCATION[garment]] = { method: d.process || d.method || '', inks: '' };
   if (!Object.keys(placements).length) placements[DEFAULT_LOCATION[garment]] = { method: '', inks: '' };
   return { garment, color: colorHex(item?.color), colorName: item?.color || '', placements, layers: [], note: '' };
 }
@@ -241,7 +241,7 @@ function wrapText(ctx, text, x, y, maxW, lh) {
   return y;
 }
 
-async function buildSheet({ design, job, item, methodName, business, version, svgs }) {
+async function buildSheet({ design, job, item, methodName, business, brand, version, svgs }) {
   const g = GARMENTS[design.garment];
   const views = Object.keys(g.views).filter((v) => design.layers.some((l) => areaOf(design, l.location).view === v));
   const imgs = await Promise.all(views.map((v) => svgToImage(svgs[v])));
@@ -252,17 +252,31 @@ async function buildSheet({ design, job, item, methodName, business, version, sv
   const ctx = c.getContext('2d');
   ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, W, H);
 
-  // encabezado
-  ctx.fillStyle = '#161a2e'; ctx.fillRect(0, 0, W, 110);
-  ctx.fillStyle = '#fff'; ctx.font = 'bold 36px Arial'; ctx.textAlign = 'left';
-  ctx.fillText(business, PAD, 68);
-  if (design.photo?.style) { ctx.font = '20px Arial'; ctx.fillStyle = '#c7cbe0'; ctx.fillText(`Prenda: SanMar ${design.photo.style} · ${design.photo.color}`, PAD, 96); }
-  ctx.textAlign = 'right'; ctx.font = 'bold 32px Arial'; ctx.fillText('PRUEBA DE ARTE', W - PAD, 52);
-  ctx.font = '22px Arial'; ctx.fillStyle = '#c7cbe0';
-  ctx.fillText(`${job.order_number || job.number} · Versión ${version} · ${fmtDate(new Date().toISOString().slice(0, 10))}`, W - PAD, 88);
+  // encabezado con la marca: logo a la izquierda, datos de la prueba a la derecha, franja con el degradado del logo
+  const HEAD = 124;
+  const principal = brand?.primary || '#613bbb';
+  let textoX = PAD;
+  if (brand?.logo) {
+    try {
+      const logo = await loadImage(brand.logo);
+      const k = Math.min(100 / logo.naturalHeight, 260 / logo.naturalWidth);
+      ctx.drawImage(logo, PAD, (HEAD - logo.naturalHeight * k) / 2, logo.naturalWidth * k, logo.naturalHeight * k);
+      textoX = PAD + logo.naturalWidth * k + 28;
+    } catch { /* sin logo si no carga */ }
+  }
+  ctx.textAlign = 'left';
+  ctx.fillStyle = '#1c2033'; ctx.font = 'bold 34px Arial'; ctx.fillText(business, textoX, 62);
+  if (design.photo?.style) { ctx.font = '20px Arial'; ctx.fillStyle = '#6b7189'; ctx.fillText(`Prenda: SanMar ${design.photo.style} · ${design.photo.color}`, textoX, 94); }
+  ctx.textAlign = 'right'; ctx.fillStyle = principal; ctx.font = 'bold 34px Arial'; ctx.fillText('PRUEBA DE ARTE', W - PAD, 56);
+  ctx.font = '22px Arial'; ctx.fillStyle = '#6b7189';
+  ctx.fillText(`${job.order_number || job.number} · Versión ${version} · ${fmtDate(new Date().toISOString().slice(0, 10))}`, W - PAD, 92);
+  const colores = brand?.gradient?.length ? brand.gradient : [principal, principal];
+  const grad = ctx.createLinearGradient(0, 0, W, 0);
+  colores.forEach((col, i) => grad.addColorStop(i / (colores.length - 1), col));
+  ctx.fillStyle = grad; ctx.fillRect(0, HEAD, W, 8);
 
   // vistas
-  const areaW = 1200, top = 140, viewH = 960;
+  const areaW = 1200, top = 156, viewH = 944;
   ctx.fillStyle = '#f3f4f6';
   ctx.beginPath(); ctx.roundRect(PAD - 10, top - 10, areaW, viewH + 20, 18); ctx.fill();
   const slot = areaW / views.length;
@@ -316,7 +330,7 @@ async function buildSheet({ design, job, item, methodName, business, version, sv
 }
 
 // ---------- componente principal ----------
-export default function ProofDesigner({ job, methods, business, initialDesign, onClose, onSent, notify, sanmarEnabled }) {
+export default function ProofDesigner({ job, methods, business, brand, initialDesign, onClose, onSent, notify, sanmarEnabled }) {
   const items = job.items || [];
   const [itemIdx, setItemIdx] = useState(initialDesign?.itemIdx ?? 0);
   const [design, setDesign] = useState(() => initialDesign || designFromItem(items[0]));
@@ -589,7 +603,7 @@ export default function ProofDesigner({ job, methods, business, initialDesign, o
   async function makeSheet() {
     if (!design.layers.length) { notify('Agrega al menos un logo o texto', true); return null; }
     setSelectedId(null);
-    return buildSheet({ design, job, item, methodName, business, version, svgs: exportSvgs.current });
+    return buildSheet({ design, job, item, methodName, business, brand, version, svgs: exportSvgs.current });
   }
   async function openPreview() {
     setBusy(true);
