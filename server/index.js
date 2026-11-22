@@ -8,7 +8,7 @@ import iaApi from './ia-api.js';
 import opsApi, { healthRouter } from './ops-api.js';
 import { programarRespaldos } from './backup.js';
 import { authRouter, usersRouter, requireAuth } from './auth.js';
-import { ensurePricing, ensureCommissionSetup, aplicarCambioComisionBryan } from './config.js';
+import { ensurePricing, ensureCommissionSetup, aplicarCambioComisionBryan, aplicarCambioWrapsBryan } from './config.js';
 import { seedIfEmpty } from './seed.js';
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
@@ -21,7 +21,7 @@ app.use(express.json({ limit: '20mb' }));
 if (seedIfEmpty({ demo: process.env.SEED_DEMO !== '0' })) console.log('Base nueva: datos iniciales cargados');
 ensurePricing();
 ensureCommissionSetup();
-if (process.env.CAMBIO_BRYAN_DISABLED !== '1') aplicarCambioComisionBryan();
+if (process.env.CAMBIO_BRYAN_DISABLED !== '1') { aplicarCambioComisionBryan(); aplicarCambioWrapsBryan(); }
 programarRespaldos();
 
 // Toda la API exige sesión, salvo el inicio de sesión y el portal público del cliente.

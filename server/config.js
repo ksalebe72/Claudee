@@ -172,7 +172,7 @@ export function listRules() {
 /**
  * Cambio pedido por la dueña: Bryan pasa de 25% de la venta a 40% de la ganancia de producto, desde el día en que se aplica.
  * Se hace una sola vez: crea la regla «Bryan · Utilidad 40%» y desactiva «Bryan · Ventas» (las órdenes que ya la tienen la conservan).
- * «Bryan · Wraps» no se toca. Queda en el historial.
+ * Queda en el historial. (Los wraps se cambian aparte en aplicarCambioWrapsBryan.)
  */
 export const CAMBIO_BRYAN = 'cambio_bryan_utilidad_40';
 export function aplicarCambioComisionBryan(hoy = new Date().toLocaleDateString('en-CA', { timeZone: 'America/New_York' })) {
@@ -190,5 +190,18 @@ export function aplicarCambioComisionBryan(hoy = new Date().toLocaleDateString('
     }
   }
   setSetting(CAMBIO_BRYAN, hoy);
+  return true;
+}
+
+/** Segundo pedido de la dueña: los wraps también al 40% de la utilidad (una sola regla para todo lo que venda Bryan). */
+export const CAMBIO_BRYAN_WRAPS = 'cambio_bryan_wraps_40';
+export function aplicarCambioWrapsBryan(hoy = new Date().toLocaleDateString('en-CA', { timeZone: 'America/New_York' })) {
+  if (getSetting(CAMBIO_BRYAN_WRAPS)) return false;
+  const wraps = get("SELECT r.* FROM commission_rules r JOIN salespeople s ON s.id = r.salesperson_id WHERE s.name = 'Bryan' AND r.name LIKE '%Wrap%' AND r.active = 1");
+  if (wraps) {
+    run('UPDATE commission_rules SET active = 0 WHERE id = ?', wraps.id);
+    audit(null, 'comisiones', `regla ${wraps.name}`, { activa: true, tasa: 0.5 }, { activa: false, motivo: `wraps también con Bryan · Utilidad 40% desde ${hoy}` }, String(wraps.id));
+  }
+  setSetting(CAMBIO_BRYAN_WRAPS, hoy);
   return true;
 }

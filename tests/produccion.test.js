@@ -126,7 +126,7 @@ test('el ajuste a meta de una línea se guarda y se recalcula en el servidor', a
   assert.equal(q.items[0].calc.decoraciones[0].precioPieza, 9.38, 'bordado $7.50 + 25%');
 });
 
-test('Bryan queda en 40% de la utilidad desde el día del cambio; la regla de 25% se desactiva y wraps no se toca', async () => {
+test('Bryan queda en 40% de la utilidad en todo (también wraps) desde el día del cambio; las reglas de 25% y 50% se desactivan', async () => {
   const reglas = await s.duena.get('/comisiones/reglas');
   const nueva = reglas.find((r) => r.name === 'Bryan · Utilidad 40%');
   assert.ok(nueva?.active, 'regla nueva activa');
@@ -134,7 +134,8 @@ test('Bryan queda en 40% de la utilidad desde el día del cambio; la regla de 25
   assert.equal(nueva.tasas[0].rate, 0.4);
   assert.match(nueva.tasas[0].effective_from, /^\d{4}-\d{2}-\d{2}$/);
   assert.equal(reglas.find((r) => r.name === 'Bryan · Ventas').active, 0, 'la de 25% ya no se sugiere');
-  assert.equal(reglas.find((r) => r.name === 'Bryan · Wraps').active, 1);
+  assert.equal(reglas.find((r) => r.name === 'Bryan · Wraps').active, 0, 'wraps también pasa al 40%');
+  assert.deepEqual(reglas.filter((r) => r.salesperson_name === 'Bryan' && r.active).map((r) => r.name), ['Bryan · Utilidad 40%'], 'una sola regla activa para Bryan');
   assert.equal(reglas.filter((r) => r.name === 'Bryan · Utilidad 40%').length, 1, 'se crea una sola vez');
   const hist = await s.duena.get('/auditoria?area=comisiones');
   assert.ok(hist.some((h) => h.field === 'regla Bryan · Utilidad 40%'));
