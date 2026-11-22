@@ -17,6 +17,11 @@ function withDefaults(cfg) {
 }
 
 let migrando = false;
+// Tabla DTF con la que arrancó la app (para reemplazarla solo si nadie la cambió)
+const TABLA_DTF_ORIGINAL = {
+  primera: [{ hasta: 15, precio: 6 }, { hasta: 95, precio: 10.5 }, { hasta: 105, precio: 11.5 }, { hasta: null, precio: 25 }],
+  adicional: [{ hasta: 15, precio: 1 }, { hasta: 95, precio: 5.5 }, { hasta: null, precio: 25 }],
+};
 export function ensurePricing() {
   if (!get('SELECT id FROM pricing_versions LIMIT 1')) {
     insert('pricing_versions', { config: DEFAULT_PRICING, note: 'Valores iniciales (matriz Color Plus)', created_by: 'sistema' });
@@ -24,21 +29,29 @@ export function ensurePricing() {
   // Aclaraciones de la dueña sobre DTF (se crea una versión nueva con historial; las cotizaciones guardadas conservan la suya):
   //  · los $1.60 de aplicación son una vez por prenda, no por ubicación
   //  · el material se cuenta por hojas de 12×12 a $4, con tamaños estándar por ubicación
+  //  · sin el salto a $25: espalda/frente estándar (hasta 144 in²) a $13 (1ª) / $8.50 (adicional); más grande que la hoja $18.50 / $13.50
+  //    (solo si la tabla sigue siendo la original; si la dueña ya la editó, no se toca)
   const ultima = get('SELECT config FROM pricing_versions ORDER BY id DESC LIMIT 1');
   const raw = typeof ultima.config === 'string' ? JSON.parse(ultima.config) : ultima.config;
-  if (!migrando && raw?.dtf && (!('aplicacionPor' in raw.dtf) || !('costoModo' in raw.dtf))) {
-    migrando = true;
-    const cfg = withDefaults(raw);
-    const notas = [];
-    if (!('aplicacionPor' in raw.dtf)) { cfg.dtf.aplicacionPor = 'prenda'; notas.push('aplicación una vez por prenda'); }
-    if (!('costoModo' in raw.dtf)) {
-      cfg.dtf.costoModo = 'hoja';
-      cfg.dtf.hoja = structuredClone(DEFAULT_PRICING.dtf.hoja);
-      cfg.dtf.tamanos = structuredClone(DEFAULT_PRICING.dtf.tamanos);
-      notas.push('costo por hoja 12×12 y tamaños estándar');
-    }
-    try { savePricing(cfg, null, `DTF: ${notas.join(' · ')} (aclaración de la dueña)`); } finally { migrando = false; }
+  if (migrando || !raw?.dtf) return;
+  const cfg = withDefaults(raw);
+  const notas = [];
+  if (!('aplicacionPor' in raw.dtf)) { cfg.dtf.aplicacionPor = 'prenda'; notas.push('aplicación una vez por prenda'); }
+  if (!('costoModo' in raw.dtf)) {
+    cfg.dtf.costoModo = 'hoja';
+    cfg.dtf.hoja = structuredClone(DEFAULT_PRICING.dtf.hoja);
+    cfg.dtf.tamanos = structuredClone(DEFAULT_PRICING.dtf.tamanos);
+    notas.push('costo por hoja 12×12 y tamaños estándar');
   }
+  const igual = (x, y) => JSON.stringify(x) === JSON.stringify(y);
+  if (igual(raw.dtf.primera, TABLA_DTF_ORIGINAL.primera) && igual(raw.dtf.adicional, TABLA_DTF_ORIGINAL.adicional)) {
+    cfg.dtf.primera = structuredClone(DEFAULT_PRICING.dtf.primera);
+    cfg.dtf.adicional = structuredClone(DEFAULT_PRICING.dtf.adicional);
+    notas.push('precios DTF sin el salto a $25');
+  }
+  if (!notas.length) return;
+  migrando = true;
+  try { savePricing(cfg, null, `DTF: ${notas.join(' · ')} (pedido de la dueña)`); } finally { migrando = false; }
 }
 
 export function currentPricing() {

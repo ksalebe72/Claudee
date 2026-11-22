@@ -87,6 +87,9 @@ test('una base con tarifas anteriores pasa a «aplicación DTF una vez por prend
     delete cfg.dtf.costoModo;
     delete cfg.dtf.hoja;
     delete cfg.dtf.tamanos;
+    // tabla de precios original (con el salto a $25)
+    cfg.dtf.primera = [{ hasta: 15, precio: 6 }, { hasta: 95, precio: 10.5 }, { hasta: 105, precio: 11.5 }, { hasta: null, precio: 25 }];
+    cfg.dtf.adicional = [{ hasta: 15, precio: 1 }, { hasta: 95, precio: 5.5 }, { hasta: null, precio: 25 }];
     db.prepare("INSERT INTO pricing_versions (config, note, created_by) VALUES (?, 'antigua', 'sistema')").run(JSON.stringify(cfg));
     const vieja = Number(db.prepare('SELECT max(id) AS id FROM pricing_versions').get().id);
     db.close();
@@ -100,6 +103,8 @@ test('una base con tarifas anteriores pasa a «aplicación DTF una vez por prend
       assert.equal(actual.config.dtf.aplicacionPor, 'prenda');
       assert.ok(actual.id > vieja);
       assert.equal(actual.config.dtf.costoModo, 'hoja');
+      assert.equal(actual.config.dtf.primera.find((f) => f.hasta === 144).precio, 13, 'sin el salto a $25');
+      assert.ok(!actual.config.dtf.primera.some((f) => f.precio === 25) && !actual.config.dtf.adicional.some((f) => f.precio === 25));
       assert.deepEqual(actual.config.dtf.hoja, { ancho: 12, alto: 12, costo: 4, aprovechamiento: 1 });
       assert.ok(actual.config.dtf.tamanos.some((t) => t.ubicacion === 'Espalda' && t.ancho === 9.5 && t.alto === 12));
       const v = (await get(`/tarifas/${vieja}`)).config.dtf;

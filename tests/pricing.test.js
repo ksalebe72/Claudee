@@ -82,6 +82,13 @@ test('DTF por hoja: aviso si el diseño no cabe en la hoja y costo pendiente si 
   assert.ok(sinTam.faltantesCosto.length >= 2);
 });
 
+test('DTF sin el salto a $25: espalda 9.5×12 = $13 (1ª) · frente + espalda = $13 + $8.50 · más grande que la hoja $18.50', () => {
+  assert.equal(conDtf(24, [pechoYEspalda[1]]).precioDecoPieza, 13);
+  assert.equal(conDtf(24, pechoYEspalda).precioDecoPieza, 14, 'espalda $13 + pecho adicional $1');
+  assert.equal(conDtf(24, [{ process: 'dtf', location: 'Frente', width: 10, height: 12 }, pechoYEspalda[1]]).precioDecoPieza, 21.5);
+  assert.equal(conDtf(24, [{ process: 'dtf', location: 'Espalda', width: 12, height: 16 }]).precioDecoPieza, 18.5);
+});
+
 test('Prenda de $4.00 → $8.80 escalonado y $8.00 fijo; prenda de $10.00 → $20.00', () => {
   assert.equal(precioPrenda(4, cfg).precio, 8.8);
   assert.equal(precioPrenda(4, fijo).precio, 8.0);

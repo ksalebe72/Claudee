@@ -31,8 +31,9 @@ export const DEFAULT_PRICING = {
     costoPieCuadrado: 4.0, // material por pie² (144 in²), solo en modo 'area'
     costoAplicacion: 1.6, // costo de aplicar el DTF
     aplicacionPor: 'prenda', // 'prenda' = una vez por prenda aunque lleve varias ubicaciones · 'ubicacion' = por cada ubicación
-    primera: [{ hasta: 15, precio: 6.0 }, { hasta: 95, precio: 10.5 }, { hasta: 105, precio: 11.5 }, { hasta: null, precio: 25.0 }],
-    adicional: [{ hasta: 15, precio: 1.0 }, { hasta: 95, precio: 5.5 }, { hasta: null, precio: 25.0 }],
+    // Sin el salto a $25 (pedido de la dueña): tramo hasta 144 in² (cabe en la hoja 12×12) y tramo final para diseños más grandes
+    primera: [{ hasta: 15, precio: 6.0 }, { hasta: 95, precio: 10.5 }, { hasta: 105, precio: 11.5 }, { hasta: 144, precio: 13.0 }, { hasta: null, precio: 18.5 }],
+    adicional: [{ hasta: 15, precio: 1.0 }, { hasta: 95, precio: 5.5 }, { hasta: 144, precio: 8.5 }, { hasta: null, precio: 13.5 }],
     minimo: null, // piezas mínimas; null = sin mínimo
   },
   heatTransfer: {
