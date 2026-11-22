@@ -29,6 +29,20 @@ Una sola app para manejar un taller de impresión y decoración textil. Junta en
 
 Todas estas reglas se pueden activar, desactivar o editar en **Automatizaciones**.
 
+## Probar en tu computadora (modo de prueba)
+
+Necesitas **Node.js 22.13 o más nuevo** (nodejs.org → versión LTS).
+
+```bash
+git clone https://github.com/ksalebe72/Claudee.git
+cd Claudee
+git checkout claude/hgl-deconetwork-app-mix-wnz1nc
+npm install
+npm run demo
+```
+
+Abre **http://localhost:3001**. La primera vez pide crear la cuenta de la dueña. El modo de prueba usa una base aparte (`data/demo.db`) con datos de ejemplo y **simuladores** de SanMar y de la IA (respuestas fijas), así que se puede probar todo sin claves. `npm run demo -- --reset` empieza de cero.
+
 ## Cómo correrla
 
 Requiere **Node.js 22.13 o superior**. No usa base de datos externa: trae SQLite integrado y guarda todo en `data/taller.db`.
