@@ -1,5 +1,5 @@
 :root {
-  --bg: #f5f6fa;
+  --bg: #ffffff; /* fondo blanco, como la muestra del tablero */
   --surface: #ffffff;
   --surface-2: #f0f2f7;
   --border: #e3e6ee;
@@ -626,3 +626,4 @@ input[type=color] { min-width: 40px; height: 32px; padding: 2px; }
 .grafica svg { max-width: 100%; }
 .tablero a:not(.btn):not(.kpi-color):not(.aviso-fila), .tablero .link-btn { color: var(--tb-azul); }
 .topbar .aviso-fila, .topbar a { color: var(--text); }
+.tablero .atencion li a { color: var(--text); }
