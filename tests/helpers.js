@@ -3,10 +3,16 @@ import { spawn } from 'node:child_process';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { createServer } from 'node:net';
+
+/** Puerto libre (evita choques cuando varias pruebas corren en paralelo). */
+export function puertoLibre() {
+  return new Promise((ok, ko) => { const srv = createServer(); srv.unref(); srv.on('error', ko); srv.listen(0, () => { const { port } = srv.address(); srv.close(() => ok(port)); }); });
+}
 
 export async function startServer({ env = {}, port, skipSetup = false } = {}) {
   const dir = mkdtempSync(join(tmpdir(), 'colorplus-'));
-  const PORT = port || 4100 + Math.floor(Math.random() * 800);
+  const PORT = port || await puertoLibre();
   const B = `http://localhost:${PORT}/api`;
   let salida = '';
   const proc = spawn(process.execPath, ['server/index.js'], {

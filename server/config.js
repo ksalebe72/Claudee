@@ -55,6 +55,12 @@ export function ensurePricing() {
     cfg.bordado.filas = structuredClone(DEFAULT_PRICING.bordado.filas);
     notas.push('bordado a $7.50 por logo para el cliente');
   }
+  // Tamaños estándar: bolsillos 3.5×3.5" y centro (frente y espalda) 9.5×12" (si nadie los editó)
+  const TAMANOS_ANTERIORES = [{ ubicacion: 'Pecho izquierdo', ancho: 3.5, alto: 3.5 }, { ubicacion: 'Espalda', ancho: 9.5, alto: 12 }];
+  if (igual(raw.dtf.tamanos, TAMANOS_ANTERIORES)) {
+    cfg.dtf.tamanos = structuredClone(DEFAULT_PRICING.dtf.tamanos);
+    notas.push('tamaños estándar: pecho izq./der. 3.5×3.5 y frente/espalda 9.5×12');
+  }
   if (!notas.length) return;
   migrando = true;
   try { savePricing(cfg, null, `${notas.join(' · ')} (pedido del dueño)`); } finally { migrando = false; }

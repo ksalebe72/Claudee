@@ -27,7 +27,10 @@ export const DEFAULT_PRICING = {
     costoModo: 'hoja',
     hoja: { ancho: 12, alto: 12, costo: 4.0, aprovechamiento: 1 }, // aprovechamiento 1 = 100% de la hoja usable
     // Tamaños estándar por ubicación: se llenan solos en la orden (se pueden cambiar en cada línea)
-    tamanos: [{ ubicacion: 'Pecho izquierdo', ancho: 3.5, alto: 3.5 }, { ubicacion: 'Espalda', ancho: 9.5, alto: 12 }],
+    tamanos: [
+      { ubicacion: 'Pecho izquierdo', ancho: 3.5, alto: 3.5 }, { ubicacion: 'Pecho derecho', ancho: 3.5, alto: 3.5 },
+      { ubicacion: 'Frente', ancho: 9.5, alto: 12 }, { ubicacion: 'Espalda', ancho: 9.5, alto: 12 },
+    ],
     costoPieCuadrado: 4.0, // material por pie² (144 in²), solo en modo 'area'
     costoAplicacion: 1.6, // costo de aplicar el DTF
     aplicacionPor: 'prenda', // 'prenda' = una vez por prenda aunque lleve varias ubicaciones · 'ubicacion' = por cada ubicación

@@ -91,6 +91,19 @@ AREAS.polo = { ...AREAS.tshirt, Frente: { view: 'front', x: 125, y: 140, w: 150,
 AREAS.cap.Frente = AREAS.cap['Frente gorra'];
 AREAS.cap.Espalda = { view: 'side', x: 250, y: 220, w: 60, h: 40, inW: 2.5 };
 
+// Medidas estándar de impresión (pulgadas) que se dibujan como guía en el decorador.
+// Se pueden cambiar en Ajustes → Tarifas → DTF → Tamaños estándar (esos valores mandan).
+export const GUIAS_DEFAULT = [
+  { ubicacion: 'Pecho izquierdo', ancho: 3.5, alto: 3.5 },
+  { ubicacion: 'Pecho derecho', ancho: 3.5, alto: 3.5 },
+  { ubicacion: 'Frente', ancho: 9.5, alto: 12 },
+  { ubicacion: 'Espalda', ancho: 9.5, alto: 12 },
+];
+export function guiaPara(guias, loc) {
+  const k = String(loc || '').trim().toLowerCase();
+  return [...(guias || []), ...GUIAS_DEFAULT].find((g) => String(g.ubicacion).trim().toLowerCase() === k && g.ancho > 0 && g.alto > 0) || null;
+}
+
 export const DEFAULT_LOCATION = { tshirt: 'Frente', polo: 'Pecho izquierdo', hoodie: 'Frente', cap: 'Frente gorra', tote: 'Frente' };
 
 export function areaFor(garment, location) {

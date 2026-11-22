@@ -2,7 +2,7 @@ import React, { useCallback, useEffect, useId, useMemo, useRef, useState } from 
 import { api, fileToDataUrl } from '../../api.js';
 import { fmtDate } from '../../utils.js';
 import {
-  GARMENTS, areaFor, locationsFor, garmentFromCategory, colorHex, SWATCHES, shade, isDark, FONTS, DEFAULT_LOCATION,
+  GARMENTS, areaFor, locationsFor, garmentFromCategory, colorHex, SWATCHES, shade, isDark, FONTS, DEFAULT_LOCATION, guiaPara,
 } from './garments.js';
 
 const uid = () => Math.random().toString(36).slice(2, 9);
@@ -81,6 +81,24 @@ function unionBox(layers) {
 const outside = (b, a) => b.x < a.x - 1 || b.y < a.y - 1 || b.x + b.w > a.x + a.w + 1 || b.y + b.h > a.y + a.h + 1;
 const inches = (units, area) => (units / area.w) * area.inW;
 const areaOf = (design, loc) => design.areas?.[loc] || areaFor(design.garment, loc);
+/** Rectángulo de la guía estándar dentro del área: centrado a lo ancho y arriba (en unidades SVG). */
+function guiaRect(design, loc, guias) {
+  const g = guiaPara(guias, loc);
+  if (!g) return null;
+  const a = areaOf(design, loc);
+  const k = a.w / a.inW; // unidades por pulgada
+  const w = g.ancho * k, h = g.alto * k;
+  return { ...g, x: a.x + (a.w - w) / 2, y: a.y, w, h };
+}
+/** Si el diseño de una ubicación mide más que su guía estándar: { ubicacion, ancho, alto, guia } */
+function excesoGuia(design, loc, guias) {
+  const g = guiaPara(guias, loc);
+  const u = unionBox(design.layers.filter((l) => l.location === loc));
+  if (!g || !u) return null;
+  const a = areaOf(design, loc);
+  const ancho = inches(u.w, a), alto = inches(u.h, a);
+  return ancho > g.ancho + 0.05 || alto > g.alto + 0.05 ? { ubicacion: loc, ancho, alto, guia: g } : null;
+}
 
 // Fotos de SanMar por vista
 const proxied = (u) => `/api/sanmar/image?u=${encodeURIComponent(u)}`;
@@ -112,7 +130,7 @@ export function designFromItem(item) {
 }
 
 // ---------- vista de prenda (SVG) ----------
-function GarmentView({ garment, color, view, design, activeLoc, selectedId, interactive, showDims, svgRef, onLayerDown, onBackground, photo, editArea, onAreaDown }) {
+function GarmentView({ garment, color, view, design, activeLoc, selectedId, interactive, showDims, svgRef, onLayerDown, onBackground, photo, editArea, onAreaDown, guias }) {
   const rid = useId().replace(/[^a-zA-Z0-9]/g, '');
   const g = GARMENTS[garment] || GARMENTS.tshirt;
   const v = g.views[view] || Object.values(g.views)[0];
@@ -194,6 +212,21 @@ function GarmentView({ garment, color, view, design, activeLoc, selectedId, inte
         );
       })}
 
+      {/* Guías de medida estándar de todas las ubicaciones de esta vista (bolsillos 3.5×3.5", centro y espalda 9.5×12"):
+          verdes si el diseño cabe, rojas si se pasa; más marcadas en las ubicaciones que llevan diseño */}
+      {interactive && locationsFor(garment).filter((loc) => areaOf(design, loc).view === view).map((loc) => {
+        const gr = guiaRect(design, loc, guias);
+        if (!gr) return null;
+        const usada = loc in design.placements;
+        const mal = !!excesoGuia(design, loc, guias);
+        const col = mal ? '#ef4444' : '#16a34a';
+        return (
+          <g key={`guia-${loc}`} pointerEvents="none" opacity={usada ? 1 : 0.55}>
+            <rect x={gr.x} y={gr.y} width={gr.w} height={gr.h} fill={mal ? 'rgba(239,68,68,0.07)' : 'rgba(22,163,74,0.05)'} stroke={col} strokeWidth={loc === activeLoc ? 1.3 : 0.9} strokeDasharray="2 2" />
+            <text x={gr.x + gr.w / 2} y={gr.y + gr.h + (gr.w < 70 ? 8 : 10)} textAnchor="middle" fontSize={gr.w < 70 ? 6 : 8} fill={col} fontFamily="Arial" fontWeight="bold" stroke="#fff" strokeWidth="2" paintOrder="stroke">{gr.ancho}×{gr.alto}"</text>
+          </g>
+        );
+      })}
       {showDims && locsHere.map((loc) => {
         const ls = layers.filter((l) => l.location === loc);
         const u = unionBox(ls);
@@ -330,7 +363,7 @@ async function buildSheet({ design, job, item, methodName, business, brand, vers
 }
 
 // ---------- componente principal ----------
-export default function ProofDesigner({ job, methods, business, brand, initialDesign, onClose, onSent, notify, sanmarEnabled }) {
+export default function ProofDesigner({ job, methods, business, brand, initialDesign, onClose, onSent, notify, sanmarEnabled, guias = [] }) {
   const items = job.items || [];
   const [itemIdx, setItemIdx] = useState(initialDesign?.itemIdx ?? 0);
   const [design, setDesign] = useState(() => initialDesign || designFromItem(items[0]));
@@ -606,6 +639,8 @@ export default function ProofDesigner({ job, methods, business, brand, initialDe
     return buildSheet({ design, job, item, methodName, business, brand, version, svgs: exportSvgs.current });
   }
   async function openPreview() {
+    const pasados = Object.keys(design.placements).map((loc) => excesoGuia(design, loc, guias)).filter(Boolean);
+    if (pasados.length && !confirm(`El diseño se sale de la medida estándar:\n${pasados.map((p) => `· ${p.ubicacion}: ${p.ancho.toFixed(1)}" × ${p.alto.toFixed(1)}" (máximo ${p.guia.ancho}" × ${p.guia.alto}")`).join('\n')}\n\n¿Continuar de todos modos?`)) return;
     setBusy(true);
     try { const png = await makeSheet(); if (png) setPreview(png); } catch (e) { notify(e.message, true); }
     setBusy(false);
@@ -623,6 +658,7 @@ export default function ProofDesigner({ job, methods, business, brand, initialDe
   }
 
   const outOfArea = design.layers.filter((l) => outside(layerBox(l), areaOf(design, l.location)));
+  const fueraDeMedida = Object.keys(design.placements).map((loc) => excesoGuia(design, loc, guias)).filter(Boolean);
   const usedLocs = Object.keys(design.placements);
   const freeLocs = locationsFor(design.garment).filter((l) => !usedLocs.includes(l));
   const pxPerIn = area.w / area.inW;
@@ -768,10 +804,13 @@ export default function ProofDesigner({ job, methods, business, brand, initialDe
           onDrop={(e) => { e.preventDefault(); addImage(e.dataTransfer.files[0]); }}>
           <GarmentView garment={design.garment} color={design.color} view={view} design={design} activeLoc={activeLoc}
             selectedId={selectedId} interactive showDims svgRef={svgRef} onLayerDown={onLayerDown} onBackground={() => setSelectedId(null)}
-            photo={photoFor(view)} editArea={editArea} onAreaDown={onAreaDown} />
+            photo={photoFor(view)} editArea={editArea} onAreaDown={onAreaDown} guias={guias} />
           {smState.loading && <div className="stage-hint">Cargando foto de SanMar…</div>}
           {!design.layers.length && <div className="stage-hint">Arrastra aquí el logo del cliente o usa «Subir logo»</div>}
         </div>
+        {fueraDeMedida.map((p) => (
+          <p key={p.ubicacion} className="alerta-medida">⚠ <strong>{p.ubicacion}:</strong> el diseño mide {p.ancho.toFixed(1)}" × {p.alto.toFixed(1)}" y la medida estándar es {p.guia.ancho}" × {p.guia.alto}". Reduce el diseño para que quepa en la guía.</p>
+        ))}
         {outOfArea.length > 0 && <p className="danger small">⚠ {outOfArea.length} elemento(s) se salen del área de impresión (contorno rojo).</p>}
         <p className="muted small">Arrastra para mover · cuadro azul para cambiar tamaño · círculo para girar (Shift = pasos de 15°) · flechas para ajustar · Supr para borrar · Ctrl+Z deshacer</p>
       </main>
