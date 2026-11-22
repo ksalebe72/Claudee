@@ -3,6 +3,7 @@ import { NavLink, Route, Routes, useLocation } from 'react-router-dom';
 import { api } from './api.js';
 import { MetaContext } from './components/ui.jsx';
 import Login from './pages/Login.jsx';
+import TopBar from './components/TopBar.jsx';
 import { applyBrand, BrandMark } from './brand.jsx';
 import Dashboard from './pages/Dashboard.jsx';
 import Contacts from './pages/Contacts.jsx';
@@ -94,13 +95,12 @@ export default function App() {
               ))}
             </nav>
           ))}
-          <div className="user-box">
-            <div><strong>{user.name}</strong><small>{user.roleName}</small></div>
-            <button className="link-btn" onClick={salir}>Salir</button>
-          </div>
         </aside>
         <main className="content">
-          <button className="menu-btn" onClick={() => setMenuOpen(!menuOpen)} aria-label="Menú">☰</button>
+          <div className="topbar-fila">
+            <button className="menu-btn" onClick={() => setMenuOpen(!menuOpen)} aria-label="Menú">☰</button>
+            <TopBar user={user} onSalir={salir} />
+          </div>
           <Routes>
             <Route path="/" element={<Dashboard />} />
             <Route path="/contactos" element={<Contacts />} />

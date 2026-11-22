@@ -94,3 +94,24 @@ test('Logística ve órdenes y mueve producción, pero sin costos ni márgenes y
   const mov = await logi.call('POST', `/jobs/${orden.id}/status`, { status: 'produccion' });
   assert.notEqual(mov.status, 403, 'puede mover la producción');
 });
+
+test('tablero y búsqueda: cada quien ve lo suyo; Logística sin montos', async () => {
+  const t = await s.duena.get('/tablero?meses=6');
+  assert.equal(t.serie.ordenes.length, 6);
+  assert.ok(t.kpis.ventas > 0);
+  assert.ok(t.avisos.some((a) => a.clave === 'margenes'), 'el dueño ve márgenes por aprobar');
+  const tb = await bryan.get('/tablero?meses=6');
+  assert.ok(tb.kpis.ventas < t.kpis.ventas, 'Bryan solo suma lo suyo');
+  assert.equal(tb.kpis.utilidad, null, 'el vendedor no ve utilidad total');
+  assert.notEqual(tb.kpis.comisiones, null, 'pero sí su comisión');
+  assert.ok(!tb.avisos.some((a) => a.clave === 'margenes'));
+  const tl = await logi.get('/tablero');
+  assert.equal(tl.kpis, null);
+  assert.equal(tl.serie, null);
+  const r = await bryan.get('/buscar?q=Cliente');
+  assert.deepEqual(r.contactos.map((c) => c.name).sort(), ['Cliente de Bryan', 'Cliente nuevo sin vendedor'].filter((n) => r.contactos.some((c) => c.name === n)).sort());
+  assert.ok(!r.contactos.some((c) => c.name === 'Cliente de Isabel'), 'no encuentra clientes ajenos');
+  assert.ok(!(await bryan.get('/buscar?q=Orden')).trabajos.some((j) => j.title === 'Orden Isabel'));
+  assert.ok((await s.duena.get('/buscar?q=Orden')).trabajos.some((j) => j.title === 'Orden Isabel'));
+  assert.ok(Array.isArray(await logi.get('/avisos')));
+});

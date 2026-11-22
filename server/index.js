@@ -9,6 +9,7 @@ import opsApi, { healthRouter } from './ops-api.js';
 import { programarRespaldos } from './backup.js';
 import { authRouter, usersRouter, requireAuth } from './auth.js';
 import { scopeMiddleware } from './scope.js';
+import { tableroApi } from './tablero.js';
 import { ensurePricing, ensureCommissionSetup, aplicarCambioComisionBryan, aplicarCambioWrapsBryan, fijarReglaAutomaticaBryan, asignarClientesExistentes } from './config.js';
 import { seedIfEmpty } from './seed.js';
 
@@ -32,6 +33,7 @@ app.use('/api', authRouter);
 app.use('/api', requireAuth);
 app.use('/api', scopeMiddleware); // qué datos ve cada rol (vendedor: solo sus clientes)
 app.use('/api', usersRouter);
+app.use('/api', tableroApi);
 app.use('/api', financeApi);
 app.use('/api', iaApi);
 app.use('/api', opsApi);

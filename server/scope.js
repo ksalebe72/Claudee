@@ -57,7 +57,7 @@ const POR_CONTACTO = [
 
 // Lo que Logística puede hacer (todo lo demás: 403)
 const LOGISTICA = [
-  ['GET', /^\/(meta|dashboard|jobs|contacts|tasks|products|methods|tarifas|vendedores|comisiones\/reglas|ia\/estado)(\/|$|\?)/],
+  ['GET', /^\/(meta|dashboard|tablero|avisos|buscar|jobs|contacts|tasks|products|methods|tarifas|vendedores|comisiones\/reglas|ia\/estado)(\/|$|\?)/],
   ['GET', /^\/proofs\/\d+\/design$/],
   ['GET', /^\/sanmar\//],
   ['POST', /^\/jobs\/\d+\/status$/],
