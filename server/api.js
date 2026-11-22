@@ -41,10 +41,10 @@ function loadJob(id) {
   const job = get('SELECT * FROM jobs WHERE id = ?', id);
   if (!job) throw fail(404, 'No encontrado');
   job.items = all(
-    'SELECT i.*, p.name AS product_name, p.sku AS product_sku FROM job_items i LEFT JOIN products p ON p.id = i.product_id WHERE job_id = ? ORDER BY position, id',
+    'SELECT i.*, p.name AS product_name, p.sku AS product_sku, p.category AS product_category, p.brand AS product_brand FROM job_items i LEFT JOIN products p ON p.id = i.product_id WHERE job_id = ? ORDER BY position, id',
     id
   );
-  job.proofs = all('SELECT * FROM proofs WHERE job_id = ? ORDER BY version DESC', id);
+  job.proofs = all('SELECT id, job_id, version, file_url, note, status, customer_comment, created_at, decided_at, design IS NOT NULL AS has_design FROM proofs WHERE job_id = ? ORDER BY version DESC', id);
   job.payments = all('SELECT * FROM payments WHERE job_id = ? ORDER BY paid_at DESC, id DESC', id);
   job.paid = job.payments.reduce((a, p) => a + p.amount, 0);
   job.balance = Math.round((job.total - job.paid) * 100) / 100;
@@ -356,7 +356,7 @@ api.post('/jobs/:id/duplicate', wrap((req) => {
 api.post('/jobs/:id/proofs', express.json({ limit: '20mb' }), wrap((req) => {
   const job = get('SELECT * FROM jobs WHERE id = ?', req.params.id);
   if (!job) throw fail(404, 'No encontrado');
-  const { file, filename = 'arte.png', note } = req.body;
+  const { file, filename = 'arte.png', note, design } = req.body;
   let fileUrl = req.body.url || null;
   if (file) {
     const m = /^data:([\w/+.-]+);base64,(.+)$/.exec(file);
@@ -368,12 +368,18 @@ api.post('/jobs/:id/proofs', express.json({ limit: '20mb' }), wrap((req) => {
   }
   if (!fileUrl) throw fail(400, 'Adjunta un archivo');
   const version = (get('SELECT MAX(version) AS v FROM proofs WHERE job_id = ?', job.id).v || 0) + 1;
-  const pid = insert('proofs', { job_id: job.id, version, file_url: fileUrl, note: note || null });
+  const pid = insert('proofs', { job_id: job.id, version, file_url: fileUrl, note: note || null, design: design ? JSON.stringify(design) : null });
   logSystem(job, `Prueba de arte v${version} subida`);
   if (job.kind === 'order' && job.status === 'arte') setOrderStatus(job.id, 'aprobacion');
   const base = `${req.protocol}://${req.get('host')}`;
   fire('proof.uploaded', { job: { ...job, link: `${base}/portal/${job.token}` }, proof: { id: pid, version }, contact: contactById(job.contact_id) });
   return loadJob(job.id);
+}));
+
+api.get('/proofs/:id/design', wrap((req) => {
+  const r = get('SELECT design FROM proofs WHERE id = ?', req.params.id);
+  if (!r?.design) throw fail(404, 'Esta prueba no tiene diseño editable');
+  return JSON.parse(r.design);
 }));
 
 api.post('/proofs/:id/decision', wrap((req) => {

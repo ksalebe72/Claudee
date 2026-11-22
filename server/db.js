@@ -101,6 +101,10 @@ CREATE TABLE IF NOT EXISTS automations (
 );
 `);
 
+// ---------- migraciones ----------
+const cols = (t) => db.prepare(`PRAGMA table_info(${t})`).all().map((c) => c.name);
+if (!cols('proofs').includes('design')) db.exec('ALTER TABLE proofs ADD COLUMN design TEXT');
+
 // ---------- helpers ----------
 const JSON_COLS = new Set(['tags', 'colors', 'sizes', 'decorations', 'tiers', 'condition', 'params']);
 

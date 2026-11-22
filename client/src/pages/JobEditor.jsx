@@ -3,7 +3,8 @@ import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { api, fileToDataUrl } from '../api.js';
 import { money, fmtDate, fmtDateTime, label, today, useLoad } from '../utils.js';
 import { Badge, Field, PageHeader, useMeta, useToast } from '../components/ui.jsx';
-import { priceItem, jobTotals, SIZES } from '../../../shared/pricing.js';
+import { priceItem, jobTotals } from '../../../shared/pricing.js';
+import ProofDesigner from '../components/designer/ProofDesigner.jsx';
 
 const LOCATIONS = ['Frente', 'Espalda', 'Pecho izquierdo', 'Pecho derecho', 'Manga izquierda', 'Manga derecha', 'Nuca', 'Frente gorra', 'Lateral gorra'];
 const emptyItem = () => ({ product_id: '', description: '', color: '', sizes: {}, qty: 0, decorations: [{ method: 'serigrafia', location: 'Frente', colors: 1 }], custom_price: '' });
@@ -20,6 +21,7 @@ export default function JobEditor() {
   const [job, setJob] = useState(null);
   const [dirty, setDirty] = useState(false);
   const [toast, notify] = useToast();
+  const [designer, setDesigner] = useState(null);
 
   useEffect(() => {
     if (id) api.get(`/jobs/${id}`).then((j) => { setJob(j); setDirty(false); });
@@ -164,7 +166,13 @@ export default function JobEditor() {
             </>}
           </section>
 
-          {id && <Proofs job={job} setJob={setJob} notify={notify} />}
+          {id && <Proofs job={job} setJob={setJob} notify={notify} onDesign={async (proof) => {
+            if (dirty) await save();
+            try {
+              const initialDesign = proof ? await api.get(`/proofs/${proof.id}/design`) : null;
+              setDesigner({ initialDesign });
+            } catch (e) { notify(e.message, true); }
+          }} />}
           {id && <Payments job={job} setJob={setJob} notify={notify} deposit={meta.settings.deposit_pct} />}
           {id && job.contact && (
             <section className="card">
@@ -177,6 +185,10 @@ export default function JobEditor() {
           )}
         </div>
       </div>
+      {designer && (
+        <ProofDesigner job={job} methods={methodsList} business={meta.settings.business_name} initialDesign={designer.initialDesign}
+          notify={notify} onClose={() => setDesigner(null)} onSent={(j) => { setJob(j); setDesigner(null); }} />
+      )}
       {toast}
     </div>
   );
@@ -263,7 +275,7 @@ function ItemEditor({ idx, item, priced, products, methods, productById, editabl
   );
 }
 
-function Proofs({ job, setJob, notify }) {
+function Proofs({ job, setJob, notify, onDesign }) {
   const [busy, setBusy] = useState(false);
   const [note, setNote] = useState('');
   async function upload(e) {
@@ -288,6 +300,8 @@ function Proofs({ job, setJob, notify }) {
     <section className="card">
       <h3>Pruebas de arte</h3>
       <div className="stack-sm">
+        <button className="btn primary designer-btn" onClick={() => onDesign(null)} disabled={!job.items.length}>🎨 Abrir decorador</button>
+        <div className="muted small center">o sube un archivo ya terminado:</div>
         <input placeholder="Nota para el cliente (opcional)" value={note} onChange={(e) => setNote(e.target.value)} />
         <label className="btn upload">{busy ? 'Subiendo…' : 'Subir prueba (imagen/PDF)'}<input type="file" accept="image/*,application/pdf" hidden onChange={upload} /></label>
       </div>
@@ -302,6 +316,7 @@ function Proofs({ job, setJob, notify }) {
               <div className="muted small">{fmtDateTime(p.created_at)}</div>
               {p.note && <div className="small">{p.note}</div>}
               {p.customer_comment && <div className="small quote">“{p.customer_comment}”</div>}
+              {!!p.has_design && <button className="link-btn small" onClick={() => onDesign(p)}>✎ Editar como nueva versión</button>}
               {p.status === 'pendiente' && (
                 <div className="row gap">
                   <button className="link-btn ok" onClick={() => decide(p, 'aprobada')}>Aprobar</button>

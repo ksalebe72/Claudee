@@ -47,7 +47,10 @@ test('flujo completo con automatizaciones', async () => {
   assert.equal(portal.status, 'arte');
   assert.equal((await call('GET', '/opportunities')).find((o) => o.id === opp.id).stage, 'ganado');
 
-  job = await call('POST', `/jobs/${job.id}/proofs`, { file: 'data:image/png;base64,iVBORw0KGgo=', filename: 'a.png' });
+  const design = { garment: 'tshirt', color: '#000000', placements: { Frente: { method: 'dtf', inks: 'Blanco' } }, layers: [{ id: 'a', type: 'text', text: 'HOLA' }] };
+  job = await call('POST', `/jobs/${job.id}/proofs`, { file: 'data:image/png;base64,iVBORw0KGgo=', filename: 'a.png', design });
+  assert.equal(job.proofs[0].has_design, 1);
+  assert.deepEqual(await call('GET', `/proofs/${job.proofs[0].id}/design`), design, 'el diseño se guarda para editarlo después');
   assert.equal(job.status, 'aprobacion');
   portal = await call('POST', `/portal/${job.token}/proofs/${job.proofs[0].id}`, { status: 'aprobada' });
   assert.equal(portal.status, 'compras', 'prueba aprobada pasa a compras');

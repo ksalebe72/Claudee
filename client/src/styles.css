@@ -288,3 +288,44 @@ input.mini { width: 76px; text-align: right; padding: 4px 6px; }
   .card { box-shadow: none; break-inside: avoid; }
   body { background: #fff; }
 }
+
+/* decorador de pruebas */
+.center { text-align: center; }
+.ellipsis { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.designer-btn { justify-content: center; }
+.designer { position: fixed; inset: 0; z-index: 70; background: var(--bg); display: grid; grid-template-columns: 270px minmax(0, 1fr) 290px; grid-template-rows: auto minmax(0, 1fr); }
+.designer-head { grid-column: 1 / -1; display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 10px 16px; background: var(--surface); border-bottom: 1px solid var(--border); flex-wrap: wrap; }
+.designer-left, .designer-right { background: var(--surface); padding: 14px; overflow-y: auto; display: flex; flex-direction: column; gap: 14px; }
+.designer-left { border-right: 1px solid var(--border); }
+.designer-right { border-left: 1px solid var(--border); }
+.designer-right hr { border: none; border-top: 1px solid var(--border); width: 100%; margin: 4px 0; }
+.designer-canvas { padding: 14px 18px; overflow: auto; display: flex; flex-direction: column; gap: 10px; min-height: 0; }
+.stage { flex: 1; min-height: 360px; background: repeating-conic-gradient(var(--surface-2) 0% 25%, var(--bg) 0% 50%) 50% / 22px 22px; border: 1px solid var(--border); border-radius: 12px; display: grid; place-items: center; position: relative; padding: 10px; }
+.garment-svg { width: 100%; height: 100%; max-height: calc(100vh - 210px); touch-action: none; user-select: none; }
+.stage .garment-svg { aspect-ratio: 400 / 440; width: auto; max-width: 100%; }
+.stage-hint { position: absolute; bottom: 16px; background: var(--surface); padding: 6px 12px; border-radius: 999px; box-shadow: var(--shadow); color: var(--muted); font-size: 13px; pointer-events: none; }
+.swatches { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 6px; align-items: center; }
+.swatch { width: 24px; height: 24px; border-radius: 50%; border: 1px solid #c5c8d4; cursor: pointer; padding: 0; }
+.swatch.on { outline: 2px solid var(--primary); outline-offset: 2px; }
+.swatches input[type=color] { width: 28px; height: 28px; padding: 0; border: none; background: none; }
+input[type=color] { min-width: 40px; height: 32px; padding: 2px; }
+.loc-list { display: flex; flex-direction: column; gap: 6px; margin-bottom: 6px; }
+.loc { border: 1px solid var(--border); border-radius: 8px; padding: 7px 10px; cursor: pointer; }
+.loc.on { border-color: var(--primary); background: var(--primary-soft); }
+.loc-settings { display: flex; flex-direction: column; gap: 10px; background: var(--surface-2); padding: 10px; border-radius: 8px; }
+.layer-list { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 4px; }
+.layer-list li { display: flex; gap: 8px; align-items: center; padding: 5px 8px; border-radius: 6px; cursor: pointer; border: 1px solid transparent; }
+.layer-list li.on { border-color: var(--primary); background: var(--primary-soft); }
+.layer-list img { width: 28px; height: 28px; object-fit: contain; background: repeating-conic-gradient(#ddd 0% 25%, #fff 0% 50%) 50% / 8px 8px; border-radius: 4px; }
+.t-icon { width: 28px; height: 28px; display: grid; place-items: center; font-weight: 800; background: var(--surface-2); border-radius: 4px; }
+.btn-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+.btn-grid .btn { justify-content: center; font-size: 12px; padding: 6px 8px; white-space: normal; }
+.export-hidden { position: fixed; left: -10000px; top: 0; width: 400px; height: 440px; }
+.preview-modal { width: min(1200px, 100%); }
+.sheet-preview { width: 100%; border: 1px solid var(--border); border-radius: 8px; margin-bottom: 10px; }
+@media (max-width: 1000px) {
+  .designer { grid-template-columns: 1fr; grid-template-rows: auto auto auto auto; overflow-y: auto; }
+  .designer-left, .designer-right { border: none; overflow: visible; }
+  .designer-canvas { order: -1; grid-row: 2; }
+  .garment-svg { max-height: 70vh; }
+}
