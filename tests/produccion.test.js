@@ -84,6 +84,9 @@ test('una base con tarifas anteriores pasa a «aplicación DTF una vez por prend
     const v = db.prepare('SELECT config FROM pricing_versions ORDER BY id DESC LIMIT 1').get();
     const cfg = JSON.parse(v.config);
     delete cfg.dtf.aplicacionPor;
+    delete cfg.dtf.costoModo;
+    delete cfg.dtf.hoja;
+    delete cfg.dtf.tamanos;
     db.prepare("INSERT INTO pricing_versions (config, note, created_by) VALUES (?, 'antigua', 'sistema')").run(JSON.stringify(cfg));
     const vieja = Number(db.prepare('SELECT max(id) AS id FROM pricing_versions').get().id);
     db.close();
@@ -96,7 +99,12 @@ test('una base con tarifas anteriores pasa a «aplicación DTF una vez por prend
       const actual = await get('/tarifas');
       assert.equal(actual.config.dtf.aplicacionPor, 'prenda');
       assert.ok(actual.id > vieja);
-      assert.equal((await get(`/tarifas/${vieja}`)).config.dtf.aplicacionPor, 'ubicacion', 'la versión vieja conserva su cálculo');
+      assert.equal(actual.config.dtf.costoModo, 'hoja');
+      assert.deepEqual(actual.config.dtf.hoja, { ancho: 12, alto: 12, costo: 4, aprovechamiento: 1 });
+      assert.ok(actual.config.dtf.tamanos.some((t) => t.ubicacion === 'Espalda' && t.ancho === 9.5 && t.alto === 12));
+      const v = (await get(`/tarifas/${vieja}`)).config.dtf;
+      assert.equal(v.aplicacionPor, 'ubicacion', 'la versión vieja conserva su cálculo');
+      assert.equal(v.costoModo, 'area', 'la versión vieja conserva su cálculo');
       const hist = await get('/auditoria?area=tarifas');
       assert.ok(hist.some((h) => h.field === 'dtf.aplicacionPor' && JSON.parse(h.new_value) === 'prenda'));
     } finally { b.stop(); }

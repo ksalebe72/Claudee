@@ -12,6 +12,7 @@ function withDefaults(cfg) {
   for (const [k, v] of Object.entries(cfg || {})) out[k] = v && typeof v === 'object' && !Array.isArray(v) ? { ...out[k], ...v } : v;
   // Versiones guardadas antes de esta opción calculaban la aplicación DTF por ubicación: se respetan tal cual.
   if (cfg?.dtf && !('aplicacionPor' in cfg.dtf)) out.dtf.aplicacionPor = 'ubicacion';
+  if (cfg?.dtf && !('costoModo' in cfg.dtf)) out.dtf.costoModo = 'area';
   return out;
 }
 
@@ -20,15 +21,23 @@ export function ensurePricing() {
   if (!get('SELECT id FROM pricing_versions LIMIT 1')) {
     insert('pricing_versions', { config: DEFAULT_PRICING, note: 'Valores iniciales (matriz Color Plus)', created_by: 'sistema' });
   }
-  // Aclaración de la dueña: los $1.60 de aplicación DTF son una vez por prenda, no por ubicación.
-  // Se crea una versión nueva (con historial); las cotizaciones guardadas conservan la suya.
+  // Aclaraciones de la dueña sobre DTF (se crea una versión nueva con historial; las cotizaciones guardadas conservan la suya):
+  //  · los $1.60 de aplicación son una vez por prenda, no por ubicación
+  //  · el material se cuenta por hojas de 12×12 a $4, con tamaños estándar por ubicación
   const ultima = get('SELECT config FROM pricing_versions ORDER BY id DESC LIMIT 1');
   const raw = typeof ultima.config === 'string' ? JSON.parse(ultima.config) : ultima.config;
-  if (!migrando && raw?.dtf && !('aplicacionPor' in raw.dtf)) {
+  if (!migrando && raw?.dtf && (!('aplicacionPor' in raw.dtf) || !('costoModo' in raw.dtf))) {
     migrando = true;
     const cfg = withDefaults(raw);
-    cfg.dtf.aplicacionPor = 'prenda';
-    try { savePricing(cfg, null, 'Aplicación DTF: una vez por prenda (aclaración de la dueña)'); } finally { migrando = false; }
+    const notas = [];
+    if (!('aplicacionPor' in raw.dtf)) { cfg.dtf.aplicacionPor = 'prenda'; notas.push('aplicación una vez por prenda'); }
+    if (!('costoModo' in raw.dtf)) {
+      cfg.dtf.costoModo = 'hoja';
+      cfg.dtf.hoja = structuredClone(DEFAULT_PRICING.dtf.hoja);
+      cfg.dtf.tamanos = structuredClone(DEFAULT_PRICING.dtf.tamanos);
+      notas.push('costo por hoja 12×12 y tamaños estándar');
+    }
+    try { savePricing(cfg, null, `DTF: ${notas.join(' · ')} (aclaración de la dueña)`); } finally { migrando = false; }
   }
 }
 
@@ -74,6 +83,13 @@ function validar(cfg) {
   for (const f of cfg.bordado.filas) if (!isNumOrNull(f.costo) || !isNumOrNull(f.precio) || !(f.cantidadDesde >= 1) || !isNumOrNull(f.puntadasHasta)) errs.push('Revisa la tabla de bordado');
   if (!(cfg.dtf.costoPieCuadrado >= 0) || !(cfg.dtf.costoAplicacion >= 0)) errs.push('Revisa los costos de DTF');
   if (!['prenda', 'ubicacion'].includes(cfg.dtf.aplicacionPor)) errs.push('La aplicación DTF debe ser por prenda o por ubicación');
+  if (!['hoja', 'area'].includes(cfg.dtf.costoModo)) errs.push('El costo DTF debe ser por hoja o por área');
+  if (cfg.dtf.costoModo === 'hoja') {
+    const h = cfg.dtf.hoja || {};
+    if (!(h.ancho > 0) || !(h.alto > 0) || !(h.costo >= 0)) errs.push('Revisa el tamaño y el costo de la hoja DTF');
+    if (!(h.aprovechamiento > 0 && h.aprovechamiento <= 1)) errs.push('El aprovechamiento de la hoja DTF debe estar entre 1% y 100%');
+  }
+  for (const t of cfg.dtf.tamanos || []) if (!t.ubicacion || !(t.ancho > 0) || !(t.alto > 0)) errs.push('Cada tamaño estándar DTF necesita ubicación, ancho y alto');
   for (const t of [cfg.dtf.primera, cfg.dtf.adicional]) {
     if (!t.length || t.filter((f) => f.hasta === null).length !== 1 || t.some((f) => !isNumOrNull(f.precio) || f.precio === null)) errs.push('Cada tabla de DTF necesita precios y un tramo final sin límite');
   }

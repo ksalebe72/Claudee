@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { api } from '../api.js';
 import { fmtDateTime, money, today, useLoad } from '../utils.js';
 import { Field, PageHeader, useMeta, useToast } from '../components/ui.jsx';
+import { LOCATIONS } from '../components/JobLines.jsx';
 
 const TABS = { tarifas: 'Tarifas', comisiones: 'Vendedores y comisiones', usuarios: 'Usuarios', historial: 'Historial de cambios', general: 'General' };
 
@@ -63,7 +64,9 @@ function Tarifas({ editable, notify }) {
       <tbody>
         {arr.map((row, i) => (
           <tr key={i}>
-            {cols.map((col) => <td key={col.k}><NumIn disabled={dis} step={col.step} value={row[col.k]} onChange={(v) => upd((n) => { path(n)[i][col.k] = v; })} placeholder={col.ph} /></td>)}
+            {cols.map((col) => <td key={col.k}>{col.text
+              ? <input disabled={dis} list={col.list} value={row[col.k] ?? ''} placeholder={col.ph} onChange={(e) => { const v = e.target.value; upd((n) => { path(n)[i][col.k] = v; }); }} />
+              : <NumIn disabled={dis} step={col.step} value={row[col.k]} onChange={(v) => upd((n) => { path(n)[i][col.k] = v; })} placeholder={col.ph} />}</td>)}
             {editable && <td><button className="icon-btn" onClick={() => upd((n) => { path(n).splice(i, 1); })}>×</button></td>}
           </tr>
         ))}
@@ -114,8 +117,22 @@ function Tarifas({ editable, notify }) {
       <section className="card">
         <h3>C) DTF</h3>
         <h4>Costo interno</h4>
+        <div className="seg">
+          <button disabled={dis} className={c.dtf.costoModo === 'hoja' ? 'on' : ''} onClick={() => upd((n) => { n.dtf.costoModo = 'hoja'; })}>Por hoja</button>
+          <button disabled={dis} className={c.dtf.costoModo === 'area' ? 'on' : ''} onClick={() => upd((n) => { n.dtf.costoModo = 'area'; })}>Por pie² del diseño</button>
+        </div>
+        {c.dtf.costoModo === 'hoja' ? (
+          <div className="row gap wrap">
+            <label className="inline">Hoja <NumIn disabled={dis} step="0.5" value={c.dtf.hoja.ancho} onChange={(v) => upd((n) => { n.dtf.hoja.ancho = v; })} />×<NumIn disabled={dis} step="0.5" value={c.dtf.hoja.alto} onChange={(v) => upd((n) => { n.dtf.hoja.alto = v; })} />"</label>
+            <label className="inline">Costo por hoja $ <NumIn disabled={dis} value={c.dtf.hoja.costo} onChange={(v) => upd((n) => { n.dtf.hoja.costo = v; })} /></label>
+            <label className="inline">Aprovechamiento <NumIn disabled={dis} pct step="1" value={c.dtf.hoja.aprovechamiento} onChange={(v) => upd((n) => { n.dtf.hoja.aprovechamiento = v; })} />%</label>
+          </div>
+        ) : (
+          <div className="row gap wrap">
+            <label className="inline">Material por pie² (144 in²) $ <NumIn disabled={dis} value={c.dtf.costoPieCuadrado} onChange={(v) => upd((n) => { n.dtf.costoPieCuadrado = v; })} /></label>
+          </div>
+        )}
         <div className="row gap wrap">
-          <label className="inline">Material por pie² (144 in²) $ <NumIn disabled={dis} value={c.dtf.costoPieCuadrado} onChange={(v) => upd((n) => { n.dtf.costoPieCuadrado = v; })} /></label>
           <label className="inline">Aplicación $ <NumIn disabled={dis} value={c.dtf.costoAplicacion} onChange={(v) => upd((n) => { n.dtf.costoAplicacion = v; })} /></label>
           <label className="inline">se cobra
             <select disabled={dis} value={c.dtf.aplicacionPor} onChange={(e) => upd((n) => { n.dtf.aplicacionPor = e.target.value; })}>
@@ -124,7 +141,13 @@ function Tarifas({ editable, notify }) {
             </select>
           </label>
         </div>
-        <p className="muted small">Ejemplo, prenda con frente 10×12" y pecho 3.5×3.5": costo DTF {money((120 + 12.25) / 144 * c.dtf.costoPieCuadrado + c.dtf.costoAplicacion * (c.dtf.aplicacionPor === 'ubicacion' ? 2 : 1))} por prenda.</p>
+        <p className="muted small">{c.dtf.costoModo === 'hoja'
+          ? <>Se suman los diseños de todas las piezas de la línea y se cuentan las hojas necesarias. Ej.: 1 camiseta con pecho 3.5×3.5 + espalda 9.5×12 = 1 hoja ({money(c.dtf.hoja.costo)}) + aplicación = {money(Number(c.dtf.hoja.costo) + Number(c.dtf.costoAplicacion))}. Si en la práctica sobra espacio sin usar, baja el aprovechamiento (ej. 85%).</>
+          : <>Ejemplo, prenda con frente 10×12" y pecho 3.5×3.5": costo DTF {money((120 + 12.25) / 144 * c.dtf.costoPieCuadrado + c.dtf.costoAplicacion * (c.dtf.aplicacionPor === 'ubicacion' ? 2 : 1))} por prenda.</>}</p>
+        <h4>Tamaños estándar por ubicación</h4>
+        {rowsEditor(c.dtf.tamanos || [], (n) => (n.dtf.tamanos ||= []), [{ k: 'ubicacion', l: 'Ubicación', text: true, list: 'ubicaciones-dtf', ph: 'Ej. Pecho izquierdo' }, { k: 'ancho', l: 'Ancho "', step: '0.25' }, { k: 'alto', l: 'Alto "', step: '0.25' }], () => ({ ubicacion: '', ancho: null, alto: null }))}
+        <datalist id="ubicaciones-dtf">{LOCATIONS.map((l) => <option key={l} value={l} />)}</datalist>
+        <p className="muted small">Al elegir la ubicación en una orden, el ancho y el alto se llenan solos (se pueden cambiar en esa línea).</p>
         <div className="row gap wrap top">
           <div><h4>Precio 1ª ubicación (por área)</h4>{rowsEditor(c.dtf.primera, (n) => n.dtf.primera, [{ k: 'hasta', l: 'Hasta in²', step: '1', ph: 'más' }, { k: 'precio', l: 'PRECIO $' }], () => ({ hasta: 50, precio: null }))}</div>
           <div><h4>Precio ubicación adicional</h4>{rowsEditor(c.dtf.adicional, (n) => n.dtf.adicional, [{ k: 'hasta', l: 'Hasta in²', step: '1', ph: 'más' }, { k: 'precio', l: 'PRECIO $' }], () => ({ hasta: 50, precio: null }))}</div>

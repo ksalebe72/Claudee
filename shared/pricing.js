@@ -23,7 +23,12 @@ export const DEFAULT_PRICING = {
     filas: [{ puntadasHasta: null, cantidadDesde: 1, costo: 4.5, precio: 4.5 }],
   },
   dtf: {
-    costoPieCuadrado: 4.0, // material por pie² (144 in²)
+    // Costo del material: 'hoja' = hojas de 12×12 (se cuentan las hojas que necesita la línea completa) · 'area' = por pie² del diseño
+    costoModo: 'hoja',
+    hoja: { ancho: 12, alto: 12, costo: 4.0, aprovechamiento: 1 }, // aprovechamiento 1 = 100% de la hoja usable
+    // Tamaños estándar por ubicación: se llenan solos en la orden (se pueden cambiar en cada línea)
+    tamanos: [{ ubicacion: 'Pecho izquierdo', ancho: 3.5, alto: 3.5 }, { ubicacion: 'Espalda', ancho: 9.5, alto: 12 }],
+    costoPieCuadrado: 4.0, // material por pie² (144 in²), solo en modo 'area'
     costoAplicacion: 1.6, // costo de aplicar el DTF
     aplicacionPor: 'prenda', // 'prenda' = una vez por prenda aunque lleve varias ubicaciones · 'ubicacion' = por cada ubicación
     primera: [{ hasta: 15, precio: 6.0 }, { hasta: 95, precio: 10.5 }, { hasta: 105, precio: 11.5 }, { hasta: null, precio: 25.0 }],
@@ -120,6 +125,21 @@ export function preciosDtf(ubicaciones, cfg) {
   });
 }
 
+/** Hojas necesarias para una línea: área total de todos los diseños de todas las piezas ÷ área útil de la hoja. */
+export function hojasDtf(qty, areas, cfg) {
+  const h = cfg.dtf.hoja || {};
+  const util = Number(h.ancho) * Number(h.alto) * (Number(h.aprovechamiento) || 1);
+  if (!(util > 0) || !qty) return 0;
+  const total = qty * areas.reduce((a, b) => a + b, 0);
+  return Math.ceil(Math.round((total / util) * 1e6) / 1e6);
+}
+/** ¿El diseño cabe en la hoja (girándolo si hace falta)? */
+export function cabeEnHoja(ancho, alto, cfg) {
+  const h = cfg.dtf.hoja || {};
+  const [w, a, H, W] = [Number(ancho), Number(alto), Number(h.alto), Number(h.ancho)];
+  return (w <= W && a <= H) || (a <= W && w <= H);
+}
+
 // ---------- D) Heat transfer ----------
 export function tarifaHeatTransfer(cfg, totalHojas) {
   const filas = (cfg.heatTransfer.hojas || []).filter((f) => totalHojas >= Number(f.cantidadDesde ?? 1));
@@ -193,6 +213,12 @@ export function calcularLinea(linea, cfg) {
   const decos = linea.decorations || [];
   const dtfIdx = decos.map((d, i) => (d.process === 'dtf' ? i : -1)).filter((i) => i >= 0);
   const dtfPrecios = preciosDtf(dtfIdx.map((i) => ({ ancho: decos[i].width, alto: decos[i].height })), cfg);
+  // Modo hoja: el material se calcula con las hojas que necesita toda la línea y se reparte según el área de cada diseño
+  const porHoja = cfg.dtf.costoModo === 'hoja';
+  const areasDtf = dtfIdx.map((i) => areaDtf(decos[i].width, decos[i].height));
+  const areaPieza = areasDtf.every((a) => a != null) ? areasDtf.reduce((a, b) => a + b, 0) : null;
+  const hojasLinea = porHoja && areaPieza ? hojasDtf(qty, areasDtf, cfg) : null;
+  const materialLinea = hojasLinea == null ? null : hojasLinea * Number(cfg.dtf.hoja.costo);
   decoraciones = decos.map((d, i) => {
     const etiqueta = `${nombre} · ${PROCESOS[d.process] || d.process} ${d.location || ''}`.trim();
     let precioPieza = null;
@@ -210,8 +236,13 @@ export function calcularLinea(linea, cfg) {
       else {
         precioPieza = p.precio;
         // La aplicación se cuenta una vez por prenda (en la 1ª ubicación), salvo que la matriz diga «por ubicación»
-        costoPieza = costoDtf(d.width, d.height, cfg, cfg.dtf.aplicacionPor === 'ubicacion' || p.esPrimera);
-        detalle = `${d.width}×${d.height}" = ${p.area} in² · ${p.esPrimera ? '1ª ubicación' : 'ubicación adicional'}`;
+        const conAplicacion = cfg.dtf.aplicacionPor === 'ubicacion' || p.esPrimera;
+        if (porHoja) {
+          costoPieza = materialLinea == null || !qty ? null
+            : (materialLinea * (p.area / areaPieza)) / qty + (conAplicacion ? Number(cfg.dtf.costoAplicacion) : 0);
+          if (!cabeEnHoja(d.width, d.height, cfg)) avisos.push(`${etiqueta}: el diseño ${d.width}×${d.height}" no cabe en la hoja de ${cfg.dtf.hoja.ancho}×${cfg.dtf.hoja.alto}"; revisa el costo`);
+        } else costoPieza = costoDtf(d.width, d.height, cfg, conAplicacion);
+        detalle = `${d.width}×${d.height}" = ${p.area} in² · ${p.esPrimera ? '1ª ubicación' : 'ubicación adicional'}${porHoja && hojasLinea != null && p.esPrimera ? ` · ${hojasLinea} hoja(s) de ${cfg.dtf.hoja.ancho}×${cfg.dtf.hoja.alto}" para la línea` : ''}`;
       }
       if (num(cfg.dtf.minimo) && qty < Number(cfg.dtf.minimo)) avisos.push(`${etiqueta}: ${qty} piezas, por debajo del mínimo DTF (${cfg.dtf.minimo})`);
     } else if (d.process === 'heat_transfer') {
@@ -234,7 +265,7 @@ export function calcularLinea(linea, cfg) {
     const acc = (porProceso[proc] ||= { venta: 0, costo: 0 });
     acc.venta = acc.venta == null || venta == null ? null : round2(acc.venta + venta);
     acc.costo = acc.costo == null || costo == null ? null : round2(acc.costo + costo);
-    return { process: d.process, location: d.location, precioPieza, costoPieza, venta, costo, manual: manualDeco, detalle };
+    return { process: d.process, location: d.location, precioPieza, costoPieza: round2(costoPieza), venta, costo, manual: manualDeco, detalle };
   });
 
   const ventaBruta = sumOrNull([ventaPrenda, ...decoraciones.map((d) => d.venta)]);

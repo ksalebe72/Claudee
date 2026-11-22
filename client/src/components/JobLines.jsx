@@ -73,11 +73,21 @@ function CodigoPrenda({ idx, item, products, editable, onImport, onPick }) {
   );
 }
 
-export function LineEditor({ idx, item, calc, products, editable, onChange, onRemove, onDuplicate, onImportSanmar }) {
+export function LineEditor({ idx, item, calc, products, editable, onChange, onRemove, onDuplicate, onImportSanmar, tamanosDtf = [] }) {
   const product = products.find((p) => p.id === Number(item.product_id));
   const tipo = item.line_type || 'prenda';
   const set = (patch) => onChange(patch);
   const setDeco = (i, patch) => set({ decorations: item.decorations.map((d, j) => (j === i ? { ...d, ...patch } : d)) });
+  // Tamaño estándar de la ubicación (Ajustes → Tarifas → DTF)
+  const estandar = (ubic) => tamanosDtf.find((t) => String(t.ubicacion).trim().toLowerCase() === String(ubic || '').trim().toLowerCase());
+  const conTamano = (d, ubic) => {
+    if (d.process !== 'dtf') return {};
+    const t = estandar(ubic);
+    const anterior = estandar(d.location);
+    const vacio = !d.width && !d.height;
+    const eraEstandar = anterior && Number(d.width) === Number(anterior.ancho) && Number(d.height) === Number(anterior.alto);
+    return t && (vacio || eraEstandar) ? { width: t.ancho, height: t.alto } : {};
+  };
 
   if (tipo === 'diseno' || tipo === 'servicio') {
     return (
@@ -177,7 +187,7 @@ export function LineEditor({ idx, item, calc, products, editable, onChange, onRe
               <select disabled={!editable} value={d.process || ''} onChange={(e) => setDeco(i, { process: e.target.value })}>
                 {Object.entries(PROCESOS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
               </select>
-              <input disabled={!editable} list="locations" value={d.location || ''} onChange={(e) => setDeco(i, { location: e.target.value })} placeholder="Ubicación" />
+              <input disabled={!editable} list="locations" value={d.location || ''} onChange={(e) => setDeco(i, { location: e.target.value, ...conTamano(d, e.target.value) })} placeholder="Ubicación" />
               {d.process === 'dtf' && <>
                 <label className="inline">An. <input type="number" step="0.25" min="0" className="mini" disabled={!editable} value={blank(d.width)} onChange={(e) => setDeco(i, { width: e.target.value })} />"</label>
                 <label className="inline">Al. <input type="number" step="0.25" min="0" className="mini" disabled={!editable} value={blank(d.height)} onChange={(e) => setDeco(i, { height: e.target.value })} />"</label>
@@ -196,7 +206,10 @@ export function LineEditor({ idx, item, calc, products, editable, onChange, onRe
         {editable && (
           <div className="row gap">
             {Object.entries(PROCESOS).map(([k, v]) => (
-              <button key={k} type="button" className="link-btn" onClick={() => set({ decorations: [...item.decorations, { process: k, location: item.decorations.length ? 'Espalda' : 'Frente', ...(k === 'heat_transfer' ? { sheets: 1 } : {}) }] })}>+ {v}</button>
+              <button key={k} type="button" className="link-btn" onClick={() => {
+                const location = item.decorations.length ? 'Espalda' : 'Frente';
+                set({ decorations: [...item.decorations, { process: k, location, ...conTamano({ process: k }, location), ...(k === 'heat_transfer' ? { sheets: 1 } : {}) }] });
+              }}>+ {v}</button>
             ))}
           </div>
         )}

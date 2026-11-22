@@ -40,7 +40,8 @@ test('DTF: la aplicación de $1.60 se cuenta una sola vez por prenda, aunque lle
     { process: 'dtf', location: 'Pecho izquierdo', width: 3.5, height: 3.5 },
     { process: 'dtf', location: 'Manga izquierda', width: 3, height: 3 },
   ];
-  const l = g5000(tres);
+  const area = { ...cfg, dtf: { ...cfg.dtf, costoModo: 'area' } };
+  const l = calcularLinea({ line_type: 'prenda', description: 'Gildan 5000', qty: 12, unit_cost: 3.1, decorations: tres }, area);
   const costoPieza = l.decoraciones.reduce((a, d) => a + d.costoPieza, 0);
   // material: (120 + 12.25 + 9) / 144 × $4 = $3.92 · aplicación $1.60 una vez = $5.52
   assert.equal(Math.round(costoPieza * 100) / 100, 5.52);
@@ -48,8 +49,37 @@ test('DTF: la aplicación de $1.60 se cuenta una sola vez por prenda, aunque lle
   assert.equal(l.decoraciones.find((d) => d.location === 'Pecho izquierdo').costoPieza, 0.34, 'las demás solo material');
   // Si la dueña lo cambia a «por ubicación», se cuenta en cada una
   const porUbic = calcularLinea({ line_type: 'prenda', description: 'Gildan 5000', qty: 12, unit_cost: 3.1, decorations: tres },
-    { ...cfg, dtf: { ...cfg.dtf, aplicacionPor: 'ubicacion' } });
+    { ...cfg, dtf: { ...cfg.dtf, costoModo: 'area', aplicacionPor: 'ubicacion' } });
   assert.equal(Math.round(porUbic.decoraciones.reduce((a, d) => a + d.costoPieza, 0) * 100) / 100, 8.72);
+});
+
+const conDtf = (qty, decorations) => calcularLinea({ line_type: 'prenda', description: 'PC61', qty, unit_cost: 3.18, decorations }, cfg);
+const pechoYEspalda = [
+  { process: 'dtf', location: 'Pecho izquierdo', width: 3.5, height: 3.5 },
+  { process: 'dtf', location: 'Espalda', width: 9.5, height: 12 },
+];
+const costoDeco = (l) => Math.round(l.decoraciones.reduce((a, d) => a + d.costo, 0) * 100) / 100;
+
+test('DTF por hoja 12×12: 1 camiseta con pecho y espalda = 1 hoja ($4) + aplicación ($1.60) = $5.60', () => {
+  assert.equal(cfg.dtf.costoModo, 'hoja');
+  const l = conDtf(1, pechoYEspalda);
+  assert.equal(costoDeco(l), 5.6);
+  assert.match(l.decoraciones.find((d) => d.location === 'Espalda').detalle, /1 hoja/);
+});
+
+test('DTF por hoja: las hojas se cuentan para toda la línea (24 camisetas pecho+espalda = 22 hojas)', () => {
+  // 24 × 126.25 in² = 3,030 in² ÷ 144 = 21.04 → 22 hojas × $4 = $88 + 24 × $1.60 = $126.40
+  assert.equal(costoDeco(conDtf(24, pechoYEspalda)), 126.4);
+  // 12 logos de pecho: 147 in² → 2 hojas = $8 + 12 × $1.60 = $27.20
+  assert.equal(costoDeco(conDtf(12, [pechoYEspalda[0]])), 27.2);
+});
+
+test('DTF por hoja: aviso si el diseño no cabe en la hoja y costo pendiente si falta un tamaño', () => {
+  const grande = conDtf(5, [{ process: 'dtf', location: 'Espalda', width: 13, height: 13 }]);
+  assert.ok(grande.avisos.some((a) => a.includes('no cabe en la hoja')));
+  const sinTam = conDtf(5, [pechoYEspalda[0], { process: 'dtf', location: 'Espalda' }]);
+  assert.ok(sinTam.decoraciones.every((d) => d.costoPieza == null), 'nunca se toma como cero');
+  assert.ok(sinTam.faltantesCosto.length >= 2);
 });
 
 test('Prenda de $4.00 → $8.80 escalonado y $8.00 fijo; prenda de $10.00 → $20.00', () => {

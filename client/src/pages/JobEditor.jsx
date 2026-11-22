@@ -220,7 +220,7 @@ export default function JobEditor() {
 
           {job.items.map((it, idx) => (
             <LineEditor key={idx} idx={idx} item={it} calc={calcs[idx]} products={products} editable={editable}
-              onImportSanmar={meta.integrations?.sanmar ? importarSanmar : null}
+              onImportSanmar={meta.integrations?.sanmar ? importarSanmar : null} tamanosDtf={cfg.dtf.tamanos || []}
               onChange={(p) => setItem(idx, p)}
               onRemove={() => set({ items: job.items.filter((_, i) => i !== idx) })}
               onDuplicate={() => set({ items: [...job.items.slice(0, idx + 1), structuredClone(it), ...job.items.slice(idx + 1)] })} />
