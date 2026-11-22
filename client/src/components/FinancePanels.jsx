@@ -60,7 +60,7 @@ export function RentabilidadCard({ fin, preview, margen, user, jobId, onUpdated,
       {req && (
         <div className={`approval ${ok ? 'ok' : ''}`}>
           {ok ? (
-            <p>✔ {otorgada?.nivel === 'duena' ? 'Excepción de la dueña' : 'Aprobado por gerencia'}: {otorgada?.por} · {fmtDateTime(otorgada?.fecha?.replace('T', ' ').slice(0, 19))}{otorgada?.nota ? ` · «${otorgada.nota}»` : ''}</p>
+            <p>✔ {req === 'duena' ? 'Excepción autorizada por la dueña' : otorgada?.nivel === 'duena' ? 'Margen aprobado por la dueña' : 'Margen aprobado por gerencia'}: {otorgada?.por} · {fmtDateTime(otorgada?.fecha?.replace('T', ' ').slice(0, 19))}{otorgada?.nota ? ` · «${otorgada.nota}»` : ''}</p>
           ) : (
             <>
               <p><strong>{req === 'duena' ? 'Contribución negativa: requiere excepción de la dueña.' : 'Contribución menor al mínimo: requiere aprobación de gerencia.'}</strong> No se puede enviar ni convertir en orden hasta aprobarla.</p>

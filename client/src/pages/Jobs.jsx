@@ -14,7 +14,7 @@ export default function Jobs({ kind }) {
 
   return (
     <>
-      <PageHeader title={isQuote ? 'Cotizaciones' : 'Órdenes de trabajo'} subtitle={isQuote ? 'Arma precios por talla y decoración, envía y cobra la aprobación en línea' : 'Todo lo que está en producción o entregado'}>
+      <PageHeader title={isQuote ? 'Cotizaciones' : 'Órdenes de trabajo'} subtitle={isQuote ? 'Precios por talla y decoración con rentabilidad en vivo. El cliente aprueba en su enlace; el sistema no envía ni cobra.' : 'Todo lo que está en producción o entregado'}>
         <select value={status} onChange={(e) => setStatus(e.target.value)}>
           <option value="">Todos los estados</option>
           {statuses.map((s) => <option key={s} value={s}>{label(s)}</option>)}
