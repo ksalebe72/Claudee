@@ -1,137 +1,131 @@
 import React, { useState } from 'react';
+import { Link } from 'react-router-dom';
 import { api } from '../api.js';
 import { money, useLoad } from '../utils.js';
-import { Field, Modal, PageHeader, useMeta } from '../components/ui.jsx';
+import { Field, Modal, PageHeader, useMeta, useToast } from '../components/ui.jsx';
+import { precioPrenda } from '../../../shared/pricing.js';
 
 const csv = (a) => (a || []).join(', ');
 const uncsv = (s) => s.split(',').map((x) => x.trim()).filter(Boolean);
+const numOrNull = (v) => (v === '' || v == null ? null : Number(v));
 
 export default function Catalog() {
   const meta = useMeta();
-  const [tab, setTab] = useState('products');
-  const [products, reloadP] = useLoad(() => api.get('/products'));
-  const [methods, reloadM] = useLoad(() => api.get('/methods'));
-  const [editP, setEditP] = useState(null);
-  const [editM, setEditM] = useState(null);
+  const esDuena = meta.user.role === 'duena';
+  const [products, reload] = useLoad(() => api.get('/products'));
+  const [tarifas] = useLoad(() => api.get('/tarifas'));
+  const [edit, setEdit] = useState(null);
+  const [toast, notify] = useToast();
 
-  async function saveP(e) {
-    e.preventDefault();
-    const body = { ...editP, base_cost: Number(editP.base_cost) || 0, colors: uncsv(editP.colorsTxt), sizes: uncsv(editP.sizesTxt) };
-    delete body.colorsTxt; delete body.sizesTxt;
-    if (editP.id) await api.put(`/products/${editP.id}`, body); else await api.post('/products', body);
-    setEditP(null); reloadP();
+  function abrir(p) {
+    setEdit(p ? { ...p, colorsTxt: csv(p.colors), sizesTxt: csv(p.sizes), base_cost: p.base_cost ?? '', price: p.price ?? '', markup_mode: p.markup_mode || '', markup_value: p.markup_value ?? '', size_costs: { ...(p.size_costs || {}) } }
+      : { kind: 'prenda', sku: '', name: '', brand: '', category: '', base_cost: '', price: '', supplier: '', colorsTxt: '', sizesTxt: 'S, M, L, XL, 2XL', size_costs: {}, markup_mode: '', markup_value: '', commissionable: 1 });
   }
-  async function saveM(e) {
+  async function guardar(e) {
     e.preventDefault();
-    const body = { ...editM, setup_fee: Number(editM.setup_fee) || 0, color_price: Number(editM.color_price) || 0, setup_per_color: editM.setup_per_color ? 1 : 0,
-      tiers: editM.tiers.filter((t) => t.min !== '').map((t) => ({ min: Number(t.min), price: Number(t.price) })).sort((a, b) => a.min - b.min) };
-    if (editM.id) await api.put(`/methods/${editM.id}`, body); else await api.post('/methods', body);
-    setEditM(null); reloadM();
-  }
-  async function importSanmar() {
-    const style = prompt('Estilo de SanMar a importar (ej. PC54, K500, ST350):');
-    if (!style) return;
+    const body = {
+      kind: edit.kind, sku: edit.sku, name: edit.name, brand: edit.brand, category: edit.category, supplier: edit.supplier,
+      base_cost: numOrNull(edit.base_cost), price: numOrNull(edit.price), colors: uncsv(edit.colorsTxt), sizes: uncsv(edit.sizesTxt),
+      size_costs: Object.fromEntries(Object.entries(edit.size_costs || {}).filter(([, v]) => v !== '' && v != null).map(([k, v]) => [k, Number(v)])),
+    };
+    if (esDuena) Object.assign(body, { markup_mode: edit.markup_mode || null, markup_value: numOrNull(edit.markup_value), commissionable: edit.commissionable ? 1 : 0 });
     try {
-      const p = await api.post('/sanmar/import', { style });
-      alert(`Importado: ${p.brand} ${p.sku} · ${p.name}\n${p.colors.length} colores · costo desde $${p.base_cost}`);
-      reloadP();
-    } catch (e) { alert(e.message); }
+      if (edit.id) await api.put(`/products/${edit.id}`, body); else await api.post('/products', body);
+      setEdit(null); reload(); notify('Guardado');
+    } catch (err) { notify(err.message, true); }
   }
-  async function delP() { if (confirm('¿Eliminar producto?')) { await api.del(`/products/${editP.id}`); setEditP(null); reloadP(); } }
-  async function delM() { if (confirm('¿Eliminar método?')) { await api.del(`/methods/${editM.id}`); setEditM(null); reloadM(); } }
+  async function importar() {
+    const style = prompt('Estilo de SanMar a importar (ej. PC61, K500):');
+    if (!style) return;
+    try { const p = await api.post('/sanmar/import', { style }); notify(`Importado: ${p.brand} ${p.sku} · ${p.colors.length} colores`); reload(); } catch (e) { notify(e.message, true); }
+  }
+  async function eliminar() { if (confirm('¿Eliminar producto?')) { await api.del(`/products/${edit.id}`); setEdit(null); reload(); } }
+
+  const cfg = tarifas?.config;
+  const venta = (p) => {
+    if (!cfg) return null;
+    if (p.kind === 'servicio') return p.price;
+    const override = p.markup_mode ? { tipo: p.markup_mode, valor: p.markup_value } : null;
+    return precioPrenda(p.base_cost, cfg, override).precio;
+  };
 
   return (
     <>
-      <PageHeader title="Catálogo y precios" subtitle={`Precio de venta del blank = costo × ${(1 + meta.settings.markup).toFixed(2)} (markup ${Math.round(meta.settings.markup * 100)}%, cámbialo en Ajustes)`}>
-        {tab === 'products' && meta.integrations?.sanmar && <button className="btn" onClick={importSanmar}>⬇ Importar de SanMar</button>}
-        {tab === 'products'
-          ? <button className="btn primary" onClick={() => setEditP({ sku: '', name: '', brand: '', category: '', base_cost: '', supplier: '', colorsTxt: '', sizesTxt: 'S, M, L, XL, 2XL' })}>+ Producto</button>
-          : <button className="btn primary" onClick={() => setEditM({ code: '', name: '', setup_fee: 0, color_price: 0, setup_per_color: 0, tiers: [{ min: 1, price: '' }] })}>+ Método</button>}
+      <PageHeader title="Catálogo" subtitle={<>Prendas (SanMar, S&S) y servicios. El precio de venta sale de la matriz de <Link to="/ajustes">Ajustes → Tarifas</Link> ({cfg?.prendas.modo === 'fijo' ? 'modo fijo' : 'modo escalonado'}).</>}>
+        {meta.integrations?.sanmar && <button className="btn" onClick={importar}>⬇ Importar de SanMar</button>}
+        <button className="btn primary" onClick={() => abrir(null)}>+ Producto o servicio</button>
       </PageHeader>
-      <div className="tabs big">
-        <button className={tab === 'products' ? 'active' : ''} onClick={() => setTab('products')}>Productos (blanks)</button>
-        <button className={tab === 'methods' ? 'active' : ''} onClick={() => setTab('methods')}>Métodos de decoración</button>
+      <div className="card no-pad">
+        <table className="table">
+          <thead><tr><th>SKU</th><th>Producto</th><th>Tipo</th><th>Marca</th><th>Proveedor</th><th className="num">Costo</th><th className="num">Venta</th><th>Excepción</th><th>Comisionable</th></tr></thead>
+          <tbody>
+            {products?.map((p) => (
+              <tr key={p.id} className="clickable" onClick={() => abrir(p)}>
+                <td>{p.sku}</td><td><strong>{p.name}</strong><div className="muted small">{p.category}</div></td>
+                <td>{p.kind === 'servicio' ? 'Servicio' : 'Prenda'}</td><td>{p.brand}</td><td className="muted">{p.supplier}</td>
+                <td className="num">{p.base_cost == null ? <span className="warn-txt">desconocido</span> : money(p.base_cost)}{Object.keys(p.size_costs || {}).length > 0 && <div className="muted small">+ por talla</div>}</td>
+                <td className="num">{venta(p) == null ? '—' : money(venta(p))}</td>
+                <td>{p.markup_mode === 'porcentaje' ? `${p.markup_value}%` : p.markup_mode === 'precio_fijo' ? `fijo ${money(p.markup_value)}` : '—'}</td>
+                <td>{p.commissionable === 0 ? <span className="badge tone-gray">no</span> : 'sí'}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
       </div>
 
-      {tab === 'products' && (
-        <div className="card no-pad">
-          <table className="table">
-            <thead><tr><th>SKU</th><th>Producto</th><th>Marca</th><th>Categoría</th><th>Proveedor</th><th>Colores</th><th>Tallas</th><th className="num">Costo</th><th className="num">Venta</th></tr></thead>
-            <tbody>
-              {products?.map((p) => (
-                <tr key={p.id} className="clickable" onClick={() => setEditP({ ...p, colorsTxt: csv(p.colors), sizesTxt: csv(p.sizes) })}>
-                  <td>{p.sku}</td><td><strong>{p.name}</strong></td><td>{p.brand}</td><td>{p.category}</td><td className="muted">{p.supplier}</td>
-                  <td className="small">{csv(p.colors)}</td><td className="small">{csv(p.sizes) || 'Talla única'}</td>
-                  <td className="num">{money(p.base_cost)}</td><td className="num">{money(p.base_cost * (1 + meta.settings.markup))}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      )}
-
-      {tab === 'methods' && (
-        <div className="cards-grid">
-          {methods?.map((m) => (
-            <div key={m.id} className="card clickable" onClick={() => setEditM({ ...m, tiers: m.tiers.map((t) => ({ ...t })) })}>
-              <h3>{m.name}</h3>
-              <div className="muted small">Setup {money(m.setup_fee)}{m.setup_per_color ? ' por color (pantalla)' : ''}{m.color_price ? ` · +${money(m.color_price)}/pz por color extra` : ''}</div>
-              <table className="table mini-table">
-                <thead><tr><th>Desde</th><th className="num">Precio/pz por ubicación</th></tr></thead>
-                <tbody>{m.tiers.map((t) => <tr key={t.min}><td>{t.min} pzs</td><td className="num">{money(t.price)}</td></tr>)}</tbody>
-              </table>
+      {edit && (
+        <Modal title={edit.id ? 'Editar' : 'Nuevo producto o servicio'} onClose={() => setEdit(null)} wide>
+          <form className="form" onSubmit={guardar}>
+            <div className="seg">
+              <button type="button" className={edit.kind !== 'servicio' ? 'on' : ''} onClick={() => setEdit({ ...edit, kind: 'prenda' })}>Prenda</button>
+              <button type="button" className={edit.kind === 'servicio' ? 'on' : ''} onClick={() => setEdit({ ...edit, kind: 'servicio' })}>Servicio (website, media player…)</button>
             </div>
-          ))}
-        </div>
-      )}
-
-      {editP && (
-        <Modal title={editP.id ? 'Editar producto' : 'Nuevo producto'} onClose={() => setEditP(null)}>
-          <form className="form" onSubmit={saveP}>
-            <div className="form-grid">
-              <Field label="Nombre *"><input required value={editP.name} onChange={(e) => setEditP({ ...editP, name: e.target.value })} /></Field>
-              <Field label="SKU / Estilo"><input value={editP.sku || ''} onChange={(e) => setEditP({ ...editP, sku: e.target.value })} /></Field>
-              <Field label="Marca"><input value={editP.brand || ''} onChange={(e) => setEditP({ ...editP, brand: e.target.value })} /></Field>
-              <Field label="Categoría"><input value={editP.category || ''} onChange={(e) => setEditP({ ...editP, category: e.target.value })} /></Field>
-              <Field label="Proveedor"><input value={editP.supplier || ''} onChange={(e) => setEditP({ ...editP, supplier: e.target.value })} placeholder="SanMar, S&S, alphabroder…" /></Field>
-              <Field label="Costo unitario"><input type="number" step="0.01" value={editP.base_cost} onChange={(e) => setEditP({ ...editP, base_cost: e.target.value })} /></Field>
+            <div className="form-grid three">
+              <Field label="Nombre *"><input required value={edit.name} onChange={(e) => setEdit({ ...edit, name: e.target.value })} /></Field>
+              <Field label="SKU / Estilo"><input value={edit.sku || ''} onChange={(e) => setEdit({ ...edit, sku: e.target.value })} /></Field>
+              <Field label="Categoría"><input value={edit.category || ''} onChange={(e) => setEdit({ ...edit, category: e.target.value })} /></Field>
+              {edit.kind !== 'servicio' && <Field label="Marca"><input value={edit.brand || ''} onChange={(e) => setEdit({ ...edit, brand: e.target.value })} /></Field>}
+              {edit.kind !== 'servicio' && <Field label="Proveedor"><input list="prov" value={edit.supplier || ''} onChange={(e) => setEdit({ ...edit, supplier: e.target.value })} /></Field>}
+              <Field label="Costo unitario" hint="Vacío = desconocido (la orden queda incompleta, nunca se usa $0)"><input type="number" step="0.01" value={edit.base_cost} onChange={(e) => setEdit({ ...edit, base_cost: e.target.value })} /></Field>
+              {edit.kind === 'servicio' && <Field label="Precio de venta"><input type="number" step="0.01" value={edit.price} onChange={(e) => setEdit({ ...edit, price: e.target.value })} /></Field>}
             </div>
-            <Field label="Colores" hint="Separados por coma"><input value={editP.colorsTxt} onChange={(e) => setEditP({ ...editP, colorsTxt: e.target.value })} /></Field>
-            <Field label="Tallas" hint="Vacío = talla única (se cotiza por cantidad). 2XL+ lleva recargo automático."><input value={editP.sizesTxt} onChange={(e) => setEditP({ ...editP, sizesTxt: e.target.value })} /></Field>
-            <div className="row between">
-              {editP.id ? <button type="button" className="btn danger-ghost" onClick={delP}>Eliminar</button> : <span />}
-              <button className="btn primary">Guardar</button>
-            </div>
-          </form>
-        </Modal>
-      )}
-
-      {editM && (
-        <Modal title={editM.id ? `Editar ${editM.name}` : 'Nuevo método'} onClose={() => setEditM(null)}>
-          <form className="form" onSubmit={saveM}>
-            <div className="form-grid">
-              <Field label="Nombre *"><input required value={editM.name} onChange={(e) => setEditM({ ...editM, name: e.target.value })} /></Field>
-              <Field label="Código *" hint="Sin espacios, ej. dtg"><input required disabled={!!editM.id} value={editM.code} onChange={(e) => setEditM({ ...editM, code: e.target.value.toLowerCase().replace(/\W/g, '') })} /></Field>
-              <Field label="Cargo de setup"><input type="number" step="0.01" value={editM.setup_fee} onChange={(e) => setEditM({ ...editM, setup_fee: e.target.value })} /></Field>
-              <Field label="Costo por color extra /pz"><input type="number" step="0.01" value={editM.color_price} onChange={(e) => setEditM({ ...editM, color_price: e.target.value })} /></Field>
-            </div>
-            <label className="inline"><input type="checkbox" checked={!!editM.setup_per_color} onChange={(e) => setEditM({ ...editM, setup_per_color: e.target.checked })} /> Cobrar setup por cada color (pantallas de serigrafía)</label>
-            <h4>Escala de precios por cantidad</h4>
-            {editM.tiers.map((t, i) => (
-              <div key={i} className="row gap">
-                <label className="inline">Desde <input className="mini" type="number" value={t.min} onChange={(e) => setEditM({ ...editM, tiers: editM.tiers.map((x, j) => (j === i ? { ...x, min: e.target.value } : x)) })} /> pzs</label>
-                <label className="inline">$ <input className="mini" type="number" step="0.01" value={t.price} onChange={(e) => setEditM({ ...editM, tiers: editM.tiers.map((x, j) => (j === i ? { ...x, price: e.target.value } : x)) })} /> /pz</label>
-                <button type="button" className="icon-btn" onClick={() => setEditM({ ...editM, tiers: editM.tiers.filter((_, j) => j !== i) })}>×</button>
+            <datalist id="prov"><option value="SanMar" /><option value="S&S Activewear" /></datalist>
+            {edit.kind !== 'servicio' && <>
+              <Field label="Colores" hint="Separados por coma"><input value={edit.colorsTxt} onChange={(e) => setEdit({ ...edit, colorsTxt: e.target.value })} /></Field>
+              <Field label="Tallas" hint="Vacío = talla única (se cotiza por cantidad)"><input value={edit.sizesTxt} onChange={(e) => setEdit({ ...edit, sizesTxt: e.target.value })} /></Field>
+              <div className="field"><span>Costo por talla (opcional: cuando el proveedor cobra distinto, p. ej. 2XL+)</span>
+                <div className="sizes">
+                  {uncsv(edit.sizesTxt).map((s) => (
+                    <label key={s} className="size"><span>{s}</span>
+                      <input type="number" step="0.01" placeholder={edit.base_cost === '' ? '?' : String(edit.base_cost)} value={edit.size_costs?.[s] ?? ''} onChange={(e) => setEdit({ ...edit, size_costs: { ...edit.size_costs, [s]: e.target.value } })} />
+                    </label>
+                  ))}
+                </div>
               </div>
-            ))}
-            <button type="button" className="link-btn" onClick={() => setEditM({ ...editM, tiers: [...editM.tiers, { min: '', price: '' }] })}>+ escala</button>
+            </>}
+            <fieldset className="owner-box" disabled={!esDuena}>
+              <legend>Matriz (solo la dueña{esDuena ? '' : ' · solo lectura'})</legend>
+              {edit.kind !== 'servicio' && (
+                <div className="row gap wrap">
+                  <label className="field"><span>Excepción de precio</span>
+                    <select value={edit.markup_mode} onChange={(e) => setEdit({ ...edit, markup_mode: e.target.value })}>
+                      <option value="">Ninguna (usa la matriz)</option><option value="porcentaje">Markup propio (%)</option><option value="precio_fijo">Precio fijo ($)</option>
+                    </select>
+                  </label>
+                  {edit.markup_mode && <label className="field"><span>{edit.markup_mode === 'porcentaje' ? 'Markup %' : 'Precio $'}</span><input type="number" step="0.01" value={edit.markup_value} onChange={(e) => setEdit({ ...edit, markup_value: e.target.value })} /></label>}
+                </div>
+              )}
+              <label className="inline"><input type="checkbox" checked={edit.commissionable !== 0 && edit.commissionable !== false} onChange={(e) => setEdit({ ...edit, commissionable: e.target.checked ? 1 : 0 })} /> Comisionable</label>
+              <p className="muted small">Mensualidades de websites y media players: no comisionables. Los cambios quedan en el historial.</p>
+            </fieldset>
             <div className="row between">
-              {editM.id ? <button type="button" className="btn danger-ghost" onClick={delM}>Eliminar</button> : <span />}
+              {edit.id ? <button type="button" className="btn danger-ghost" onClick={eliminar}>Eliminar</button> : <span />}
               <button className="btn primary">Guardar</button>
             </div>
           </form>
         </Modal>
       )}
+      {toast}
     </>
   );
 }

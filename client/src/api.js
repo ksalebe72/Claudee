@@ -3,9 +3,11 @@ async function request(method, url, body) {
     method,
     headers: body ? { 'Content-Type': 'application/json' } : undefined,
     body: body ? JSON.stringify(body) : undefined,
+    credentials: 'same-origin',
   });
   const data = await res.json().catch(() => ({}));
-  if (!res.ok) throw new Error(data.error || `Error ${res.status}`);
+  if (res.status === 401 && data.codigo === 'SIN_SESION') window.dispatchEvent(new Event('cp:sin-sesion'));
+  if (!res.ok) throw Object.assign(new Error(data.error || `Error ${res.status}`), { status: res.status, codigo: data.codigo });
   return data;
 }
 export const api = {

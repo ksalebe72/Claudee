@@ -1,34 +1,314 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { api } from '../api.js';
+import { fmtDateTime, money, today, useLoad } from '../utils.js';
 import { Field, PageHeader, useMeta, useToast } from '../components/ui.jsx';
+
+const TABS = { tarifas: 'Tarifas', comisiones: 'Vendedores y comisiones', usuarios: 'Usuarios', historial: 'Historial de cambios', general: 'General' };
 
 export default function Settings() {
   const meta = useMeta();
-  const s = meta.settings;
-  const [f, setF] = useState({ business_name: s.business_name, markup: s.markup * 100, tax_rate: s.tax_rate * 100, deposit_pct: s.deposit_pct * 100, sanmar_markup: (s.sanmar_markup ?? 1) * 100 });
+  const esDuena = meta.user.role === 'duena';
+  const [tab, setTab] = useState('tarifas');
   const [toast, notify] = useToast();
-  async function save(e) {
-    e.preventDefault();
-    await api.put('/settings', { business_name: f.business_name, markup: Number(f.markup) / 100, tax_rate: Number(f.tax_rate) / 100, deposit_pct: Number(f.deposit_pct) / 100, sanmar_markup: Number(f.sanmar_markup) / 100 });
-    await meta.reloadMeta();
-    notify('Ajustes guardados');
-  }
   return (
     <>
-      <PageHeader title="Ajustes" subtitle="Datos del negocio y reglas de precios" />
-      <form className="card form narrow" onSubmit={save}>
-        <Field label="Nombre del negocio"><input value={f.business_name} onChange={(e) => setF({ ...f, business_name: e.target.value })} /></Field>
-        <Field label="Markup sobre costo de blanks (%)" hint="60 = vendes el blank a costo × 1.6"><input type="number" value={f.markup} onChange={(e) => setF({ ...f, markup: e.target.value })} /></Field>
-        <Field label="Markup sobre costo SanMar (%)" hint={`100 = precio de venta es el costo de SanMar × 2. Hoy: costo × ${(1 + Number(f.sanmar_markup) / 100).toFixed(2)}`}><input type="number" value={f.sanmar_markup} onChange={(e) => setF({ ...f, sanmar_markup: e.target.value })} /></Field>
-        <Field label="Impuesto por defecto (%)"><input type="number" step="0.01" value={f.tax_rate} onChange={(e) => setF({ ...f, tax_rate: e.target.value })} /></Field>
-        <Field label="Anticipo sugerido (%)"><input type="number" value={f.deposit_pct} onChange={(e) => setF({ ...f, deposit_pct: e.target.value })} /></Field>
-        <div className="row end"><button className="btn primary">Guardar</button></div>
-      </form>
-      <section className="card narrow">
-        <h3>Integraciones</h3>
-        <p className="muted">Los SMS y emails se registran en la conversación del contacto. Para enviarlos de verdad, configura Twilio (SMS) o SMTP/SendGrid (email) en <code>server/messaging.js</code> con variables de entorno. Ver README.</p>
-      </section>
+      <PageHeader title="Ajustes" subtitle={esDuena ? 'Matriz de precios y costos, comisiones y usuarios. Cada cambio queda en el historial.' : 'Solo la dueña puede modificar estos valores. Aquí los ves en modo lectura.'} />
+      <div className="tabs big">
+        {Object.entries(TABS).filter(([k]) => esDuena || ['tarifas', 'comisiones'].includes(k)).map(([k, v]) => (
+          <button key={k} className={tab === k ? 'active' : ''} onClick={() => setTab(k)}>{v}</button>
+        ))}
+      </div>
+      {tab === 'tarifas' && <Tarifas editable={esDuena} notify={notify} />}
+      {tab === 'comisiones' && <Comisiones editable={esDuena} notify={notify} />}
+      {tab === 'usuarios' && esDuena && <Usuarios notify={notify} />}
+      {tab === 'historial' && esDuena && <Historial />}
+      {tab === 'general' && esDuena && <General notify={notify} />}
       {toast}
     </>
+  );
+}
+
+// ---------- helpers de edición ----------
+const toNum = (v) => (v === '' || v == null ? null : Number(v));
+function NumIn({ value, onChange, disabled, step = '0.01', pct, placeholder, width }) {
+  const shown = value == null ? '' : pct ? Math.round(value * 100000) / 1000 : value;
+  return (
+    <input type="number" step={step} className="mini" style={width ? { width } : undefined} disabled={disabled} value={shown} placeholder={placeholder ?? 'sin valor'}
+      onChange={(e) => onChange(e.target.value === '' ? null : pct ? Number(e.target.value) / 100 : Number(e.target.value))} />
+  );
+}
+const lim = (v) => (v == null ? 'en adelante' : v);
+
+// ---------- Tarifas ----------
+function Tarifas({ editable, notify }) {
+  const [t, reload] = useLoad(() => api.get('/tarifas'));
+  const [c, setC] = useState(null);
+  const [nota, setNota] = useState('');
+  useEffect(() => { if (t) setC(structuredClone(t.config)); }, [t]);
+  if (!t || !c) return <div className="loading">Cargando…</div>;
+  const upd = (fn) => setC((prev) => { const n = structuredClone(prev); fn(n); return n; });
+  const changed = JSON.stringify(c) !== JSON.stringify(t.config);
+  async function guardar() {
+    try {
+      const r = await api.put('/tarifas', { config: c, nota });
+      notify(`Versión ${r.id} guardada (${r.cambios} cambio${r.cambios === 1 ? '' : 's'}). Las cotizaciones existentes conservan sus precios.`);
+      setNota('');
+      reload();
+    } catch (e) { notify(e.message, true); }
+  }
+  const dis = !editable;
+  const rowsEditor = (arr, path, cols, nuevo) => (
+    <table className="table mini-table edit-table">
+      <thead><tr>{cols.map((col) => <th key={col.k}>{col.l}</th>)}{editable && <th />}</tr></thead>
+      <tbody>
+        {arr.map((row, i) => (
+          <tr key={i}>
+            {cols.map((col) => <td key={col.k}><NumIn disabled={dis} step={col.step} value={row[col.k]} onChange={(v) => upd((n) => { path(n)[i][col.k] = v; })} placeholder={col.ph} /></td>)}
+            {editable && <td><button className="icon-btn" onClick={() => upd((n) => { path(n).splice(i, 1); })}>×</button></td>}
+          </tr>
+        ))}
+      </tbody>
+      {editable && <tfoot><tr><td colSpan={cols.length + 1}><button className="link-btn" onClick={() => upd((n) => { path(n).push(nuevo()); })}>+ fila</button></td></tr></tfoot>}
+    </table>
+  );
+
+  return (
+    <div className="settings-grid">
+      <section className="card">
+        <h3>A) Prendas · precio de venta = costo × factor</h3>
+        <div className="seg">
+          <button disabled={dis} className={c.prendas.modo === 'escalonado' ? 'on' : ''} onClick={() => upd((n) => { n.prendas.modo = 'escalonado'; })}>Escalonado</button>
+          <button disabled={dis} className={c.prendas.modo === 'fijo' ? 'on' : ''} onClick={() => upd((n) => { n.prendas.modo = 'fijo'; })}>Fijo (como DecoNetwork)</button>
+        </div>
+        <h4>Modo escalonado</h4>
+        <table className="table mini-table edit-table">
+          <thead><tr><th>Si el costo es menor que</th><th>Factor</th><th>Markup</th>{editable && <th />}</tr></thead>
+          <tbody>
+            {c.prendas.escalonado.map((tr, i) => (
+              <tr key={i}>
+                <td>{tr.menorQue == null ? <span className="muted">resto (sin límite)</span> : <NumIn disabled={dis} value={tr.menorQue} onChange={(v) => upd((n) => { n.prendas.escalonado[i].menorQue = v; })} />}</td>
+                <td><NumIn disabled={dis} value={tr.factor} onChange={(v) => upd((n) => { n.prendas.escalonado[i].factor = v; })} /></td>
+                <td className="muted">{tr.factor ? `${Math.round((tr.factor - 1) * 100)}%` : ''}</td>
+                {editable && <td>{tr.menorQue != null && <button className="icon-btn" onClick={() => upd((n) => { n.prendas.escalonado.splice(i, 1); })}>×</button>}</td>}
+              </tr>
+            ))}
+          </tbody>
+          {editable && <tfoot><tr><td colSpan={4}><button className="link-btn" onClick={() => upd((n) => { n.prendas.escalonado.splice(n.prendas.escalonado.length - 1, 0, { menorQue: 10, factor: 2 }); })}>+ tramo</button></td></tr></tfoot>}
+        </table>
+        <h4>Modo fijo</h4>
+        <label className="inline">Factor <NumIn disabled={dis} value={c.prendas.fijo.factor} onChange={(v) => upd((n) => { n.prendas.fijo.factor = v; })} /> <span className="muted">({Math.round((c.prendas.fijo.factor - 1) * 100)}% de markup)</span></label>
+        <p className="muted small">Ejemplo con el modo activo: prenda de $4.00 → {money(4 * (c.prendas.modo === 'fijo' ? c.prendas.fijo.factor : (c.prendas.escalonado.find((x) => x.menorQue == null || 4 < x.menorQue)?.factor || 0)))}. Las excepciones por producto (porcentaje o precio fijo) se ponen en Catálogo.</p>
+      </section>
+
+      <section className="card">
+        <h3>B) Bordado · por logo y por ubicación</h3>
+        {rowsEditor(c.bordado.filas, (n) => n.bordado.filas, [
+          { k: 'puntadasHasta', l: 'Puntadas hasta', step: '500', ph: 'cualquiera' },
+          { k: 'cantidadDesde', l: 'Desde (piezas)', step: '1' },
+          { k: 'costo', l: 'COSTO $' },
+          { k: 'precio', l: 'PRECIO $' },
+        ], () => ({ puntadasHasta: 5000, cantidadDesde: 1, costo: null, precio: null }))}
+        <p className="muted small">Sin rangos todavía: una sola fila. Para rangos de puntadas agrega filas con «Puntadas hasta» (5,000 / 10,000 / 15,000) y deja una fila vacía para «más». Digitalizado/setup se cobra con una línea «Diseño/Digitalizado» en la cotización.</p>
+      </section>
+
+      <section className="card">
+        <h3>C) DTF</h3>
+        <h4>Costo interno</h4>
+        <div className="row gap wrap">
+          <label className="inline">Material por pie² (144 in²) $ <NumIn disabled={dis} value={c.dtf.costoPieCuadrado} onChange={(v) => upd((n) => { n.dtf.costoPieCuadrado = v; })} /></label>
+          <label className="inline">Aplicación por ubicación y prenda $ <NumIn disabled={dis} value={c.dtf.costoAplicacion} onChange={(v) => upd((n) => { n.dtf.costoAplicacion = v; })} /></label>
+        </div>
+        <p className="muted small">3×3" = {money(9 / 144 * c.dtf.costoPieCuadrado + c.dtf.costoAplicacion)} · 12×12" = {money(c.dtf.costoPieCuadrado + c.dtf.costoAplicacion)}</p>
+        <div className="row gap wrap top">
+          <div><h4>Precio 1ª ubicación (por área)</h4>{rowsEditor(c.dtf.primera, (n) => n.dtf.primera, [{ k: 'hasta', l: 'Hasta in²', step: '1', ph: 'más' }, { k: 'precio', l: 'PRECIO $' }], () => ({ hasta: 50, precio: null }))}</div>
+          <div><h4>Precio ubicación adicional</h4>{rowsEditor(c.dtf.adicional, (n) => n.dtf.adicional, [{ k: 'hasta', l: 'Hasta in²', step: '1', ph: 'más' }, { k: 'precio', l: 'PRECIO $' }], () => ({ hasta: 50, precio: null }))}</div>
+        </div>
+        <label className="inline">Mínimo de piezas DTF <NumIn disabled={dis} step="1" value={c.dtf.minimo} onChange={(v) => upd((n) => { n.dtf.minimo = v; })} placeholder="sin mínimo" /></label>
+        <p className="muted small">La ubicación más cara de la prenda se cobra como 1ª; las demás con la tabla adicional. Tramos: «hasta» incluye el límite (15 in² entra en el primer tramo). Una fila sin «hasta» es el tramo final.</p>
+      </section>
+
+      <section className="card">
+        <h3>D) Heat transfer</h3>
+        <h4>Por hoja (tramos por cantidad total de hojas)</h4>
+        {rowsEditor(c.heatTransfer.hojas, (n) => n.heatTransfer.hojas, [{ k: 'cantidadDesde', l: 'Desde (hojas)', step: '1' }, { k: 'costo', l: 'COSTO $/hoja' }, { k: 'precio', l: 'PRECIO $/hoja' }], () => ({ cantidadDesde: 10, costo: null, precio: null }))}
+        <div className="row gap wrap">
+          <label className="inline">Aplicación por ubicación · COSTO $ <NumIn disabled={dis} value={c.heatTransfer.aplicacion.costo} onChange={(v) => upd((n) => { n.heatTransfer.aplicacion.costo = v; })} /></label>
+          <label className="inline">PRECIO $ <NumIn disabled={dis} value={c.heatTransfer.aplicacion.precio} onChange={(v) => upd((n) => { n.heatTransfer.aplicacion.precio = v; })} /></label>
+          <label className="inline">Mínimo <NumIn disabled={dis} step="1" value={c.heatTransfer.minimo} onChange={(v) => upd((n) => { n.heatTransfer.minimo = v; })} placeholder="sin mínimo" /></label>
+        </div>
+        <p className="muted small">Mientras falten valores, toda línea de heat transfer queda con «costo pendiente» y su precio se pone a mano en la línea. El setup se cobra con una línea de Diseño/Setup.</p>
+      </section>
+
+      <section className="card">
+        <h3>E) Impuesto, márgenes y liquidación</h3>
+        <div className="row gap wrap">
+          <label className="inline">Impuesto ({c.impuesto.nombre}) % <NumIn disabled={dis} pct value={c.impuesto.tasa} onChange={(v) => upd((n) => { n.impuesto.tasa = v ?? 0; })} /></label>
+          <label className="inline">Contribución objetivo % <NumIn disabled={dis} pct value={c.margen.objetivo} onChange={(v) => upd((n) => { n.margen.objetivo = v ?? 0; })} /></label>
+          <label className="inline">Contribución mínima % <NumIn disabled={dis} pct value={c.margen.minimo} onChange={(v) => upd((n) => { n.margen.minimo = v ?? 0; })} /></label>
+          <label className="inline">Día de pago de comisiones <NumIn disabled={dis} step="1" value={c.liquidacion.diaPago} onChange={(v) => upd((n) => { n.liquidacion.diaPago = v; })} /></label>
+        </div>
+        <p className="muted small">Impuesto sobre productos + envío cobrado; clientes exentos = 0%. Verde ≥ objetivo · amarillo entre mínimo y objetivo · rojo bajo el mínimo (aprueba gerencia) · contribución negativa: excepción de la dueña.</p>
+      </section>
+
+      {editable && changed && (
+        <div className="save-bar">
+          <input className="grow" placeholder="Nota de esta versión (opcional), p. ej. «Tabla DTF Color Plus 2026-11»" value={nota} onChange={(e) => setNota(e.target.value)} />
+          <button className="btn" disabled={!changed} onClick={() => setC(structuredClone(t.config))}>Descartar</button>
+          <button className="btn primary" disabled={!changed} onClick={guardar}>Guardar nueva versión</button>
+        </div>
+      )}
+      <section className="card">
+        <h3>Versiones</h3>
+        <p className="muted small">Vigente: versión {t.id}. Cada cotización guarda la versión con la que se calculó.</p>
+        <ul className="list">{t.versiones.map((v) => <li key={v.id}><span>v{v.id} · {v.note || '—'}</span><span className="muted">{v.created_by}</span><span>{fmtDateTime(v.created_at)}</span></li>)}</ul>
+      </section>
+    </div>
+  );
+}
+
+// ---------- Comisiones ----------
+const BASES = { venta_neta: 'Venta neta de productos', ganancia_producto: 'Ganancia de producto', ganancia_total: 'Ganancia de producto + envío' };
+function Comisiones({ editable, notify }) {
+  const [vend, reloadV] = useLoad(() => api.get('/vendedores'));
+  const [reglas, reloadR] = useLoad(() => api.get('/comisiones/reglas'));
+  const [nueva, setNueva] = useState(null);
+  const [tasa, setTasa] = useState({});
+  if (!vend || !reglas) return <div className="loading">Cargando…</div>;
+  const run = async (fn, msg) => { try { await fn(); notify(msg); reloadV(); reloadR(); } catch (e) { notify(e.message, true); } };
+  return (
+    <div className="settings-grid">
+      <section className="card">
+        <h3>Vendedores</h3>
+        <ul className="list">
+          {vend.map((v) => (
+            <li key={v.id}><span>{v.name}</span><span className="muted">{v.active ? 'activo' : 'inactivo'}</span>
+              {editable && <button className="link-btn" onClick={() => run(() => api.put(`/vendedores/${v.id}`, { active: !v.active }), 'Actualizado')}>{v.active ? 'Desactivar' : 'Activar'}</button>}</li>
+          ))}
+        </ul>
+        {editable && <button className="link-btn" onClick={() => { const name = prompt('Nombre del vendedor'); if (name) run(() => api.post('/vendedores', { name }), 'Vendedor agregado'); }}>+ vendedor</button>}
+      </section>
+      <section className="card wide">
+        <h3>Reglas de comisión</h3>
+        <p className="muted small">La base excluye impuesto, envío, líneas de Diseño/Digitalizado y productos marcados «no comisionable». Si la base sobre ganancia sale negativa, la comisión es $0. La tasa usada es la vigente en la fecha de factura.</p>
+        <table className="table">
+          <thead><tr><th>Regla</th><th>Vendedor</th><th>Base</th><th>Cliente</th><th>Tasa vigente</th><th>Historial de tasas</th>{editable && <th>Nueva tasa</th>}</tr></thead>
+          <tbody>
+            {reglas.map((r) => (
+              <tr key={r.id} className={r.active ? '' : 'muted'}>
+                <td><strong>{r.name}</strong>{!r.active && ' (inactiva)'}</td>
+                <td>{r.salesperson_name || 'Cualquiera'}</td>
+                <td>{editable ? <select value={r.base} onChange={(e) => run(() => api.put(`/comisiones/reglas/${r.id}`, { base: e.target.value }), 'Base actualizada')}>{Object.entries(BASES).map(([k, v]) => <option key={k} value={k}>{v}</option>)}</select> : BASES[r.base]}</td>
+                <td>{r.client_type || '—'}</td>
+                <td><strong>{(() => { const t = r.tasas.find((x) => x.effective_from <= today()); return t ? `${Math.round(t.rate * 10000) / 100}%` : '—'; })()}</strong></td>
+                <td className="small">{r.tasas.map((t) => <div key={t.id}>{Math.round(t.rate * 10000) / 100}% desde {t.effective_from === '2000-01-01' ? 'el inicio' : t.effective_from}</div>)}</td>
+                {editable && (
+                  <td>
+                    <div className="row gap">
+                      <input type="number" step="0.5" className="mini" placeholder="%" value={tasa[r.id]?.rate ?? ''} onChange={(e) => setTasa({ ...tasa, [r.id]: { ...tasa[r.id], rate: e.target.value } })} />
+                      <input type="date" value={tasa[r.id]?.date ?? today()} onChange={(e) => setTasa({ ...tasa, [r.id]: { ...tasa[r.id], date: e.target.value } })} />
+                      <button className="btn" disabled={tasa[r.id]?.rate === undefined || tasa[r.id]?.rate === ''} onClick={() => run(() => api.post(`/comisiones/reglas/${r.id}/tasas`, { rate: Number(tasa[r.id].rate) / 100, effective_from: tasa[r.id].date || today() }).then(() => setTasa({ ...tasa, [r.id]: {} })), 'Tasa agregada')}>Agregar</button>
+                    </div>
+                    <button className="link-btn small" onClick={() => run(() => api.put(`/comisiones/reglas/${r.id}`, { active: !r.active }), 'Actualizada')}>{r.active ? 'Desactivar regla' : 'Activar regla'}</button>
+                  </td>
+                )}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+        {editable && !nueva && <button className="link-btn" onClick={() => setNueva({ name: '', salesperson_id: '', base: 'venta_neta', client_type: '', rate: '', effective_from: today() })}>+ regla</button>}
+        {nueva && (
+          <div className="row gap wrap">
+            <input placeholder="Nombre" value={nueva.name} onChange={(e) => setNueva({ ...nueva, name: e.target.value })} />
+            <select value={nueva.salesperson_id} onChange={(e) => setNueva({ ...nueva, salesperson_id: e.target.value })}><option value="">Cualquier vendedor</option>{vend.map((v) => <option key={v.id} value={v.id}>{v.name}</option>)}</select>
+            <select value={nueva.base} onChange={(e) => setNueva({ ...nueva, base: e.target.value })}>{Object.entries(BASES).map(([k, v]) => <option key={k} value={k}>{v}</option>)}</select>
+            <select value={nueva.client_type} onChange={(e) => setNueva({ ...nueva, client_type: e.target.value })}><option value="">Todo cliente</option><option value="nuevo">Cliente nuevo</option><option value="existente">Cliente existente</option></select>
+            <input type="number" step="0.5" className="mini" placeholder="%" value={nueva.rate} onChange={(e) => setNueva({ ...nueva, rate: e.target.value })} />
+            <input type="date" value={nueva.effective_from} onChange={(e) => setNueva({ ...nueva, effective_from: e.target.value })} />
+            <button className="btn primary" onClick={() => run(() => api.post('/comisiones/reglas', { ...nueva, salesperson_id: nueva.salesperson_id ? Number(nueva.salesperson_id) : null, rate: Number(nueva.rate) / 100 }).then(() => setNueva(null)), 'Regla creada')}>Crear</button>
+            <button className="btn" onClick={() => setNueva(null)}>Cancelar</button>
+          </div>
+        )}
+      </section>
+    </div>
+  );
+}
+
+// ---------- Usuarios ----------
+function Usuarios({ notify }) {
+  const meta = useMeta();
+  const [users, reload] = useLoad(() => api.get('/usuarios'));
+  const [vend] = useLoad(() => api.get('/vendedores'));
+  const [f, setF] = useState({ name: '', username: '', password: '', role: 'ventas', salesperson_id: '' });
+  if (!users || !vend) return <div className="loading">Cargando…</div>;
+  const run = async (fn, msg) => { try { await fn(); notify(msg); reload(); } catch (e) { notify(e.message, true); } };
+  return (
+    <section className="card">
+      <h3>Usuarios</h3>
+      <table className="table">
+        <thead><tr><th>Nombre</th><th>Usuario</th><th>Rol</th><th>Vendedor</th><th>Estado</th><th /></tr></thead>
+        <tbody>
+          {users.map((u) => (
+            <tr key={u.id}>
+              <td>{u.name}</td><td>{u.username}</td>
+              <td><select value={u.role} disabled={u.id === meta.user.id} onChange={(e) => run(() => api.put(`/usuarios/${u.id}`, { role: e.target.value }), 'Rol actualizado')}>{Object.entries(meta.roles).map(([k, v]) => <option key={k} value={k}>{v}</option>)}</select></td>
+              <td><select value={u.salesperson_id || ''} onChange={(e) => run(() => api.put(`/usuarios/${u.id}`, { salesperson_id: e.target.value ? Number(e.target.value) : null }), 'Actualizado')}><option value="">—</option>{vend.map((v) => <option key={v.id} value={v.id}>{v.name}</option>)}</select></td>
+              <td>{u.active ? 'activo' : 'inactivo'}</td>
+              <td className="row gap">
+                {u.id !== meta.user.id && <button className="link-btn" onClick={() => run(() => api.put(`/usuarios/${u.id}`, { active: !u.active }), 'Actualizado')}>{u.active ? 'Desactivar' : 'Activar'}</button>}
+                <button className="link-btn" onClick={() => { const p = prompt('Nueva contraseña (mínimo 8 caracteres)'); if (p) run(() => api.put(`/usuarios/${u.id}`, { password: p }), 'Contraseña cambiada'); }}>Cambiar contraseña</button>
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+      <h4>Nuevo usuario</h4>
+      <form className="row gap wrap" onSubmit={(e) => { e.preventDefault(); run(() => api.post('/usuarios', { ...f, salesperson_id: f.salesperson_id ? Number(f.salesperson_id) : null }).then(() => setF({ ...f, name: '', username: '', password: '' })), 'Usuario creado'); }}>
+        <input required placeholder="Nombre" value={f.name} onChange={(e) => setF({ ...f, name: e.target.value })} />
+        <input required placeholder="Usuario" value={f.username} onChange={(e) => setF({ ...f, username: e.target.value })} />
+        <input required type="password" minLength={8} placeholder="Contraseña" value={f.password} onChange={(e) => setF({ ...f, password: e.target.value })} autoComplete="new-password" />
+        <select value={f.role} onChange={(e) => setF({ ...f, role: e.target.value })}>{Object.entries(meta.roles).map(([k, v]) => <option key={k} value={k}>{v}</option>)}</select>
+        <select value={f.salesperson_id} onChange={(e) => setF({ ...f, salesperson_id: e.target.value })}><option value="">Sin vendedor</option>{vend.map((v) => <option key={v.id} value={v.id}>{v.name}</option>)}</select>
+        <button className="btn primary">Crear</button>
+      </form>
+      <p className="muted small">Dueña: ajustes, excepciones y aprobación de liquidaciones · Finanzas: costos reales, confirmar costos, revisar y marcar pagadas · Gerencia: aprobar márgenes bajos y ver reportes · Ventas: cotizar.</p>
+    </section>
+  );
+}
+
+// ---------- Historial ----------
+const AREAS = { '': 'Todo', tarifas: 'Tarifas', comisiones: 'Comisiones', productos: 'Productos', costos: 'Costos', creditos: 'Créditos', liquidacion: 'Liquidaciones', aprobacion_margen: 'Aprobaciones de margen', ordenes: 'Órdenes', pagos: 'Pagos', ajustes: 'General' };
+const show = (v) => { if (v == null) return '—'; try { const x = JSON.parse(v); return typeof x === 'object' && x !== null ? JSON.stringify(x) : String(x); } catch { return v; } };
+function Historial() {
+  const [area, setArea] = useState('');
+  const [rows] = useLoad(() => api.get(`/auditoria${area ? `?area=${area}` : ''}`), [area]);
+  return (
+    <section className="card no-pad">
+      <div className="row gap pad"><select value={area} onChange={(e) => setArea(e.target.value)}>{Object.entries(AREAS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}</select><span className="muted small">Últimos 500 cambios</span></div>
+      <table className="table">
+        <thead><tr><th>Cuándo</th><th>Quién</th><th>Área</th><th>Qué</th><th>Antes</th><th>Después</th><th>Ref.</th></tr></thead>
+        <tbody>{rows?.map((r) => (
+          <tr key={r.id}><td className="small">{fmtDateTime(r.at)}</td><td>{r.user_name}</td><td>{AREAS[r.area] || r.area}</td><td className="small">{r.field}</td><td className="small mono">{show(r.old_value)}</td><td className="small mono">{show(r.new_value)}</td><td className="small muted">{r.ref}</td></tr>
+        ))}</tbody>
+      </table>
+    </section>
+  );
+}
+
+// ---------- General ----------
+function General({ notify }) {
+  const meta = useMeta();
+  const s = meta.settings;
+  const [f, setF] = useState({ business_name: s.business_name, deposit_pct: s.deposit_pct * 100 });
+  async function save(e) {
+    e.preventDefault();
+    try { await api.put('/settings', { business_name: f.business_name, deposit_pct: Number(f.deposit_pct) / 100 }); await meta.reloadMeta(); notify('Guardado'); } catch (err) { notify(err.message, true); }
+  }
+  return (
+    <form className="card form narrow" onSubmit={save}>
+      <Field label="Nombre del negocio"><input value={f.business_name} onChange={(e) => setF({ ...f, business_name: e.target.value })} /></Field>
+      <Field label="Anticipo sugerido (%)"><input type="number" value={f.deposit_pct} onChange={(e) => setF({ ...f, deposit_pct: e.target.value })} /></Field>
+      <div className="row end"><button className="btn primary">Guardar</button></div>
+      <p className="muted small">Mensajes al cliente: el sistema no envía correos ni SMS. Las automatizaciones de envío vienen apagadas.</p>
+    </form>
   );
 }

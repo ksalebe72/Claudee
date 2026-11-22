@@ -59,7 +59,7 @@ export default function Portal() {
               <tr key={it.id}>
                 <td>
                   <strong>{it.description}</strong>{it.color && ` · ${it.color}`}
-                  <div className="muted small">{it.decorations.map((d) => `${d.location} (${d.method_name || d.method}${d.colors > 1 ? `, ${d.colors} colores` : ''})`).join(' · ')}</div>
+                  <div className="muted small">{it.decorations.map((d) => `${d.location} (${d.method_name}${d.width && d.height ? ` ${d.width}×${d.height}"` : ''})`).join(' · ')}</div>
                 </td>
                 <td className="small">{Object.entries(it.sizes || {}).map(([s, n]) => `${s}:${n}`).join(' ')}</td>
                 <td className="num">{it.qty}</td>
@@ -73,6 +73,7 @@ export default function Portal() {
         <div className="portal-totals">
           <div className="row between"><span>Subtotal</span><span>{money(j.subtotal)}</span></div>
           {j.discount > 0 && <div className="row between"><span>Descuento</span><span>-{money(j.discount)}</span></div>}
+          {j.shipping > 0 && <div className="row between"><span>Envío</span><span>{money(j.shipping)}</span></div>}
           <div className="row between"><span>Impuesto</span><span>{money(j.tax)}</span></div>
           <div className="row between total"><span>Total</span><span>{money(j.total)}</span></div>
           {!isQuote && <div className="row between"><span>Pagado</span><span>{money(j.paid)}</span></div>}

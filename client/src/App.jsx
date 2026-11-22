@@ -1,8 +1,8 @@
-import React, { useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import { NavLink, Route, Routes, useLocation } from 'react-router-dom';
 import { api } from './api.js';
-import { useLoad } from './utils.js';
 import { MetaContext } from './components/ui.jsx';
+import Login from './pages/Login.jsx';
 import Dashboard from './pages/Dashboard.jsx';
 import Contacts from './pages/Contacts.jsx';
 import ContactDetail from './pages/ContactDetail.jsx';
@@ -15,8 +15,11 @@ import Catalog from './pages/Catalog.jsx';
 import Automations from './pages/Automations.jsx';
 import Billing from './pages/Billing.jsx';
 import Settings from './pages/Settings.jsx';
+import Liquidaciones from './pages/Liquidaciones.jsx';
+import Reportes from './pages/Reportes.jsx';
 import Portal from './pages/Portal.jsx';
 
+const GESTION = ['duena', 'finanzas', 'gerencia'];
 const NAV = [
   { group: 'General', items: [{ to: '/', label: 'Tablero', icon: '◧', end: true }] },
   { group: 'Ventas y CRM', items: [
@@ -29,45 +32,68 @@ const NAV = [
     { to: '/cotizaciones', label: 'Cotizaciones', icon: '✎' },
     { to: '/ordenes', label: 'Órdenes', icon: '▤' },
     { to: '/produccion', label: 'Producción', icon: '⚙' },
-    { to: '/catalogo', label: 'Catálogo y precios', icon: '▦' },
+    { to: '/catalogo', label: 'Catálogo', icon: '▦' },
   ] },
   { group: 'Finanzas', items: [
     { to: '/cobranza', label: 'Cobranza', icon: '$' },
+    { to: '/liquidaciones', label: 'Liquidación de comisiones', icon: '◎', roles: GESTION },
+    { to: '/reportes', label: 'Reportes', icon: '▥', roles: GESTION },
     { to: '/ajustes', label: 'Ajustes', icon: '⚙' },
   ] },
 ];
 
 export default function App() {
   const loc = useLocation();
-  const [meta, reloadMeta] = useLoad(() => api.get('/meta'));
+  const [auth, setAuth] = useState(null); // { necesitaConfiguracion, usuario }
+  const [meta, setMeta] = useState(null);
   const [menuOpen, setMenuOpen] = useState(false);
+
+  const loadAuth = useCallback(() => api.get('/auth/estado').then(setAuth).catch(() => setAuth({ necesitaConfiguracion: false, usuario: null })), []);
+  const reloadMeta = useCallback(() => api.get('/meta').then(setMeta), []);
+
+  useEffect(() => { if (!loc.pathname.startsWith('/portal/')) loadAuth(); }, []);
+  useEffect(() => { if (auth?.usuario) reloadMeta().catch(() => {}); }, [auth?.usuario?.id]);
+  useEffect(() => {
+    const h = () => { setMeta(null); setAuth((a) => ({ ...(a || {}), usuario: null })); };
+    window.addEventListener('cp:sin-sesion', h);
+    return () => window.removeEventListener('cp:sin-sesion', h);
+  }, []);
 
   if (loc.pathname.startsWith('/portal/')) {
     return <Routes><Route path="/portal/:token" element={<Portal />} /></Routes>;
   }
+  if (!auth) return <div className="loading">Cargando…</div>;
+  if (!auth.usuario) return <Login setup={auth.necesitaConfiguracion} onDone={(u) => setAuth({ necesitaConfiguracion: false, usuario: u })} />;
   if (!meta) return <div className="loading">Cargando…</div>;
 
+  const user = auth.usuario;
+  const salir = async () => { await api.post('/auth/salir').catch(() => {}); setMeta(null); setAuth({ necesitaConfiguracion: false, usuario: null }); };
+
   return (
-    <MetaContext.Provider value={{ ...meta, reloadMeta }}>
+    <MetaContext.Provider value={{ ...meta, user, reloadMeta }}>
       <div className="layout">
         <aside className={`sidebar ${menuOpen ? 'open' : ''}`} onClick={() => setMenuOpen(false)}>
           <div className="brand">
-            <div className="logo">T</div>
+            <div className="logo">CP</div>
             <div>
               <strong>{meta.settings.business_name}</strong>
-              <small>Taller OS</small>
+              <small>ColorPlus OS</small>
             </div>
           </div>
           {NAV.map((g) => (
             <nav key={g.group}>
               <div className="nav-group">{g.group}</div>
-              {g.items.map((i) => (
+              {g.items.filter((i) => !i.roles || i.roles.includes(user.role)).map((i) => (
                 <NavLink key={i.to} to={i.to} end={i.end} className="nav-link">
                   <span className="nav-icon">{i.icon}</span>{i.label}
                 </NavLink>
               ))}
             </nav>
           ))}
+          <div className="user-box">
+            <div><strong>{user.name}</strong><small>{user.roleName}</small></div>
+            <button className="link-btn" onClick={salir}>Salir</button>
+          </div>
         </aside>
         <main className="content">
           <button className="menu-btn" onClick={() => setMenuOpen(!menuOpen)} aria-label="Menú">☰</button>
@@ -85,6 +111,8 @@ export default function App() {
             <Route path="/produccion" element={<Production />} />
             <Route path="/catalogo" element={<Catalog />} />
             <Route path="/cobranza" element={<Billing />} />
+            <Route path="/liquidaciones" element={<Liquidaciones />} />
+            <Route path="/reportes" element={<Reportes />} />
             <Route path="/ajustes" element={<Settings />} />
             <Route path="*" element={<p>Página no encontrada</p>} />
           </Routes>

@@ -51,10 +51,96 @@ Variables de entorno opcionales:
 |---|---|
 | `PORT` | Puerto (por defecto 3001) |
 | `DB_PATH` | Ruta del archivo SQLite |
-| `APP_USER` / `APP_PASSWORD` | Protege el panel con usuario y contraseña. El portal del cliente sigue siendo público. |
 | `SEED_DEMO=0` | Arranca sin los contactos de ejemplo |
 
 `npm run seed` borra la base y la vuelve a crear con los datos iniciales. `npm test` corre las pruebas.
+
+## Usuarios y roles
+
+La primera vez que se abre la app, pide crear la **cuenta de la dueña**. No hay contraseñas por defecto. Después, la dueña crea los demás usuarios en **Ajustes → Usuarios**.
+
+| Rol | Puede |
+|---|---|
+| Dueña | Todo. Es la única que cambia la matriz y las comisiones, autoriza excepciones por contribución negativa y aprueba liquidaciones. |
+| Finanzas | Registrar costos reales y créditos, confirmar costos, revisar liquidaciones y marcarlas como pagadas. |
+| Gerencia | Aprobar órdenes con contribución bajo el mínimo y ver reportes y liquidaciones. |
+| Ventas | Cotizar y gestionar clientes y órdenes. No ve liquidaciones ni reportes; Ajustes solo en lectura. |
+
+Las sesiones usan una cookie HttpOnly y las contraseñas se guardan con hash scrypt. El portal del cliente sigue siendo público por enlace y nunca muestra costos.
+
+## Costos, rentabilidad y comisiones
+
+### Matriz de precios y costos (Ajustes → Tarifas)
+
+Todo es editable solo por la dueña. Cada guardado crea una **versión nueva** y registra cada valor cambiado en el **historial**: quién, cuándo, valor anterior y valor nuevo. Una cotización guarda la versión con que se calculó, así que un cambio de tabla no la modifica. Si se quiere, se puede **recalcular con las tarifas vigentes** desde la propia cotización.
+
+| Concepto | Valores iniciales |
+|---|---|
+| Prendas | Precio = costo × factor. Modo escalonado: costo < $5.00 → ×2.20; desde $5.00 → ×2.00. Modo fijo: ×2.00. Se puede poner una excepción por producto (porcentaje o precio fijo). El precio puesto a mano en una línea queda marcado "precio manual". |
+| Bordado | $4.50 por logo y ubicación (columnas de COSTO y PRECIO por separado). La tabla está lista para rangos de puntadas y de cantidad. El digitalizado va como línea "Diseño/Digitalizado". |
+| DTF | Costo: área ÷ 144 × $4.00 + $1.60 de aplicación. Precio, primera ubicación: ≤15 in² $6.00 · ≤95 $10.50 · ≤105 $11.50 · más $25.00. Ubicación adicional: ≤15 $1.00 · ≤95 $5.50 · más $25.00. Sin mínimo. |
+| Heat Transfer | Estructura lista (por hoja con tramos, aplicación, mínimo), pero sin valores. Hasta que se llenen, el costo queda "pendiente" y el precio se pone a mano. |
+| Impuesto | Maryland 6% sobre productos + envío cobrado. Cliente exento = 0%. |
+| Márgenes | Objetivo 35%, mínimo 30%. |
+| Pago de comisiones | Día 15 del mes siguiente. |
+
+**Costo desconocido = nunca cero.** Si falta un costo, la rentabilidad y la comisión quedan "incompletas" y la orden dice exactamente qué falta.
+
+### Rentabilidad por orden
+
+| Concepto | Cálculo |
+|---|---|
+| Venta de productos | Líneas − descuentos de línea − descuento global − créditos |
+| Ingreso sin impuesto | Venta de productos + envío cobrado |
+| Ganancia de producto | Venta de productos − (prendas + decoración + setup + otros costos directos) |
+| Ganancia bruta | Ganancia de producto + (envío cobrado − costo de envío) |
+| Contribución | Ganancia bruta − comisión |
+
+**Semáforo:**
+- Verde: ≥ objetivo.
+- Amarillo: entre el mínimo y el objetivo.
+- Rojo: bajo el mínimo. Gerencia debe aprobarla antes de marcarla como enviada o convertirla en orden.
+- Contribución negativa: requiere una excepción de la dueña, con motivo.
+
+**Costos reales.** Finanzas registra las facturas de proveedor (SanMar, S&S, Halftone, envío…) por categoría. El costo real reemplaza al cotizado y la orden muestra la diferencia. Luego Finanzas **confirma los costos**.
+
+### Comisiones
+
+| Regla | Tasa | Base |
+|---|---|---|
+| Bryan · Ventas | 25% | venta neta |
+| Bryan · Wraps | 50% | ganancia de producto |
+| Isabel · Cliente existente | 5% | venta neta |
+| Isabel · Cliente nuevo | 10% | venta neta |
+| Sin comisión | 0% | — |
+
+- **Configuración:** cada regla puede calcularse sobre venta neta, ganancia de producto o ganancia de producto + envío. Las tasas tienen fecha de vigencia y se usa la vigente en la fecha de factura.
+- **Cliente nuevo o existente:** es "existente" si tiene otra orden cobrada al 100%. Se puede corregir a mano.
+- **Base comisionable:** excluye impuesto, envío, líneas de Diseño/Digitalizado y productos marcados como no comisionables (las mensualidades de websites y media players vienen así).
+- **Base sobre ganancia negativa:** la comisión es $0.
+- **Falta un costo y la regla es sobre ganancia:** la comisión queda "pendiente".
+
+### Liquidación mensual (Finanzas → Liquidación de comisiones)
+
+1. Elige el mes. Entran las órdenes **cobradas al 100%** y con **costos confirmados**, en el mes en que se completó el cobro. Abajo se listan las que aún no entran y por qué (falta cobro o falta costo).
+2. **Finanzas** pulsa "Marcar revisada". La liquidación queda congelada.
+3. **La dueña** pulsa "Aprobar".
+4. Se paga **fuera del sistema** (cheque, transferencia, nómina). Luego Finanzas o la dueña la marcan como **pagada**, con fecha y referencia.
+5. Si después hay una devolución, un crédito o un costo tardío, se crea un **ajuste** (negativo o positivo) en la siguiente liquidación abierta del vendedor. Una liquidación revisada, aprobada o pagada nunca se edita.
+6. Cada liquidación se exporta a **PDF** y a **Excel**.
+
+### Reportes (Finanzas → Reportes)
+
+- Rentabilidad por orden, cliente, proceso (prendas, bordado, DTF, heat transfer, servicios) y vendedor, filtrada por fecha de factura.
+- Órdenes bajo el mínimo de contribución.
+- Comisiones por vendedor: pendientes de cobro, pendientes de costo, listas, aprobadas, pagadas y ajustes.
+
+### Reglas que el sistema respeta
+
+- **No envía nada al cliente:** las automatizaciones de SMS y email vienen apagadas y la capa de mensajes solo registra.
+- **No cobra.**
+- **No crea órdenes de compra.**
+- **No paga comisiones.**
 
 ## SanMar (productos, fotos, precios e inventario · solo lectura)
 
@@ -139,8 +225,8 @@ Por ahora los mensajes **se registran** en la conversación del contacto, pero n
 ## Estructura
 
 ```
-server/   API Express + SQLite (node:sqlite), automatizaciones, mensajería
-shared/   motor de precios (lo usan el servidor y el navegador)
+server/   API Express + SQLite (node:sqlite): auth, finanzas (rentabilidad, liquidación), tarifas versionadas, exportación PDF/Excel
+shared/   motor de precios, costos y rentabilidad (lo usan el servidor y el navegador)
 client/   React + Vite
 tests/    pruebas del cotizador y del flujo completo
 ```

@@ -76,6 +76,7 @@ export function ContactForm({ contact, onClose, onSaved }) {
         </div>
         <datalist id="sources">{['Instagram', 'Facebook', 'Google Ads', 'Referido', 'Sitio web', 'Visita a tienda', 'Llamada'].map((s) => <option key={s} value={s} />)}</datalist>
         <Field label="Dirección"><input value={f.address || ''} onChange={set('address')} /></Field>
+        <label className="inline"><input type="checkbox" checked={!!f.tax_exempt} onChange={(e) => setF({ ...f, tax_exempt: e.target.checked ? 1 : 0 })} /> Exento de impuesto (Maryland)</label>
         <Field label="Notas"><textarea rows={2} value={f.notes || ''} onChange={set('notes')} /></Field>
         {!contact && (
           <div className="form-grid">
