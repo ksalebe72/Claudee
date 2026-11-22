@@ -7,6 +7,7 @@ import { calcularLinea, calcularRentabilidad } from '../../../shared/pricing.js'
 import ProofDesigner from '../components/designer/ProofDesigner.jsx';
 import { LineEditor, emptyPrenda, emptyDiseno } from '../components/JobLines.jsx';
 import { RentabilidadCard, VendedorCard, EnvioCostosCard, CostosRealesCard, CreditosCard } from '../components/FinancePanels.jsx';
+import { RedactarIAModal } from '../components/IA.jsx';
 
 /** Regla de comisión con la tasa vigente (misma lógica que el servidor). */
 function reglaVigente(reglas, job) {
@@ -37,6 +38,7 @@ export default function JobEditor() {
   const [dirty, setDirty] = useState(false);
   const [toast, notify] = useToast();
   const [designer, setDesigner] = useState(null);
+  const [redactar, setRedactar] = useState(false);
 
   const reload = () => api.get(`/jobs/${id}`).then((j) => { setJob(j); setDirty(false); });
   useEffect(() => {
@@ -117,6 +119,7 @@ export default function JobEditor() {
   return (
     <div className="job-editor">
       <PageHeader title={id ? `${docNumber} · ${job.title}` : 'Nueva cotización'} subtitle={id && <>{isOrder ? `De la cotización ${job.number}` : 'Cotización'} · <Badge status={job.status} /> · tarifas v{job.pricing_version_id}</>}>
+        {id && meta.integrations?.ia && <button className="btn ia-btn" onClick={() => setRedactar(true)}>✨ Redactar mensaje</button>}
         {id && <button className="btn" onClick={() => window.print()}>Imprimir</button>}
         {id && <button className="btn" onClick={duplicate}>Duplicar</button>}
         {id && <button className="btn danger-ghost" onClick={remove}>Eliminar</button>}
@@ -245,6 +248,7 @@ export default function JobEditor() {
           )}
         </div>
       </div>
+      {redactar && <RedactarIAModal job={job} notify={notify} onClose={() => setRedactar(false)} />}
       {designer && (
         <ProofDesigner job={job} methods={methodsList} business={meta.settings.business_name} brand={meta.brand} sanmarEnabled={!!meta.integrations?.sanmar} initialDesign={designer.initialDesign}
           notify={notify} onClose={() => setDesigner(null)} onSent={(j) => { setJob(j); setDesigner(null); }} />

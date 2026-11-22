@@ -4,6 +4,8 @@ import { api } from '../api.js';
 import { money, fmtDate, label, today, useLoad } from '../utils.js';
 import { Badge, Empty, PageHeader, useMeta } from '../components/ui.jsx';
 import { Semaforo } from '../components/FinancePanels.jsx';
+import { CotizarIAModal } from '../components/IA.jsx';
+import { useToast } from '../components/ui.jsx';
 
 export default function Jobs({ kind }) {
   const meta = useMeta();
@@ -11,6 +13,8 @@ export default function Jobs({ kind }) {
   const [list] = useLoad(() => api.get(`/jobs?kind=${kind}${status ? `&status=${status}` : ''}`), [kind, status]);
   const statuses = kind === 'quote' ? meta.quoteStatuses : meta.orderStatuses;
   const isQuote = kind === 'quote';
+  const [ia, setIa] = useState(false);
+  const [toast, notify] = useToast();
 
   return (
     <>
@@ -19,6 +23,7 @@ export default function Jobs({ kind }) {
           <option value="">Todos los estados</option>
           {statuses.map((s) => <option key={s} value={s}>{label(s)}</option>)}
         </select>
+        {isQuote && meta.integrations?.ia && <button className="btn ia-btn" onClick={() => setIa(true)}>✨ Cotizar desde mensaje</button>}
         {isQuote && <Link className="btn primary" to="/trabajos/nuevo">+ Nueva cotización</Link>}
       </PageHeader>
       <div className="card no-pad">
@@ -50,6 +55,8 @@ export default function Jobs({ kind }) {
         </table>
         {list?.length === 0 && <Empty>{isQuote ? 'No hay cotizaciones. Crea la primera.' : 'Aún no hay órdenes. Se crean cuando el cliente aprueba una cotización.'}</Empty>}
       </div>
+      {ia && <CotizarIAModal onClose={() => setIa(false)} notify={notify} />}
+      {toast}
     </>
   );
 }

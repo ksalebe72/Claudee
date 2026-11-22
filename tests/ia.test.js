@@ -1,0 +1,91 @@
+// IA: cotizar desde un mensaje, preguntarle al negocio y redactar mensajes (contra un simulador de la API).
+import { test, before, after } from 'node:test';
+import assert from 'node:assert/strict';
+import { startServer } from './helpers.js';
+import { startAnthropicMock } from './fixtures/anthropic-mock.js';
+
+const MOCK = 5100 + Math.floor(Math.random() * 200);
+let s, sinClave, mock, ventas, producto, orden;
+
+before(async () => {
+  mock = await startAnthropicMock(MOCK);
+  s = await startServer({ env: { SEED_DEMO: '0', ANTHROPIC_API_KEY: 'sk-ant-prueba-NO-REAL', ANTHROPIC_BASE_URL: `http://localhost:${MOCK}` } });
+  sinClave = await startServer({ env: { SEED_DEMO: '0', ANTHROPIC_API_KEY: '' } });
+  ventas = await s.userWithRole('ventas');
+  producto = await s.duena.post('/products', { sku: 'PC61', name: 'Port & Company Essential Tee', brand: 'Port & Company', category: 'Camisetas', supplier: 'SanMar', base_cost: 3.37, sizes: ['S', 'M', 'L', 'XL', '2XL'], colors: ['Jet Black'] });
+  const c = await s.duena.post('/contacts', { name: 'Ana Torres', company: 'Gym FitZone', email: 'ana@fitzone.com' });
+  const q = await s.duena.post('/jobs', { contact_id: c.id, title: 'Camisetas staff', items: [{ product_id: producto.id, sizes: { M: 10 }, decorations: [{ process: 'dtf', location: 'Frente', width: 4, height: 4 }] }] });
+  orden = q;
+});
+after(() => { s.stop(); sinClave.stop(); mock.close(); });
+
+test('sin clave la IA aparece desactivada y responde 503', async () => {
+  const meta = await sinClave.duena.get('/meta');
+  assert.equal(meta.integrations.ia, false);
+  const r = await sinClave.duena.call('POST', '/ia/cotizar', { texto: 'Necesito 20 camisetas negras con logo' });
+  assert.equal(r.status, 503);
+  assert.match(r.body.error, /ANTHROPIC_API_KEY/);
+});
+
+test('cotizar desde un mensaje: borrador sin precios, cliente reconocido y tallas normalizadas', async () => {
+  const antes = mock.peticiones.length;
+  const b = await s.duena.post('/ia/cotizar', { texto: 'Hola, soy Ana de FitZone (ana@fitzone.com). Necesito camisetas PC61 negras: 10 M, 15 L, 3 XXL, logo DTF en la espalda 10x12 y bordado en el pecho. Para el 10 de diciembre.' });
+  assert.equal(b.clienteExistente.company, 'Gym FitZone', 'reconoce al cliente por email');
+  assert.equal(b.lineas[0].productoId, producto.id);
+  assert.deepEqual(b.lineas[0].tallas, [{ talla: 'M', cantidad: 10 }, { talla: 'L', cantidad: 15 }, { talla: '2XL', cantidad: 3 }], 'convierte XXL a 2XL');
+  assert.equal(b.fechaEntrega, '2026-12-10');
+  assert.ok(!JSON.stringify(b).includes('precio'), 'la IA no pone precios');
+  const p = mock.peticiones[antes];
+  assert.equal(p.body.model, 'claude-opus-5-5');
+  assert.equal(p.body.fallbacks, 'default', 'respaldo del servidor activado');
+  assert.match(p.headers['anthropic-beta'], /server-side-fallback-2026-07-01/);
+  assert.equal(p.body.output_config.format.type, 'json_schema');
+  assert.match(JSON.stringify(p.body.messages), /<mensaje_cliente>/, 'el mensaje del cliente va aislado como dato');
+  const sistema = p.body.system.map((b) => b.text).join('\n');
+  assert.ok(sistema.includes('"estilo":"PC61"'), 'envía el catálogo para reconocer productos');
+  assert.equal(p.body.system[1].cache_control?.type, 'ephemeral', 'el catálogo va en caché');
+  assert.ok(!p.raw.includes('3.37'), 'no envía costos del catálogo');
+});
+
+test('preguntarle al negocio: solo gestión; envía datos de solo lectura', async () => {
+  assert.equal((await ventas.call('POST', '/ia/preguntar', { pregunta: '¿Cuánto vendí?' })).status, 403);
+  const antes = mock.peticiones.length;
+  const r = await s.duena.post('/ia/preguntar', { pregunta: '¿Qué orden tiene menor margen?', historial: [{ role: 'user', content: 'hola' }, { role: 'assistant', content: 'hola' }] });
+  assert.match(r.respuesta, /simulador/);
+  const p = mock.peticiones[antes];
+  assert.match(p.raw, /cotizacionesAbiertas/);
+  assert.match(p.raw, new RegExp(orden.number));
+});
+
+test('redactar mensaje: borrador sin costos ni márgenes, y se puede guardar como nota', async () => {
+  const antes = mock.peticiones.length;
+  const b = await ventas.post('/ia/redactar', { jobId: orden.id, tipo: 'enviar_cotizacion', idioma: 'es', instrucciones: 'Menciona que el logo va en DTF' });
+  assert.equal(b.canalSugerido, 'email');
+  assert.ok(b.mensaje.length > 0);
+  const p = mock.peticiones[antes];
+  for (const prohibido of ['3.37', 'costo', 'contribucion', 'comision', 'gananciaBruta']) assert.ok(!p.raw.toLowerCase().includes(`"${prohibido}`), `no envía ${prohibido}`);
+  assert.match(p.raw, /\/portal\//, 'incluye el enlace del portal');
+  await ventas.post('/ia/guardar-nota', { jobId: orden.id, asunto: b.asunto, mensaje: b.mensaje });
+  const c = await s.duena.get(`/contacts/${orden.contact_id}`);
+  assert.ok(c.activities.some((a) => a.type === 'nota' && a.body.startsWith('Borrador (IA, no enviado)')));
+});
+
+test('errores claros: rechazo del modelo y clave inválida', async () => {
+  mock.setModo('refusal');
+  const r1 = await s.duena.call('POST', '/ia/cotizar', { texto: 'mensaje cualquiera de prueba' });
+  assert.equal(r1.status, 422);
+  mock.setModo('auth');
+  const r2 = await s.duena.call('POST', '/ia/redactar', { jobId: orden.id, tipo: 'libre', idioma: 'es' });
+  assert.equal(r2.status, 502);
+  assert.match(r2.body.error, /clave de IA no es válida/);
+  mock.setModo('normal');
+  assert.ok(!s.salida().includes('sk-ant-prueba-NO-REAL'), 'la clave nunca aparece en los logs');
+});
+
+test('la dueña ve el uso del mes', async () => {
+  const e = await s.duena.get('/ia/estado');
+  assert.equal(e.configurada, true);
+  assert.ok(e.usoDelMes.find((u) => u.feature === 'cotizar').consultas >= 1);
+  const ev = await ventas.get('/ia/estado');
+  assert.equal(ev.usoDelMes, undefined);
+});

@@ -54,7 +54,11 @@ export function LineEditor({ idx, item, calc, products, editable, onChange, onRe
     );
   }
 
-  const sizes = product?.sizes?.length ? product.sizes : Object.keys(item.sizes || {}).length ? Object.keys(item.sizes) : null;
+  // Tallas del producto + cualquier talla con cantidad en la línea (para no ocultar piezas)
+  const ORDEN = ['XS', 'S', 'M', 'L', 'XL', '2XL', '3XL', '4XL', '5XL'];
+  const enLinea = Object.keys(item.sizes || {}).filter((k) => Number(item.sizes[k]) > 0);
+  const todas = [...new Set([...(product?.sizes || []), ...enLinea])].sort((a, b) => (ORDEN.indexOf(a) + 1 || 99) - (ORDEN.indexOf(b) + 1 || 99));
+  const sizes = todas.length ? todas : null;
   const tallas = calc?.prenda?.tallas || [];
   const porTalla = Object.fromEntries(tallas.map((t) => [t.talla ?? '_', t]));
 

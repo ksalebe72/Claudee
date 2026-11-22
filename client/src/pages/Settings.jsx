@@ -306,6 +306,7 @@ function General({ notify }) {
   return (
     <div className="settings-grid">
       <Marca notify={notify} />
+      <EstadoIA />
       <form className="card form" onSubmit={save}>
         <h3>Negocio</h3>
         <Field label="Nombre del negocio"><input value={f.business_name} onChange={(e) => setF({ ...f, business_name: e.target.value })} /></Field>
@@ -372,6 +373,25 @@ function Marca({ notify }) {
         <button className="btn primary" onClick={() => guardarColores(colores)}>Guardar colores</button>
         <button className="btn" onClick={() => { guardarColores({ primary: null, sidebar: null }).then(() => meta.reloadMeta()).then(() => {}); setColores({ primary: '#613bbb', sidebar: '#1c1340' }); }}>Colores de Color Plus</button>
       </div>
+    </section>
+  );
+}
+
+function EstadoIA() {
+  const [e] = useLoad(() => api.get('/ia/estado'));
+  if (!e) return null;
+  const NOMBRES = { cotizar: 'Cotizar desde mensaje', preguntar: 'Asistente del negocio', redactar: 'Redactar mensajes' };
+  return (
+    <section className="card">
+      <h3>✨ Inteligencia artificial</h3>
+      {e.configurada ? <p className="ok">Activa · modelo <code>{e.modelo}</code></p> : <p className="warn-txt">Desactivada: falta ANTHROPIC_API_KEY en el servidor (ver README).</p>}
+      {e.usoDelMes?.length > 0 && (
+        <table className="table mini-table">
+          <thead><tr><th>Uso de este mes</th><th className="num">Consultas</th><th className="num">Tokens</th></tr></thead>
+          <tbody>{e.usoDelMes.map((u) => <tr key={u.feature}><td>{NOMBRES[u.feature] || u.feature}</td><td className="num">{u.consultas}</td><td className="num">{(u.entrada + u.salida).toLocaleString('es')}</td></tr>)}</tbody>
+        </table>
+      )}
+      <p className="muted small">La IA arma borradores y responde preguntas; no guarda, no envía ni cobra nada por su cuenta. Límite: 40 consultas por hora por usuario. El costo se ve en console.anthropic.com.</p>
     </section>
   );
 }

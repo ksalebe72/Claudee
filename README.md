@@ -218,6 +218,29 @@ await sanmar.obtenerDetalleColor('PC61', 'Navy');        // tallas con costo e i
 - Si el producto de la orden es de SanMar, carga sola la foto real (plana o con modelo).
 - **Ajustar área** sirve para calibrar el área de impresión sobre la foto. Se guarda por estilo.
 
+## Inteligencia artificial (Claude)
+
+Tres funciones, todas de **solo lectura o borrador**: la IA no guarda, no envía y no cobra nada por su cuenta.
+
+| Función | Dónde | Qué hace |
+|---|---|---|
+| Cotizar desde un mensaje | Cotizaciones → ✨ Cotizar desde mensaje | Pegas el email, SMS o WhatsApp del cliente y arma un borrador: cliente (reconoce contactos existentes), prendas del catálogo, tallas, decoraciones, ubicaciones, fecha y lo que falta preguntar. **Los precios los calcula la matriz, nunca la IA.** Revisas y pulsas «Crear borrador». |
+| Asistente del negocio | Menú → ✨ Asistente IA (dueña, Finanzas, Gerencia) | Responde preguntas sobre órdenes, márgenes, cobros, comisiones y tareas con los datos de los últimos ~13 meses. No puede cambiar nada. |
+| Redactar mensajes | En cada cotización u orden → ✨ Redactar mensaje | Borradores (enviar cotización, seguimiento, aprobar arte, orden lista, recordatorio de pago o libre) en español o inglés, con el tono de Color Plus. Se copian o se guardan como nota; **no se envían**. La IA nunca recibe costos ni márgenes. |
+
+### Activarla
+
+1. Entra a **console.anthropic.com** con la cuenta de la empresa → **API Keys** → **Create Key**. (La clave de la API es distinta de la suscripción de Claude; se paga por uso.)
+2. Ponla en el servidor como variable de entorno o en `.env` — nunca en el código:
+   ```
+   ANTHROPIC_API_KEY=sk-ant-...
+   ```
+3. Reinicia la app. En **Ajustes → General** debe decir «IA activa».
+
+Opcional: `IA_MODEL` (por defecto `claude-opus-5-5`). Si el modelo rechaza una petición por sus filtros de seguridad, la API la reintenta automáticamente con otro modelo (respaldo del servidor).
+
+**Privacidad y costo:** el texto que pegas y los datos que usa el asistente se envían a la API de Anthropic para procesarlos. Hay un límite de 40 consultas por hora por usuario y la dueña ve el uso del mes en Ajustes; el gasto detallado está en console.anthropic.com. El contenido de los mensajes nunca se escribe en los logs.
+
 ## SMS y email reales
 
 Por ahora los mensajes **se registran** en la conversación del contacto, pero no salen. Para enviarlos de verdad hay que conectar un proveedor en `server/messaging.js`: Twilio para SMS, SMTP o SendGrid para email, o la API de HighLevel si quieres seguir usando sus números.

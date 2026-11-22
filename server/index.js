@@ -4,6 +4,7 @@ import { resolve, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import api, { UPLOAD_DIR } from './api.js';
 import financeApi from './finance-api.js';
+import iaApi from './ia-api.js';
 import { authRouter, usersRouter, requireAuth } from './auth.js';
 import { ensurePricing, ensureCommissionSetup } from './config.js';
 import { seedIfEmpty } from './seed.js';
@@ -22,6 +23,7 @@ app.use('/api', authRouter);
 app.use('/api', requireAuth);
 app.use('/api', usersRouter);
 app.use('/api', financeApi);
+app.use('/api', iaApi);
 app.use('/api', api);
 app.use('/uploads', express.static(UPLOAD_DIR));
 

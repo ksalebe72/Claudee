@@ -10,6 +10,7 @@ import { computeJob, productSnapshot, computeClientStatus, assertMarginApproved,
 import { currentPricing, pricingVersion, audit, listRules } from './config.js';
 import { ROLES, requireRole } from './auth.js';
 import { getBrand, setBrandColors, saveLogo, removeLogo } from './brand.js';
+import { iaConfigurada } from './ia.js';
 import { sendMessage } from './messaging.js';
 import { sanmar, sanmarConfigured, cacheImage, getStyleAreas, setStyleAreas, clearSanmarCache } from './sanmar.js';
 
@@ -175,7 +176,7 @@ api.get('/meta', wrap((req) => ({
   procesos: PROCESOS,
   roles: ROLES,
   pricingVersion: currentPricing().id,
-  integrations: { sanmar: sanmarConfigured() },
+  integrations: { sanmar: sanmarConfigured(), ia: iaConfigurada() },
 })));
 
 api.put('/settings', wrap((req) => {

@@ -19,10 +19,11 @@ import Settings from './pages/Settings.jsx';
 import Liquidaciones from './pages/Liquidaciones.jsx';
 import Reportes from './pages/Reportes.jsx';
 import Portal from './pages/Portal.jsx';
+import Asistente from './pages/Asistente.jsx';
 
 const GESTION = ['duena', 'finanzas', 'gerencia'];
 const NAV = [
-  { group: 'General', items: [{ to: '/', label: 'Tablero', icon: '◧', end: true }] },
+  { group: 'General', items: [{ to: '/', label: 'Tablero', icon: '◧', end: true }, { to: '/asistente', label: 'Asistente IA', icon: '✨', roles: GESTION }] },
   { group: 'Ventas y CRM', items: [
     { to: '/contactos', label: 'Contactos', icon: '☺' },
     { to: '/pipeline', label: 'Pipeline', icon: '⇶' },
@@ -115,6 +116,7 @@ export default function App() {
             <Route path="/cobranza" element={<Billing />} />
             <Route path="/liquidaciones" element={<Liquidaciones />} />
             <Route path="/reportes" element={<Reportes />} />
+            <Route path="/asistente" element={<Asistente />} />
             <Route path="/ajustes" element={<Settings />} />
             <Route path="*" element={<p>Página no encontrada</p>} />
           </Routes>
