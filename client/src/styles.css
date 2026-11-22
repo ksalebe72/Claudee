@@ -385,3 +385,20 @@ input[type=color] { min-width: 40px; height: 32px; padding: 2px; }
 @media (max-width: 800px) { .settings-grid { grid-template-columns: minmax(0, 1fr); } }
 
 .btn:disabled { opacity: .45; cursor: not-allowed; }
+
+/* ---------- marca ---------- */
+.btn.primary, .seg button.on, .step.current, .switch input:checked + span { color: var(--on-primary, #fff); }
+.brand strong { color: var(--sidebar-strong, #fff); }
+.brand.dark strong { color: var(--text); }
+.nav-link, .nav-group, .brand small, .user-box small, .user-box .link-btn { color: var(--sidebar-text); }
+.nav-link.active { background: var(--sidebar-active, rgba(124,116,255,.22)); color: var(--sidebar-strong, #fff); }
+.user-box strong { color: var(--sidebar-strong, #fff); }
+.brand-logo { height: 38px; max-width: 120px; object-fit: contain; border-radius: 6px; }
+.login .brand-logo { height: 52px; max-width: 180px; }
+.portal-logo { height: 56px; max-width: 220px; object-fit: contain; }
+.brand-preview { display: flex; align-items: center; gap: 12px; padding: 12px; border-radius: 10px; background: var(--sidebar); }
+.brand-preview .brand-logo { height: 44px; }
+.logo-drop { border: 2px dashed var(--border); border-radius: 10px; padding: 16px; text-align: center; cursor: pointer; }
+.brand-card { display: flex; flex-direction: column; gap: 12px; }
+.brand-card h3 { margin: 0; }
+.brand-card .muted { margin: 0; }

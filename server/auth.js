@@ -5,6 +5,7 @@
 import express from 'express';
 import { randomBytes, scryptSync, timingSafeEqual } from 'node:crypto';
 import { all, get, run, insert } from './db.js';
+import { getBrand } from './brand.js';
 
 export const ROLES = { duena: 'Dueña', finanzas: 'Finanzas', gerencia: 'Gerencia', ventas: 'Ventas' };
 const COOKIE = 'cp_session';
@@ -69,6 +70,7 @@ const wrap = (fn) => (req, res) => {
 
 authRouter.get('/auth/estado', wrap((req) => ({
   necesitaConfiguracion: get('SELECT COUNT(*) AS c FROM users').c === 0,
+  marca: getBrand(),
   usuario: userFromRequest(req),
 })));
 

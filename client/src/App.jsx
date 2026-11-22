@@ -3,6 +3,7 @@ import { NavLink, Route, Routes, useLocation } from 'react-router-dom';
 import { api } from './api.js';
 import { MetaContext } from './components/ui.jsx';
 import Login from './pages/Login.jsx';
+import { applyBrand, BrandMark } from './brand.jsx';
 import Dashboard from './pages/Dashboard.jsx';
 import Contacts from './pages/Contacts.jsx';
 import ContactDetail from './pages/ContactDetail.jsx';
@@ -53,6 +54,7 @@ export default function App() {
 
   useEffect(() => { if (!loc.pathname.startsWith('/portal/')) loadAuth(); }, []);
   useEffect(() => { if (auth?.usuario) reloadMeta().catch(() => {}); }, [auth?.usuario?.id]);
+  useEffect(() => { applyBrand(meta?.brand || auth?.marca); }, [meta?.brand, auth?.marca]);
   useEffect(() => {
     const h = () => { setMeta(null); setAuth((a) => ({ ...(a || {}), usuario: null })); };
     window.addEventListener('cp:sin-sesion', h);
@@ -63,7 +65,7 @@ export default function App() {
     return <Routes><Route path="/portal/:token" element={<Portal />} /></Routes>;
   }
   if (!auth) return <div className="loading">Cargando…</div>;
-  if (!auth.usuario) return <Login setup={auth.necesitaConfiguracion} onDone={(u) => setAuth({ necesitaConfiguracion: false, usuario: u })} />;
+  if (!auth.usuario) return <Login setup={auth.necesitaConfiguracion} brand={auth.marca} onDone={(u) => setAuth((a) => ({ ...a, necesitaConfiguracion: false, usuario: u }))} />;
   if (!meta) return <div className="loading">Cargando…</div>;
 
   const user = auth.usuario;
@@ -74,7 +76,7 @@ export default function App() {
       <div className="layout">
         <aside className={`sidebar ${menuOpen ? 'open' : ''}`} onClick={() => setMenuOpen(false)}>
           <div className="brand">
-            <div className="logo">CP</div>
+            <BrandMark brand={meta.brand} />
             <div>
               <strong>{meta.settings.business_name}</strong>
               <small>ColorPlus OS</small>

@@ -304,11 +304,61 @@ function General({ notify }) {
     try { await api.put('/settings', { business_name: f.business_name, deposit_pct: Number(f.deposit_pct) / 100 }); await meta.reloadMeta(); notify('Guardado'); } catch (err) { notify(err.message, true); }
   }
   return (
-    <form className="card form narrow" onSubmit={save}>
-      <Field label="Nombre del negocio"><input value={f.business_name} onChange={(e) => setF({ ...f, business_name: e.target.value })} /></Field>
-      <Field label="Anticipo sugerido (%)"><input type="number" value={f.deposit_pct} onChange={(e) => setF({ ...f, deposit_pct: e.target.value })} /></Field>
-      <div className="row end"><button className="btn primary">Guardar</button></div>
-      <p className="muted small">Mensajes al cliente: el sistema no envía correos ni SMS. Las automatizaciones de envío vienen apagadas.</p>
-    </form>
+    <div className="settings-grid">
+      <Marca notify={notify} />
+      <form className="card form" onSubmit={save}>
+        <h3>Negocio</h3>
+        <Field label="Nombre del negocio"><input value={f.business_name} onChange={(e) => setF({ ...f, business_name: e.target.value })} /></Field>
+        <Field label="Anticipo sugerido (%)"><input type="number" value={f.deposit_pct} onChange={(e) => setF({ ...f, deposit_pct: e.target.value })} /></Field>
+        <div className="row end"><button className="btn primary">Guardar</button></div>
+        <p className="muted small">Mensajes al cliente: el sistema no envía correos ni SMS. Las automatizaciones de envío vienen apagadas.</p>
+      </form>
+    </div>
+  );
+}
+
+function Marca({ notify }) {
+  const meta = useMeta();
+  const b = meta.brand || {};
+  const [colores, setColores] = useState({ primary: b.primary || '#4f46e5', sidebar: b.sidebar || '#161a2e' });
+  const [busy, setBusy] = useState(false);
+  async function subirLogo(file) {
+    if (!file) return;
+    setBusy(true);
+    try {
+      const data = await new Promise((ok, ko) => { const r = new FileReader(); r.onload = () => ok(r.result); r.onerror = ko; r.readAsDataURL(file); });
+      await api.post('/settings/logo', { file: data });
+      await meta.reloadMeta();
+      notify('Logo actualizado');
+    } catch (e) { notify(e.message, true); }
+    setBusy(false);
+  }
+  async function quitarLogo() { if (confirm('¿Quitar el logo?')) { await api.del('/settings/logo'); await meta.reloadMeta(); } }
+  async function guardarColores(valores) {
+    try { await api.put('/settings', { brand_primary: valores.primary, brand_sidebar: valores.sidebar }); await meta.reloadMeta(); notify('Colores guardados'); } catch (e) { notify(e.message, true); }
+  }
+  return (
+    <section className="card brand-card">
+      <h3>Marca: logo y colores</h3>
+      <p className="muted small">Se usan en el menú, el inicio de sesión y el portal del cliente. Ideal: logo en PNG o SVG con fondo transparente, versión clara si el menú es oscuro.</p>
+      <div className="brand-preview" style={{ background: colores.sidebar }}>
+        {b.logo ? <img src={b.logo} alt="Logo" className="brand-logo" /> : <div className="logo">CP</div>}
+        <strong style={{ color: '#fff', mixBlendMode: 'difference' }}>{meta.settings.business_name}</strong>
+        <span className="btn primary" style={{ background: colores.primary, borderColor: colores.primary, marginLeft: 'auto' }}>Botón</span>
+      </div>
+      <label className="logo-drop">
+        {busy ? 'Subiendo…' : b.logo ? 'Cambiar logo (PNG, JPG, SVG o WEBP, máx. 3 MB)' : 'Subir logo (PNG, JPG, SVG o WEBP, máx. 3 MB)'}
+        <input type="file" accept="image/png,image/jpeg,image/svg+xml,image/webp" hidden onChange={(e) => { subirLogo(e.target.files[0]); e.target.value = ''; }} />
+      </label>
+      {b.logo && <button className="link-btn danger" onClick={quitarLogo}>Quitar logo</button>}
+      <div className="row gap wrap">
+        <label className="inline">Color principal <input type="color" value={colores.primary} onChange={(e) => setColores({ ...colores, primary: e.target.value })} /> <code>{colores.primary}</code></label>
+        <label className="inline">Menú lateral <input type="color" value={colores.sidebar} onChange={(e) => setColores({ ...colores, sidebar: e.target.value })} /> <code>{colores.sidebar}</code></label>
+      </div>
+      <div className="row gap">
+        <button className="btn primary" onClick={() => guardarColores(colores)}>Guardar colores</button>
+        {(b.primary || b.sidebar) && <button className="btn" onClick={() => { setColores({ primary: '#4f46e5', sidebar: '#161a2e' }); guardarColores({ primary: null, sidebar: null }); }}>Volver al tema neutro</button>}
+      </div>
+    </section>
   );
 }

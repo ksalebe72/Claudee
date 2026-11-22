@@ -9,6 +9,7 @@ import { PROCESOS, precioPrenda } from '../shared/pricing.js';
 import { computeJob, productSnapshot, computeClientStatus, assertMarginApproved, today as hoy } from './finance.js';
 import { currentPricing, pricingVersion, audit, listRules } from './config.js';
 import { ROLES, requireRole } from './auth.js';
+import { getBrand, setBrandColors, saveLogo, removeLogo } from './brand.js';
 import { sendMessage } from './messaging.js';
 import { sanmar, sanmarConfigured, cacheImage, getStyleAreas, setStyleAreas, clearSanmarCache } from './sanmar.js';
 
@@ -170,6 +171,7 @@ api.get('/meta', wrap((req) => ({
     business_name: getSetting('business_name', 'Mi Taller'),
     deposit_pct: getSetting('deposit_pct', 0.5),
   },
+  brand: getBrand(),
   procesos: PROCESOS,
   roles: ROLES,
   pricingVersion: currentPricing().id,
@@ -179,7 +181,26 @@ api.get('/meta', wrap((req) => ({
 api.put('/settings', wrap((req) => {
   requireRole(req, 'duena');
   for (const k of ['business_name', 'deposit_pct']) if (k in req.body) { audit(req.user, 'ajustes', k, getSetting(k), req.body[k]); setSetting(k, req.body[k]); }
-  return { ok: true };
+  if ('brand_primary' in req.body || 'brand_sidebar' in req.body) {
+    const antes = getBrand();
+    setBrandColors({ primary: req.body.brand_primary, sidebar: req.body.brand_sidebar });
+    audit(req.user, 'ajustes', 'colores de marca', { primary: antes.primary, sidebar: antes.sidebar }, { primary: getBrand().primary, sidebar: getBrand().sidebar });
+  }
+  return { ok: true, brand: getBrand() };
+}));
+
+// Logo de la empresa (solo la dueña)
+api.post('/settings/logo', express.json({ limit: '5mb' }), wrap((req) => {
+  requireRole(req, 'duena');
+  const url = saveLogo(req.body.file, UPLOAD_DIR);
+  audit(req.user, 'ajustes', 'logo', null, url);
+  return getBrand();
+}));
+api.delete('/settings/logo', wrap((req) => {
+  requireRole(req, 'duena');
+  removeLogo(UPLOAD_DIR);
+  audit(req.user, 'ajustes', 'logo', 'logo anterior', null);
+  return getBrand();
 }));
 
 // ---------- dashboard ----------
@@ -571,7 +592,7 @@ function portalJob(tok) {
     id: job.id, kind: job.kind, number: job.number, order_number: job.order_number, title: job.title, status: job.status,
     due_date: job.due_date, notes: job.notes, subtotal: f.ventaProductos, discount: f.descuentoGlobal + f.creditos, shipping: f.envioCobrado,
     tax: f.impuesto, total: f.total, paid: job.paid, balance: job.balance, items, proofs,
-    contact: { name, company, email, phone }, business_name: getSetting('business_name', 'Color Plus LLC'),
+    contact: { name, company, email, phone }, business_name: getSetting('business_name', 'Color Plus LLC'), brand: getBrand(),
     deposit_pct: getSetting('deposit_pct', 0.5),
   };
 }

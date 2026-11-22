@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { useParams } from 'react-router-dom';
 import { api } from '../api.js';
 import { money, fmtDate, label, useLoad } from '../utils.js';
+import { applyBrand } from '../brand.jsx';
 
 export default function Portal() {
   const { token } = useParams();
@@ -11,6 +12,7 @@ export default function Portal() {
 
   if (error) return <div className="portal"><div className="portal-card"><h2>Enlace no válido</h2><p>Pide a tu proveedor un enlace nuevo.</p></div></div>;
   if (!j) return <div className="loading">Cargando…</div>;
+  applyBrand(j.brand);
 
   const post = async (url, body) => {
     try { setJ(await api.post(`/portal/${token}${url}`, body)); setComment(''); setErr(null); } catch (e) { setErr(e.message); }
@@ -24,7 +26,7 @@ export default function Portal() {
       <div className="portal-card">
         <header className="portal-head">
           <div>
-            <div className="muted">{j.business_name}</div>
+            {j.brand?.logo ? <img src={j.brand.logo} alt={j.business_name} className="portal-logo" /> : <div className="muted">{j.business_name}</div>}
             <h1>{isQuote ? `Cotización ${j.number}` : `Orden ${j.order_number}`}</h1>
             <div>{j.title}</div>
           </div>
