@@ -34,6 +34,24 @@ test('DTF: costo interno 3×3" = $1.85 y 12×12" = $5.60', () => {
   assert.equal(costoDtf(12, 12, cfg), 5.6);
 });
 
+test('DTF: la aplicación de $1.60 se cuenta una sola vez por prenda, aunque lleve varias ubicaciones', () => {
+  const tres = [
+    { process: 'dtf', location: 'Frente', width: 10, height: 12 },
+    { process: 'dtf', location: 'Pecho izquierdo', width: 3.5, height: 3.5 },
+    { process: 'dtf', location: 'Manga izquierda', width: 3, height: 3 },
+  ];
+  const l = g5000(tres);
+  const costoPieza = l.decoraciones.reduce((a, d) => a + d.costoPieza, 0);
+  // material: (120 + 12.25 + 9) / 144 × $4 = $3.92 · aplicación $1.60 una vez = $5.52
+  assert.equal(Math.round(costoPieza * 100) / 100, 5.52);
+  assert.equal(l.decoraciones.find((d) => d.location === 'Frente').costoPieza, 4.93, 'la 1ª ubicación lleva la aplicación');
+  assert.equal(l.decoraciones.find((d) => d.location === 'Pecho izquierdo').costoPieza, 0.34, 'las demás solo material');
+  // Si la dueña lo cambia a «por ubicación», se cuenta en cada una
+  const porUbic = calcularLinea({ line_type: 'prenda', description: 'Gildan 5000', qty: 12, unit_cost: 3.1, decorations: tres },
+    { ...cfg, dtf: { ...cfg.dtf, aplicacionPor: 'ubicacion' } });
+  assert.equal(Math.round(porUbic.decoraciones.reduce((a, d) => a + d.costoPieza, 0) * 100) / 100, 8.72);
+});
+
 test('Prenda de $4.00 → $8.80 escalonado y $8.00 fijo; prenda de $10.00 → $20.00', () => {
   assert.equal(precioPrenda(4, cfg).precio, 8.8);
   assert.equal(precioPrenda(4, fijo).precio, 8.0);

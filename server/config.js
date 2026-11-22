@@ -10,12 +10,25 @@ const fail = (status, msg) => Object.assign(new Error(msg), { status });
 function withDefaults(cfg) {
   const out = structuredClone(DEFAULT_PRICING);
   for (const [k, v] of Object.entries(cfg || {})) out[k] = v && typeof v === 'object' && !Array.isArray(v) ? { ...out[k], ...v } : v;
+  // Versiones guardadas antes de esta opción calculaban la aplicación DTF por ubicación: se respetan tal cual.
+  if (cfg?.dtf && !('aplicacionPor' in cfg.dtf)) out.dtf.aplicacionPor = 'ubicacion';
   return out;
 }
 
+let migrando = false;
 export function ensurePricing() {
   if (!get('SELECT id FROM pricing_versions LIMIT 1')) {
     insert('pricing_versions', { config: DEFAULT_PRICING, note: 'Valores iniciales (matriz Color Plus)', created_by: 'sistema' });
+  }
+  // Aclaración de la dueña: los $1.60 de aplicación DTF son una vez por prenda, no por ubicación.
+  // Se crea una versión nueva (con historial); las cotizaciones guardadas conservan la suya.
+  const ultima = get('SELECT config FROM pricing_versions ORDER BY id DESC LIMIT 1');
+  const raw = typeof ultima.config === 'string' ? JSON.parse(ultima.config) : ultima.config;
+  if (!migrando && raw?.dtf && !('aplicacionPor' in raw.dtf)) {
+    migrando = true;
+    const cfg = withDefaults(raw);
+    cfg.dtf.aplicacionPor = 'prenda';
+    try { savePricing(cfg, null, 'Aplicación DTF: una vez por prenda (aclaración de la dueña)'); } finally { migrando = false; }
   }
 }
 
@@ -60,6 +73,7 @@ function validar(cfg) {
   if (p.escalonado.filter((t) => t.menorQue === null).length !== 1) errs.push('El modo escalonado necesita exactamente un tramo final (sin límite)');
   for (const f of cfg.bordado.filas) if (!isNumOrNull(f.costo) || !isNumOrNull(f.precio) || !(f.cantidadDesde >= 1) || !isNumOrNull(f.puntadasHasta)) errs.push('Revisa la tabla de bordado');
   if (!(cfg.dtf.costoPieCuadrado >= 0) || !(cfg.dtf.costoAplicacion >= 0)) errs.push('Revisa los costos de DTF');
+  if (!['prenda', 'ubicacion'].includes(cfg.dtf.aplicacionPor)) errs.push('La aplicación DTF debe ser por prenda o por ubicación');
   for (const t of [cfg.dtf.primera, cfg.dtf.adicional]) {
     if (!t.length || t.filter((f) => f.hasta === null).length !== 1 || t.some((f) => !isNumOrNull(f.precio) || f.precio === null)) errs.push('Cada tabla de DTF necesita precios y un tramo final sin límite');
   }

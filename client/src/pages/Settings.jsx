@@ -116,9 +116,15 @@ function Tarifas({ editable, notify }) {
         <h4>Costo interno</h4>
         <div className="row gap wrap">
           <label className="inline">Material por pie² (144 in²) $ <NumIn disabled={dis} value={c.dtf.costoPieCuadrado} onChange={(v) => upd((n) => { n.dtf.costoPieCuadrado = v; })} /></label>
-          <label className="inline">Aplicación por ubicación y prenda $ <NumIn disabled={dis} value={c.dtf.costoAplicacion} onChange={(v) => upd((n) => { n.dtf.costoAplicacion = v; })} /></label>
+          <label className="inline">Aplicación $ <NumIn disabled={dis} value={c.dtf.costoAplicacion} onChange={(v) => upd((n) => { n.dtf.costoAplicacion = v; })} /></label>
+          <label className="inline">se cobra
+            <select disabled={dis} value={c.dtf.aplicacionPor} onChange={(e) => upd((n) => { n.dtf.aplicacionPor = e.target.value; })}>
+              <option value="prenda">una vez por prenda</option>
+              <option value="ubicacion">por cada ubicación</option>
+            </select>
+          </label>
         </div>
-        <p className="muted small">3×3" = {money(9 / 144 * c.dtf.costoPieCuadrado + c.dtf.costoAplicacion)} · 12×12" = {money(c.dtf.costoPieCuadrado + c.dtf.costoAplicacion)}</p>
+        <p className="muted small">Ejemplo, prenda con frente 10×12" y pecho 3.5×3.5": costo DTF {money((120 + 12.25) / 144 * c.dtf.costoPieCuadrado + c.dtf.costoAplicacion * (c.dtf.aplicacionPor === 'ubicacion' ? 2 : 1))} por prenda.</p>
         <div className="row gap wrap top">
           <div><h4>Precio 1ª ubicación (por área)</h4>{rowsEditor(c.dtf.primera, (n) => n.dtf.primera, [{ k: 'hasta', l: 'Hasta in²', step: '1', ph: 'más' }, { k: 'precio', l: 'PRECIO $' }], () => ({ hasta: 50, precio: null }))}</div>
           <div><h4>Precio ubicación adicional</h4>{rowsEditor(c.dtf.adicional, (n) => n.dtf.adicional, [{ k: 'hasta', l: 'Hasta in²', step: '1', ph: 'más' }, { k: 'precio', l: 'PRECIO $' }], () => ({ hasta: 50, precio: null }))}</div>

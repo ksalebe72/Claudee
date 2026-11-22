@@ -68,3 +68,37 @@ test('los archivos subidos van a UPLOAD_DIR', async () => {
     assert.ok(readFileSync(join(dir, archivo)).length > 0);
   } finally { s2.stop(); }
 });
+
+test('una base con tarifas anteriores pasa a «aplicación DTF una vez por prenda» con historial, sin tocar la versión vieja', async () => {
+  const { DatabaseSync } = await import('node:sqlite');
+  const { mkdtempSync, rmSync } = await import('node:fs');
+  const { tmpdir } = await import('node:os');
+  const carpeta = mkdtempSync(join(tmpdir(), 'colorplus-mig-'));
+  const DB_PATH = join(carpeta, 'vieja.db');
+  try {
+    const a = await startServer({ env: { SEED_DEMO: '0', DB_PATH } });
+    a.stop();
+    await new Promise((r) => setTimeout(r, 300));
+    // Simula una base creada antes de la opción: la última versión no tiene «aplicacionPor»
+    const db = new DatabaseSync(DB_PATH);
+    const v = db.prepare('SELECT config FROM pricing_versions ORDER BY id DESC LIMIT 1').get();
+    const cfg = JSON.parse(v.config);
+    delete cfg.dtf.aplicacionPor;
+    db.prepare("INSERT INTO pricing_versions (config, note, created_by) VALUES (?, 'antigua', 'sistema')").run(JSON.stringify(cfg));
+    const vieja = Number(db.prepare('SELECT max(id) AS id FROM pricing_versions').get().id);
+    db.close();
+
+    const b = await startServer({ skipSetup: true, env: { SEED_DEMO: '0', DB_PATH } });
+    try {
+      const entrar = await fetch(`${b.B}/auth/entrar`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ username: 'duena', password: 'ClaveDuena123' }) });
+      const cookie = entrar.headers.get('set-cookie').split(';')[0];
+      const get = async (u) => (await fetch(b.B + u, { headers: { cookie } })).json();
+      const actual = await get('/tarifas');
+      assert.equal(actual.config.dtf.aplicacionPor, 'prenda');
+      assert.ok(actual.id > vieja);
+      assert.equal((await get(`/tarifas/${vieja}`)).config.dtf.aplicacionPor, 'ubicacion', 'la versión vieja conserva su cálculo');
+      const hist = await get('/auditoria?area=tarifas');
+      assert.ok(hist.some((h) => h.field === 'dtf.aplicacionPor' && JSON.parse(h.new_value) === 'prenda'));
+    } finally { b.stop(); }
+  } finally { rmSync(carpeta, { recursive: true, force: true }); }
+});

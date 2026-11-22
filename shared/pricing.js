@@ -24,7 +24,8 @@ export const DEFAULT_PRICING = {
   },
   dtf: {
     costoPieCuadrado: 4.0, // material por pie² (144 in²)
-    costoAplicacion: 1.6, // por ubicación y prenda
+    costoAplicacion: 1.6, // costo de aplicar el DTF
+    aplicacionPor: 'prenda', // 'prenda' = una vez por prenda aunque lleve varias ubicaciones · 'ubicacion' = por cada ubicación
     primera: [{ hasta: 15, precio: 6.0 }, { hasta: 95, precio: 10.5 }, { hasta: 105, precio: 11.5 }, { hasta: null, precio: 25.0 }],
     adicional: [{ hasta: 15, precio: 1.0 }, { hasta: 95, precio: 5.5 }, { hasta: null, precio: 25.0 }],
     minimo: null, // piezas mínimas; null = sin mínimo
@@ -98,10 +99,11 @@ export function precioTabla(tabla, area) {
   return fila ? num(fila.precio) : null;
 }
 /** Costo interno por ubicación: ancho × alto ÷ 144 × costo pie² + aplicación. */
-export function costoDtf(ancho, alto, cfg) {
+/** Costo por pieza de una ubicación DTF. conAplicacion=false cuando la aplicación ya se cobró en otra ubicación de la misma prenda. */
+export function costoDtf(ancho, alto, cfg, conAplicacion = true) {
   const area = areaDtf(ancho, alto);
   if (area == null) return null;
-  return round2((area / 144) * Number(cfg.dtf.costoPieCuadrado) + Number(cfg.dtf.costoAplicacion));
+  return round2((area / 144) * Number(cfg.dtf.costoPieCuadrado) + (conAplicacion ? Number(cfg.dtf.costoAplicacion) : 0));
 }
 /**
  * Precio por pieza de todas las ubicaciones DTF de una prenda.
@@ -207,7 +209,8 @@ export function calcularLinea(linea, cfg) {
       if (p.area == null) detalle = 'falta: ancho y alto del diseño';
       else {
         precioPieza = p.precio;
-        costoPieza = costoDtf(d.width, d.height, cfg);
+        // La aplicación se cuenta una vez por prenda (en la 1ª ubicación), salvo que la matriz diga «por ubicación»
+        costoPieza = costoDtf(d.width, d.height, cfg, cfg.dtf.aplicacionPor === 'ubicacion' || p.esPrimera);
         detalle = `${d.width}×${d.height}" = ${p.area} in² · ${p.esPrimera ? '1ª ubicación' : 'ubicación adicional'}`;
       }
       if (num(cfg.dtf.minimo) && qty < Number(cfg.dtf.minimo)) avisos.push(`${etiqueta}: ${qty} piezas, por debajo del mínimo DTF (${cfg.dtf.minimo})`);
