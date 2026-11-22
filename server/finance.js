@@ -63,6 +63,15 @@ export function computeClientStatus(contactId, excludeJobId) {
 }
 
 /** Ajusta la regla de comisión al tipo de cliente (p. ej. Isabel nuevo/existente). */
+/** Regla automática del vendedor (su perfil). Si no tiene, la primera regla activa suya que no sea especial (wraps). */
+export function reglaAutomatica(salespersonId) {
+  if (!salespersonId) return null;
+  const sp = get('SELECT * FROM salespeople WHERE id = ?', salespersonId);
+  if (sp?.default_rule_id && get('SELECT id FROM commission_rules WHERE id = ? AND active = 1', sp.default_rule_id)) return sp.default_rule_id;
+  const r = get("SELECT id FROM commission_rules WHERE salesperson_id = ? AND active = 1 ORDER BY (name LIKE '%Wrap%'), id LIMIT 1", salespersonId);
+  return r?.id ?? null;
+}
+
 export function resolveRule(job) {
   if (!job.commission_rule_id) return null;
   const r = get('SELECT * FROM commission_rules WHERE id = ?', job.commission_rule_id);

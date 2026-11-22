@@ -210,7 +210,13 @@ function Comisiones({ editable, notify }) {
         <h3>Vendedores</h3>
         <ul className="list">
           {vend.map((v) => (
-            <li key={v.id}><span>{v.name}</span><span className="muted">{v.active ? 'activo' : 'inactivo'}</span>
+            <li key={v.id} className="vendedor-fila"><strong>{v.name}</strong><span className="muted">{v.active ? 'activo' : 'inactivo'}</span>
+              <label className="inline small">Regla automática
+                <select disabled={!editable} value={v.default_rule_id || ''} onChange={(e) => run(() => api.put(`/vendedores/${v.id}`, { default_rule_id: e.target.value ? Number(e.target.value) : null }), 'Regla automática actualizada')}>
+                  <option value="">— la primera activa —</option>
+                  {reglas.filter((r) => r.active && (r.salesperson_id === v.id || !r.salesperson_id)).map((r) => <option key={r.id} value={r.id}>{r.name}</option>)}
+                </select>
+              </label>
               {editable && <button className="link-btn" onClick={() => run(() => api.put(`/vendedores/${v.id}`, { active: !v.active }), 'Actualizado')}>{v.active ? 'Desactivar' : 'Activar'}</button>}</li>
           ))}
         </ul>

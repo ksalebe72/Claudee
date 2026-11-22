@@ -56,9 +56,15 @@ r.put('/vendedores/:id', wrap((req) => {
   requireRole(req, 'duena');
   const s = get('SELECT * FROM salespeople WHERE id = ?', req.params.id);
   if (!s) throw fail(404, 'No encontrado');
-  const datos = { name: req.body.name ?? s.name, active: req.body.active === undefined ? s.active : req.body.active ? 1 : 0 };
+  const datos = { name: req.body.name ?? s.name, active: req.body.active === undefined ? s.active : req.body.active ? 1 : 0, default_rule_id: s.default_rule_id ?? null };
+  if ('default_rule_id' in req.body) {
+    const rid = req.body.default_rule_id ? Number(req.body.default_rule_id) : null;
+    const regla = rid && get('SELECT * FROM commission_rules WHERE id = ?', rid);
+    if (rid && (!regla || (regla.salesperson_id && regla.salesperson_id !== s.id))) throw fail(400, 'Esa regla no es de este vendedor');
+    datos.default_rule_id = rid;
+  }
   update('salespeople', s.id, datos);
-  audit(req.user, 'comisiones', `vendedor ${s.name}`, { name: s.name, active: s.active }, datos, String(s.id));
+  audit(req.user, 'comisiones', `vendedor ${s.name}`, { name: s.name, active: s.active, regla_automatica: s.default_rule_id ?? null }, { name: datos.name, active: datos.active, regla_automatica: datos.default_rule_id }, String(s.id));
   return get('SELECT * FROM salespeople WHERE id = ?', s.id);
 }));
 

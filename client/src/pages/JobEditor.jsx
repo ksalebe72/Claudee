@@ -62,6 +62,14 @@ export default function JobEditor() {
     }
   }, [id]);
 
+  // Cotización nueva hecha por un vendedor: se pone sola la regla automática de su perfil
+  useEffect(() => {
+    if (id || !job || job.commission_rule_id || !job.salesperson_id || !vendedores || !reglas) return;
+    const perfil = vendedores.find((v) => v.id === Number(job.salesperson_id))?.default_rule_id;
+    const regla = reglas.find((r) => r.id === perfil && r.active);
+    if (regla) setJob((j) => ({ ...j, commission_rule_id: regla.id }));
+  }, [id, job?.salesperson_id, vendedores, reglas]);
+
   // Viene de «🎨 Proof» en una orden nueva: al guardarse, se abre el decorador
   useEffect(() => {
     if (id && job?.id === Number(id) && ubicacion.state?.abrirDecorador) {

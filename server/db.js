@@ -166,6 +166,7 @@ CREATE TABLE IF NOT EXISTS commission_entries (
   created_at TEXT DEFAULT (datetime('now'))
 );
 `);
+addColumn('salespeople', 'default_rule_id', 'INTEGER'); // regla de comisión automática del vendedor
 
 // ---------- helpers ----------
 const JSON_COLS = new Set(['tags', 'colors', 'sizes', 'decorations', 'tiers', 'condition', 'params', 'size_costs', 'extra_costs', 'override', 'margin_approval', 'fin', 'calc', 'config', 'snapshot']);

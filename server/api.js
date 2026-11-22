@@ -6,7 +6,7 @@ import { fileURLToPath } from 'node:url';
 import { all, get, run, insert, update, getSetting, setSetting, transaction } from './db.js';
 import { fire, registerHandler, TRIGGERS, ACTIONS } from './automations.js';
 import { PROCESOS, precioPrenda } from '../shared/pricing.js';
-import { computeJob, productSnapshot, computeClientStatus, assertMarginApproved, today as hoy } from './finance.js';
+import { computeJob, productSnapshot, computeClientStatus, assertMarginApproved, reglaAutomatica, today as hoy } from './finance.js';
 import { currentPricing, pricingVersion, audit, listRules } from './config.js';
 import { ROLES, requireRole } from './auth.js';
 import { getBrand, setBrandColors, saveLogo, removeLogo } from './brand.js';
@@ -384,7 +384,8 @@ api.post('/jobs', wrap((req) => {
       tax_exempt: b.tax_exempt !== undefined ? (b.tax_exempt ? 1 : 0) : contact?.tax_exempt ? 1 : 0,
       shipping_charged: numOrNull(b.shipping_charged) || 0, shipping_cost: numOrNull(b.shipping_cost),
       extra_costs: b.extra_costs || [],
-      salesperson_id: b.salesperson_id || null, commission_rule_id: b.commission_rule_id || null,
+      // Si llega el vendedor sin regla, se usa la regla automática de su perfil
+      salesperson_id: b.salesperson_id || null, commission_rule_id: b.commission_rule_id || reglaAutomatica(b.salesperson_id) || null,
       client_status: b.client_status || computeClientStatus(b.contact_id, 0), client_status_manual: b.client_status ? 1 : 0,
     });
     saveItems(id, b.items || []);
@@ -411,6 +412,10 @@ api.put('/jobs/:id', wrap((req) => {
   if ('extra_costs' in b) b.extra_costs = (b.extra_costs || []).map((x) => ({ concepto: x.concepto || 'Costo directo', tipo: x.tipo === 'setup' ? 'setup' : 'otro', monto: numOrNull(x.monto) }));
   if ('client_status' in b) { b.client_status_manual = b.client_status ? 1 : 0; if (!b.client_status) b.client_status = computeClientStatus(b.contact_id ?? antes.contact_id, id); }
   else if ('contact_id' in b && b.contact_id !== antes.contact_id && !antes.client_status_manual) b.client_status = computeClientStatus(b.contact_id, id);
+  // Cambió el vendedor y no se indicó regla (o quedó vacía): se pone la regla automática de su perfil
+  if ('salesperson_id' in b && b.salesperson_id && !b.commission_rule_id && (Number(b.salesperson_id) !== antes.salesperson_id || !antes.commission_rule_id)) {
+    b.commission_rule_id = reglaAutomatica(Number(b.salesperson_id));
+  }
   transaction(() => {
     update('jobs', id, b, JOB_FIELDS);
     if (req.body.items) saveItems(id, req.body.items);

@@ -451,3 +451,4 @@ input[type=color] { min-width: 40px; height: 32px; padding: 2px; }
 .md-table { margin: 6px 0 10px; font-size: 13px; }
 .md-table th, .md-table td { padding: 6px 8px; }
 .ajuste-meta { align-items: center; }
+.vendedor-fila { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }

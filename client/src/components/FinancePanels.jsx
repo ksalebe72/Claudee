@@ -93,7 +93,8 @@ export function VendedorCard({ job, set, vendedores, reglas, editable }) {
             // Las reglas especiales (wraps) no se sugieren solas: se eligen a mano en la orden
             const especial = (r) => /wrap/i.test(r.name);
             const propias = reglas.filter((r) => r.active && r.salesperson_id === sp).sort((a, b) => especial(a) - especial(b));
-            const sugerida = propias.find((r) => !r.client_type || r.client_type === job.client_status) || propias[0] || reglas.find((r) => r.name === 'Sin comisión');
+            const perfil = vendedores.find((v) => v.id === sp)?.default_rule_id;
+            const sugerida = propias.find((r) => r.id === perfil) || propias.find((r) => !r.client_type || r.client_type === job.client_status) || propias[0] || reglas.find((r) => r.name === 'Sin comisión');
             set({ salesperson_id: sp, commission_rule_id: sugerida?.id || null });
           }}>
             <option value="">— Sin vendedor —</option>

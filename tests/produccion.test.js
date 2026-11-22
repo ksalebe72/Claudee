@@ -148,3 +148,26 @@ test('Bryan queda en 40% de la utilidad en todo (también wraps) desde el día d
   assert.equal(q.finanzas.comision.base, 48);
   assert.equal(q.finanzas.comision.monto, 19.2);
 });
+
+test('la regla automática del perfil del vendedor se pone sola en las órdenes (Bryan → Utilidad 40%)', async () => {
+  const reglas = await s.duena.get('/comisiones/reglas');
+  const id = (n) => reglas.find((r) => r.name === n).id;
+  const vend = await s.duena.get('/vendedores');
+  const bryan = vend.find((v) => v.name === 'Bryan');
+  const isabel = vend.find((v) => v.name === 'Isabel');
+  assert.equal(bryan.default_rule_id, id('Bryan · Utilidad 40%'), 'queda en el perfil de Bryan');
+
+  const nueva = await s.duena.post('/jobs', { title: 'Auto', salesperson_id: bryan.id, items: [] });
+  assert.equal(nueva.commission_rule_id, id('Bryan · Utilidad 40%'), 'al crear');
+  const sinVend = await s.duena.post('/jobs', { title: 'Sin vendedor', items: [] });
+  const cambio = await s.duena.put(`/jobs/${sinVend.id}`, { salesperson_id: bryan.id });
+  assert.equal(cambio.commission_rule_id, id('Bryan · Utilidad 40%'), 'al asignar el vendedor después');
+  const elegida = await s.duena.post('/jobs', { title: 'Elegida', salesperson_id: bryan.id, commission_rule_id: id('Sin comisión'), items: [] });
+  assert.equal(elegida.commission_rule_id, id('Sin comisión'), 'si se elige otra a mano, se respeta');
+
+  // La dueña puede cambiar la regla automática; no puede poner la regla de otro vendedor
+  assert.equal((await s.duena.put(`/vendedores/${isabel.id}`, { default_rule_id: id('Isabel · Cliente nuevo') })).default_rule_id, id('Isabel · Cliente nuevo'));
+  assert.equal((await s.duena.call('PUT', `/vendedores/${isabel.id}`, { default_rule_id: id('Bryan · Utilidad 40%') })).status, 400);
+  const ventas = await s.userWithRole('ventas');
+  assert.equal((await ventas.call('PUT', `/vendedores/${isabel.id}`, { default_rule_id: null })).status, 403);
+});

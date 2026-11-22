@@ -205,3 +205,16 @@ export function aplicarCambioWrapsBryan(hoy = new Date().toLocaleDateString('en-
   setSetting(CAMBIO_BRYAN_WRAPS, hoy);
   return true;
 }
+
+/** La regla «Bryan · Utilidad 40%» queda como regla automática en el perfil de Bryan (una sola vez). */
+export function fijarReglaAutomaticaBryan() {
+  if (getSetting('bryan_regla_automatica')) return false;
+  const bryan = get("SELECT * FROM salespeople WHERE name = 'Bryan'");
+  const regla = bryan && get("SELECT id FROM commission_rules WHERE salesperson_id = ? AND name = 'Bryan · Utilidad 40%' AND active = 1", bryan.id);
+  if (regla && bryan.default_rule_id !== regla.id) {
+    run('UPDATE salespeople SET default_rule_id = ? WHERE id = ?', regla.id, bryan.id);
+    audit(null, 'comisiones', 'vendedor Bryan', { regla_automatica: bryan.default_rule_id ?? null }, { regla_automatica: 'Bryan · Utilidad 40%' }, String(bryan.id));
+  }
+  setSetting('bryan_regla_automatica', true);
+  return true;
+}
