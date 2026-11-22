@@ -4,3 +4,4 @@ data/*.db*
 server/uploads/*
 !server/uploads/.gitkeep
 .env
+data/

@@ -24,7 +24,27 @@ export function snapshotFromProduct(p, prev = {}) {
 const blank = (v) => (v == null ? '' : v);
 const pend = (v, txt = 'pendiente') => (v == null ? <span className="warn-txt">{txt}</span> : money(v));
 
-export function LineEditor({ idx, item, calc, products, editable, onChange, onRemove, onDuplicate }) {
+/** Escribe un estilo de SanMar (ej. PC61) y lo trae al catálogo y a la línea. */
+function TraerSanmar({ onImport, onPick }) {
+  const [estilo, setEstilo] = React.useState('');
+  const [estado, setEstado] = React.useState({ cargando: false, error: '' });
+  const traer = async () => {
+    if (!estilo.trim()) return;
+    setEstado({ cargando: true, error: '' });
+    try { onPick(await onImport(estilo.trim())); setEstilo(''); setEstado({ cargando: false, error: '' }); }
+    catch (e) { setEstado({ cargando: false, error: e.message }); }
+  };
+  return (
+    <div className="row gap wrap sanmar-traer">
+      <input value={estilo} placeholder="Estilo SanMar (ej. PC61)" onChange={(e) => setEstilo(e.target.value.toUpperCase())}
+        onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); traer(); } }} style={{ maxWidth: 200 }} />
+      <button type="button" className="btn" disabled={estado.cargando || !estilo.trim()} onClick={traer}>{estado.cargando ? 'Buscando…' : '⬇ Traer de SanMar'}</button>
+      {estado.error && <span className="warn-txt">{estado.error}</span>}
+    </div>
+  );
+}
+
+export function LineEditor({ idx, item, calc, products, editable, onChange, onRemove, onDuplicate, onImportSanmar }) {
   const product = products.find((p) => p.id === Number(item.product_id));
   const tipo = item.line_type || 'prenda';
   const set = (patch) => onChange(patch);
@@ -80,6 +100,7 @@ export function LineEditor({ idx, item, calc, products, editable, onChange, onRe
           {editable && <button className="icon-btn" title="Quitar" onClick={onRemove}>🗑</button>}
         </div>
       </div>
+      {editable && onImportSanmar && <TraerSanmar onImport={onImportSanmar} onPick={(p) => set(snapshotFromProduct(p, item))} />}
       <input className="desc" disabled={!editable} value={item.description} placeholder="Descripción" onChange={(e) => set({ description: e.target.value })} />
 
       <div className="sizes">

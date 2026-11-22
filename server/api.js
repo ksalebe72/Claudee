@@ -547,15 +547,18 @@ api.post('/sanmar/import', awrap(async (req) => {
   if (!req.body.style) throw fail(400, 'Indica el estilo (ej. PC61)');
   clearSanmarCache(req.body.style);
   const d = await sanmar.buscarEstilo(req.body.style);
+  // Costo desconocido = null (nunca 0). Por talla se guarda el costo más alto entre colores, para no cotizar por debajo.
   let costo = null;
+  const sizeCosts = {};
   try {
     const precios = await sanmar.obtenerPrecios(d.estilo);
     const costos = precios.map((p) => p.costo).filter((c) => c > 0);
     if (costos.length) costo = Math.min(...costos);
+    for (const f of precios) if (f.talla && f.costo > 0) sizeCosts[f.talla] = Math.max(sizeCosts[f.talla] || 0, f.costo);
   } catch (e) {
     if (e.codigo === 'CREDENCIALES') throw e; // otros errores de precios no impiden importar el producto
   }
-  const data = { sku: d.estilo, name: d.titulo || d.estilo, brand: d.marca, base_cost: costo ?? 0, colors: d.colores.map((c) => c.nombre), sizes: d.tallas, supplier: 'SanMar' };
+  const data = { sku: d.estilo, name: d.titulo || d.estilo, brand: d.marca, base_cost: costo, size_costs: sizeCosts, colors: d.colores.map((c) => c.nombre), sizes: d.tallas, supplier: 'SanMar' };
   const existing = get("SELECT id FROM products WHERE upper(sku) = upper(?) AND supplier = 'SanMar'", d.estilo);
   if (existing) update('products', existing.id, data);
   const id = existing ? existing.id : insert('products', { ...data, category: req.body.category || 'SanMar' });

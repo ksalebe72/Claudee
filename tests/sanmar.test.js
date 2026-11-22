@@ -70,6 +70,8 @@ test('importa el estilo al catálogo con el costo de la cuenta', async () => {
   assert.equal(p.supplier, 'SanMar');
   assert.equal(p.base_cost, 3.18);
   assert.deepEqual(p.colors, ['Jet Black', 'Navy', 'Athletic Heather']);
+  assert.ok(Object.keys(p.size_costs).length > 0, 'guarda el costo por talla');
+  for (const c of Object.values(p.size_costs)) assert.ok(c >= p.base_cost);
 });
 
 test('la contraseña nunca aparece en los logs del servidor', () => {

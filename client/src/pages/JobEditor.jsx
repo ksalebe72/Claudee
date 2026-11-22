@@ -27,7 +27,13 @@ export default function JobEditor() {
   const nav = useNavigate();
   const meta = useMeta();
   const user = meta.user;
-  const [products] = useLoad(() => api.get('/products'));
+  const [products, , setProducts] = useLoad(() => api.get('/products'));
+  // Trae un estilo de SanMar al catálogo y lo deja disponible en la lista sin recargar la página
+  const importarSanmar = async (style) => {
+    const p = await api.post('/sanmar/import', { style });
+    setProducts((lista) => [...(lista || []).filter((x) => x.id !== p.id), p]);
+    return p;
+  };
   const [methodsList] = useLoad(() => api.get('/methods'));
   const [contacts] = useLoad(() => api.get('/contacts'));
   const [opps] = useLoad(() => api.get('/opportunities'));
@@ -194,6 +200,7 @@ export default function JobEditor() {
 
           {job.items.map((it, idx) => (
             <LineEditor key={idx} idx={idx} item={it} calc={calcs[idx]} products={products} editable={editable}
+              onImportSanmar={meta.integrations?.sanmar ? importarSanmar : null}
               onChange={(p) => setItem(idx, p)}
               onRemove={() => set({ items: job.items.filter((_, i) => i !== idx) })}
               onDuplicate={() => set({ items: [...job.items.slice(0, idx + 1), structuredClone(it), ...job.items.slice(idx + 1)] })} />
