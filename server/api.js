@@ -9,6 +9,7 @@ import { PROCESOS, precioPrenda } from '../shared/pricing.js';
 import { computeJob, productSnapshot, computeClientStatus, assertMarginApproved, reglaAutomatica, today as hoy } from './finance.js';
 import { currentPricing, pricingVersion, audit, listRules } from './config.js';
 import { ROLES, requireRole } from './auth.js';
+import { filtroContactos, filtroJobs, soloPropios, esLogistica, sinFinanzas, tareaPermitida } from './scope.js';
 import { getBrand, setBrandColors, saveLogo, removeLogo } from './brand.js';
 import { iaConfigurada } from './ia.js';
 import { sendMessage } from './messaging.js';
@@ -193,7 +194,7 @@ api.put('/settings', wrap((req) => {
   return { ok: true, brand: getBrand() };
 }));
 
-// Logo de la empresa (solo la dueña)
+// Logo de la empresa (solo el dueño)
 api.post('/settings/logo', express.json({ limit: '5mb' }), wrap((req) => {
   requireRole(req, 'duena');
   const tipo = req.body.tipo === 'icon' ? 'icon' : 'logo';
@@ -210,38 +211,47 @@ api.delete('/settings/logo', wrap((req) => {
 }));
 
 // ---------- dashboard ----------
-api.get('/dashboard', wrap(() => {
+api.get('/dashboard', wrap((req) => {
   const today = new Date().toISOString().slice(0, 10);
   const month = today.slice(0, 7);
-  const pipeline = all("SELECT stage, COUNT(*) AS count, COALESCE(SUM(value),0) AS value FROM opportunities GROUP BY stage");
-  const orders = all("SELECT status, COUNT(*) AS count FROM jobs WHERE kind = 'order' GROUP BY status");
-  const openQuotes = get("SELECT COUNT(*) AS count, COALESCE(SUM(total),0) AS value FROM jobs WHERE kind='quote' AND status IN ('borrador','enviada')");
-  const revenue = get("SELECT COALESCE(SUM(amount),0) AS v FROM payments WHERE substr(paid_at,1,7) = ?", month).v;
-  const booked = get("SELECT COALESCE(SUM(total),0) AS v FROM jobs WHERE kind='order' AND substr(created_at,1,7) = ?", month).v;
+  // Vendedor: solo sus clientes y sus órdenes
+  const fj = filtroJobs(req.user, 'j');
+  const fc = filtroContactos(req.user, 'c');
+  const pipeline = all(`SELECT o.stage, COUNT(*) AS count, COALESCE(SUM(o.value),0) AS value FROM opportunities o LEFT JOIN contacts c ON c.id = o.contact_id WHERE ${fc.sql} GROUP BY o.stage`, ...fc.params);
+  const orders = all(`SELECT j.status, COUNT(*) AS count FROM jobs j WHERE j.kind = 'order' AND ${fj.sql} GROUP BY j.status`, ...fj.params);
+  const openQuotes = get(`SELECT COUNT(*) AS count, COALESCE(SUM(j.total),0) AS value FROM jobs j WHERE j.kind='quote' AND j.status IN ('borrador','enviada') AND ${fj.sql}`, ...fj.params);
+  const revenue = get(`SELECT COALESCE(SUM(p.amount),0) AS v FROM payments p JOIN jobs j ON j.id = p.job_id WHERE substr(p.paid_at,1,7) = ? AND ${fj.sql}`, month, ...fj.params).v;
+  const booked = get(`SELECT COALESCE(SUM(j.total),0) AS v FROM jobs j WHERE j.kind='order' AND substr(j.created_at,1,7) = ? AND ${fj.sql}`, month, ...fj.params).v;
   const ar = get(`SELECT COALESCE(SUM(j.total - COALESCE((SELECT SUM(amount) FROM payments p WHERE p.job_id = j.id),0)),0) AS v
-                  FROM jobs j WHERE j.kind = 'order'`).v;
+                  FROM jobs j WHERE j.kind = 'order' AND ${fj.sql}`, ...fj.params).v;
   const overdue = all(`SELECT j.id, j.order_number, j.title, j.due_date, j.status, c.name AS contact_name FROM jobs j
                        LEFT JOIN contacts c ON c.id = j.contact_id
-                       WHERE j.kind='order' AND j.status != 'entregado' AND j.due_date < ? ORDER BY j.due_date`, today);
+                       WHERE j.kind='order' AND j.status != 'entregado' AND j.due_date < ? AND ${fj.sql} ORDER BY j.due_date`, today, ...fj.params);
   const dueSoon = all(`SELECT j.id, j.order_number, j.title, j.due_date, j.status, c.name AS contact_name FROM jobs j
                        LEFT JOIN contacts c ON c.id = j.contact_id
-                       WHERE j.kind='order' AND j.status != 'entregado' AND j.due_date >= ? ORDER BY j.due_date LIMIT 8`, today);
+                       WHERE j.kind='order' AND j.status != 'entregado' AND j.due_date >= ? AND ${fj.sql} ORDER BY j.due_date LIMIT 8`, today, ...fj.params);
   const tasks = all(`SELECT t.*, c.name AS contact_name FROM tasks t LEFT JOIN contacts c ON c.id = t.contact_id
-                     WHERE done = 0 AND (due_date IS NULL OR due_date <= ?) ORDER BY due_date LIMIT 10`, today);
-  const pendingProofs = get("SELECT COUNT(*) AS c FROM proofs WHERE status = 'pendiente'").c;
+                     WHERE done = 0 AND (t.due_date IS NULL OR t.due_date <= ?) ORDER BY t.due_date LIMIT 50`, today)
+    .filter((t) => tareaPermitida(req.user, t)).slice(0, 10);
+  const pendingProofs = get(`SELECT COUNT(*) AS c FROM proofs pr JOIN jobs j ON j.id = pr.job_id WHERE pr.status = 'pendiente' AND ${fj.sql}`, ...fj.params).c;
   const activity = all(`SELECT a.*, c.name AS contact_name FROM activities a LEFT JOIN contacts c ON c.id = a.contact_id
-                        ORDER BY a.id DESC LIMIT 12`);
-  return { pipeline, orders, openQuotes, revenue, booked, ar, overdue, dueSoon, tasks, pendingProofs, activity };
+                        WHERE ${soloPropios(req.user) ? fc.sql : '1=1'} ORDER BY a.id DESC LIMIT 12`, ...(soloPropios(req.user) ? fc.params : []));
+  const dash = { pipeline, orders, openQuotes, revenue, booked, ar, overdue, dueSoon, tasks, pendingProofs, activity };
+  if (esLogistica(req.user)) { dash.revenue = null; dash.booked = null; dash.ar = null; dash.openQuotes = null; dash.pipeline = []; }
+  return dash;
 }));
 
 // ---------- contactos ----------
 api.get('/contacts', wrap((req) => {
   const q = `%${req.query.q || ''}%`;
+  const f = filtroContactos(req.user, 'c');
   return all(`SELECT c.*,
       (SELECT COUNT(*) FROM jobs j WHERE j.contact_id = c.id AND j.kind='order') AS orders_count,
       (SELECT COALESCE(SUM(total),0) FROM jobs j WHERE j.contact_id = c.id AND j.kind='order') AS lifetime_value
-    FROM contacts c WHERE c.name LIKE ? OR c.company LIKE ? OR c.email LIKE ? OR c.phone LIKE ? OR c.tags LIKE ?
-    ORDER BY c.id DESC`, q, q, q, q, q);
+      , s.name AS salesperson_name
+    FROM contacts c LEFT JOIN salespeople s ON s.id = c.salesperson_id
+    WHERE (c.name LIKE ? OR c.company LIKE ? OR c.email LIKE ? OR c.phone LIKE ? OR c.tags LIKE ?) AND ${f.sql}
+    ORDER BY c.id DESC`, q, q, q, q, q, ...f.params);
 }));
 
 api.get('/contacts/:id', wrap((req) => {
@@ -258,6 +268,8 @@ const CONTACT_FIELDS = ['name', 'company', 'email', 'phone', 'tags', 'source', '
 api.post('/contacts', wrap((req) => {
   if (!req.body.name) throw fail(400, 'El nombre es obligatorio');
   const data = Object.fromEntries(CONTACT_FIELDS.filter((k) => k in req.body).map((k) => [k, req.body[k]]));
+  // El cliente queda asignado al vendedor: el vendedor siempre a sí mismo; los demás pueden elegir
+  data.salesperson_id = soloPropios(req.user) ? req.user.salesperson_id ?? null : req.body.salesperson_id || null;
   const id = insert('contacts', data);
   const contact = contactById(id);
   if (req.body.opportunity) {
@@ -267,7 +279,17 @@ api.post('/contacts', wrap((req) => {
   return contact;
 }));
 
-api.put('/contacts/:id', wrap((req) => { update('contacts', req.params.id, req.body, CONTACT_FIELDS); return contactById(req.params.id); }));
+api.put('/contacts/:id', wrap((req) => {
+  const campos = soloPropios(req.user) ? CONTACT_FIELDS : [...CONTACT_FIELDS, 'salesperson_id'];
+  const datos = { ...req.body };
+  if ('salesperson_id' in datos) {
+    datos.salesperson_id = datos.salesperson_id ? Number(datos.salesperson_id) : null;
+    const antes = contactById(req.params.id);
+    if (!soloPropios(req.user) && antes && antes.salesperson_id !== datos.salesperson_id) audit(req.user, 'clientes', `vendedor del cliente ${antes.name}`, antes.salesperson_id, datos.salesperson_id, String(antes.id));
+  }
+  update('contacts', req.params.id, datos, campos);
+  return contactById(req.params.id);
+}));
 api.delete('/contacts/:id', wrap((req) => { run('DELETE FROM contacts WHERE id = ?', req.params.id); return { ok: true }; }));
 
 api.post('/contacts/:id/activities', wrap((req) => {
@@ -281,8 +303,11 @@ api.post('/contacts/:id/activities', wrap((req) => {
 }));
 
 // ---------- oportunidades (pipeline) ----------
-api.get('/opportunities', wrap(() => all(`SELECT o.*, c.name AS contact_name, c.company AS contact_company
-  FROM opportunities o LEFT JOIN contacts c ON c.id = o.contact_id ORDER BY o.updated_at DESC`)));
+api.get('/opportunities', wrap((req) => {
+  const f = filtroContactos(req.user, 'c');
+  return all(`SELECT o.*, c.name AS contact_name, c.company AS contact_company
+    FROM opportunities o LEFT JOIN contacts c ON c.id = o.contact_id WHERE ${f.sql} ORDER BY o.updated_at DESC`, ...f.params);
+}));
 
 api.post('/opportunities', wrap((req) => {
   const { contact_id, title, value, stage } = req.body;
@@ -304,7 +329,7 @@ api.get('/tasks', wrap((req) => {
   const where = req.query.all ? '' : 'WHERE t.done = 0';
   return all(`SELECT t.*, c.name AS contact_name, j.number AS job_number, j.order_number FROM tasks t
     LEFT JOIN contacts c ON c.id = t.contact_id LEFT JOIN jobs j ON j.id = t.job_id ${where}
-    ORDER BY t.done, t.due_date IS NULL, t.due_date`);
+    ORDER BY t.done, t.due_date IS NULL, t.due_date`).filter((t) => tareaPermitida(req.user, t));
 }));
 api.post('/tasks', wrap((req) => {
   if (!req.body.title) throw fail(400, 'Título obligatorio');
@@ -321,7 +346,7 @@ api.delete('/tasks/:id', wrap((req) => { run('DELETE FROM tasks WHERE id = ?', r
 
 // ---------- catálogo ----------
 const PRODUCT_FIELDS = ['sku', 'name', 'brand', 'category', 'base_cost', 'colors', 'sizes', 'supplier', 'active', 'kind', 'size_costs', 'price'];
-// La excepción de markup y la casilla «comisionable» son parte de la matriz: solo la dueña, con historial.
+// La excepción de markup y la casilla «comisionable» son parte de la matriz: solo el dueño, con historial.
 const PRODUCT_OWNER_FIELDS = ['markup_mode', 'markup_value', 'commissionable'];
 function productData(req, current = {}) {
   const data = Object.fromEntries(PRODUCT_FIELDS.filter((k) => k in req.body).map((k) => [k, req.body[k]]));
@@ -361,18 +386,30 @@ api.get('/jobs', wrap((req) => {
   const params = [];
   if (kind) { cond.push('j.kind = ?'); params.push(kind); }
   if (status) { cond.push('j.status = ?'); params.push(status); }
-  return all(`SELECT j.*, c.name AS contact_name, c.company AS contact_company,
+  const fj = filtroJobs(req.user, 'j');
+  if (soloPropios(req.user)) { cond.push(fj.sql); params.push(...fj.params); }
+  const filas = all(`SELECT j.*, c.name AS contact_name, c.company AS contact_company,
       COALESCE((SELECT SUM(amount) FROM payments p WHERE p.job_id = j.id),0) AS paid,
       (SELECT SUM(qty) FROM job_items i WHERE i.job_id = j.id) AS pieces,
       (SELECT status FROM proofs pr WHERE pr.job_id = j.id ORDER BY version DESC LIMIT 1) AS proof_status
     FROM jobs j LEFT JOIN contacts c ON c.id = j.contact_id
     ${cond.length ? 'WHERE ' + cond.join(' AND ') : ''} ORDER BY j.id DESC`, ...params);
+  // Logística no ve márgenes ni comisiones
+  return esLogistica(req.user) ? filas.map(({ fin: _f, margin_approval: _m, commission_rule_id: _c, ...r }) => r) : filas;
 }));
 
-api.get('/jobs/:id', wrap((req) => loadJob(req.params.id)));
+api.get('/jobs/:id', wrap((req) => (esLogistica(req.user) ? sinFinanzas(loadJob(req.params.id)) : loadJob(req.params.id))));
+
+// El cliente sin vendedor queda asignado al vendedor de su primera orden
+function asignarClienteAlVendedor(jobId) {
+  const j = get('SELECT contact_id, salesperson_id FROM jobs WHERE id = ?', jobId);
+  if (j?.contact_id && j.salesperson_id) run('UPDATE contacts SET salesperson_id = ? WHERE id = ? AND salesperson_id IS NULL', j.salesperson_id, j.contact_id);
+}
 
 api.post('/jobs', wrap((req) => {
-  const b = req.body;
+  const b = { ...req.body };
+  // Un vendedor siempre cotiza a su nombre y con la regla automática de su perfil
+  if (soloPropios(req.user)) { b.salesperson_id = req.user.salesperson_id || null; b.commission_rule_id = null; }
   const id = transaction(() => {
     const contact = contactById(b.contact_id);
     const id = insert('jobs', {
@@ -389,6 +426,7 @@ api.post('/jobs', wrap((req) => {
       client_status: b.client_status || computeClientStatus(b.contact_id, 0), client_status_manual: b.client_status ? 1 : 0,
     });
     saveItems(id, b.items || []);
+    asignarClienteAlVendedor(id);
     return id;
   });
   return loadJob(id);
@@ -401,6 +439,7 @@ api.put('/jobs/:id', wrap((req) => {
   const antes = get('SELECT * FROM jobs WHERE id = ?', id);
   if (!antes) throw fail(404, 'No encontrado');
   const b = { ...req.body };
+  if (soloPropios(req.user)) { delete b.salesperson_id; delete b.commission_rule_id; } // el vendedor no se cambia a sí mismo
   for (const k of ['discount', 'shipping_charged']) if (k in b) b[k] = numOrNull(b[k]) || 0;
   if ('shipping_cost' in b) b.shipping_cost = numOrNull(b.shipping_cost);
   if ('tax_exempt' in b) b.tax_exempt = b.tax_exempt ? 1 : 0;
@@ -420,6 +459,7 @@ api.put('/jobs/:id', wrap((req) => {
     update('jobs', id, b, JOB_FIELDS);
     if (req.body.items) saveItems(id, req.body.items);
     else computeJob(id);
+    asignarClienteAlVendedor(id);
   });
   return loadJob(id);
 }));

@@ -26,11 +26,11 @@ export function ensurePricing() {
   if (!get('SELECT id FROM pricing_versions LIMIT 1')) {
     insert('pricing_versions', { config: DEFAULT_PRICING, note: 'Valores iniciales (matriz Color Plus)', created_by: 'sistema' });
   }
-  // Aclaraciones de la dueña sobre DTF (se crea una versión nueva con historial; las cotizaciones guardadas conservan la suya):
+  // Aclaraciones del dueño sobre DTF (se crea una versión nueva con historial; las cotizaciones guardadas conservan la suya):
   //  · los $1.60 de aplicación son una vez por prenda, no por ubicación
   //  · el material se cuenta por hojas de 12×12 a $4, con tamaños estándar por ubicación
   //  · sin el salto a $25: espalda/frente estándar (hasta 144 in²) a $13 (1ª) / $8.50 (adicional); más grande que la hoja $18.50 / $13.50
-  //    (solo si la tabla sigue siendo la original; si la dueña ya la editó, no se toca)
+  //    (solo si la tabla sigue siendo la original; si el dueño ya la editó, no se toca)
   const ultima = get('SELECT config FROM pricing_versions ORDER BY id DESC LIMIT 1');
   const raw = typeof ultima.config === 'string' ? JSON.parse(ultima.config) : ultima.config;
   if (migrando || !raw?.dtf) return;
@@ -57,7 +57,7 @@ export function ensurePricing() {
   }
   if (!notas.length) return;
   migrando = true;
-  try { savePricing(cfg, null, `${notas.join(' · ')} (pedido de la dueña)`); } finally { migrando = false; }
+  try { savePricing(cfg, null, `${notas.join(' · ')} (pedido del dueño)`); } finally { migrando = false; }
 }
 
 export function currentPricing() {
@@ -170,7 +170,7 @@ export function listRules() {
 }
 
 /**
- * Cambio pedido por la dueña: Bryan pasa de 25% de la venta a 40% de la ganancia de producto, desde el día en que se aplica.
+ * Cambio pedido por el dueño: Bryan pasa de 25% de la venta a 40% de la ganancia de producto, desde el día en que se aplica.
  * Se hace una sola vez: crea la regla «Bryan · Utilidad 40%» y desactiva «Bryan · Ventas» (las órdenes que ya la tienen la conservan).
  * Queda en el historial. (Los wraps se cambian aparte en aplicarCambioWrapsBryan.)
  */
@@ -181,7 +181,7 @@ export function aplicarCambioComisionBryan(hoy = new Date().toLocaleDateString('
   const yaExiste = bryan && get("SELECT id FROM commission_rules WHERE salesperson_id = ? AND base = 'ganancia_producto' AND name NOT LIKE '%Wrap%' AND active = 1", bryan.id);
   if (bryan && !yaExiste) {
     const id = insert('commission_rules', { salesperson_id: bryan.id, name: 'Bryan · Utilidad 40%', base: 'ganancia_producto', client_type: null });
-    insert('commission_rates', { rule_id: id, rate: 0.4, effective_from: hoy, created_by: 'sistema (pedido de la dueña)' });
+    insert('commission_rates', { rule_id: id, rate: 0.4, effective_from: hoy, created_by: 'sistema (pedido del dueño)' });
     audit(null, 'comisiones', 'regla Bryan · Utilidad 40%', null, { base: 'ganancia_producto', tasa: 0.4, desde: hoy }, String(id));
     const ventas = get("SELECT * FROM commission_rules WHERE salesperson_id = ? AND name = 'Bryan · Ventas'", bryan.id);
     if (ventas?.active) {
@@ -193,7 +193,7 @@ export function aplicarCambioComisionBryan(hoy = new Date().toLocaleDateString('
   return true;
 }
 
-/** Segundo pedido de la dueña: los wraps también al 40% de la utilidad (una sola regla para todo lo que venda Bryan). */
+/** Segundo pedido del dueño: los wraps también al 40% de la utilidad (una sola regla para todo lo que venda Bryan). */
 export const CAMBIO_BRYAN_WRAPS = 'cambio_bryan_wraps_40';
 export function aplicarCambioWrapsBryan(hoy = new Date().toLocaleDateString('en-CA', { timeZone: 'America/New_York' })) {
   if (getSetting(CAMBIO_BRYAN_WRAPS)) return false;
@@ -217,4 +217,22 @@ export function fijarReglaAutomaticaBryan() {
   }
   setSetting('bryan_regla_automatica', true);
   return true;
+}
+
+/**
+ * Una sola vez: los clientes sin vendedor quedan asignados al vendedor de sus órdenes,
+ * si todas sus órdenes con vendedor son del mismo. Así cada vendedor ve desde el inicio a sus clientes.
+ */
+export function asignarClientesExistentes() {
+  if (getSetting('clientes_asignados_a_vendedor')) return 0;
+  const filas = all(`SELECT c.id, GROUP_CONCAT(DISTINCT j.salesperson_id) AS vendedores FROM contacts c
+    JOIN jobs j ON j.contact_id = c.id AND j.salesperson_id IS NOT NULL
+    WHERE c.salesperson_id IS NULL GROUP BY c.id`);
+  let n = 0;
+  for (const f of filas) {
+    const ids = String(f.vendedores).split(',');
+    if (ids.length === 1) { run('UPDATE contacts SET salesperson_id = ? WHERE id = ?', Number(ids[0]), f.id); n++; }
+  }
+  setSetting('clientes_asignados_a_vendedor', true);
+  return n;
 }

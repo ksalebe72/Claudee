@@ -47,7 +47,7 @@ test('DTF: la aplicación de $1.60 se cuenta una sola vez por prenda, aunque lle
   assert.equal(Math.round(costoPieza * 100) / 100, 5.52);
   assert.equal(l.decoraciones.find((d) => d.location === 'Frente').costoPieza, 4.93, 'la 1ª ubicación lleva la aplicación');
   assert.equal(l.decoraciones.find((d) => d.location === 'Pecho izquierdo').costoPieza, 0.34, 'las demás solo material');
-  // Si la dueña lo cambia a «por ubicación», se cuenta en cada una
+  // Si el dueño lo cambia a «por ubicación», se cuenta en cada una
   const porUbic = calcularLinea({ line_type: 'prenda', description: 'Gildan 5000', qty: 12, unit_cost: 3.1, decorations: tres },
     { ...cfg, dtf: { ...cfg.dtf, costoModo: 'area', aplicacionPor: 'ubicacion' } });
   assert.equal(Math.round(porUbic.decoraciones.reduce((a, d) => a + d.costoPieza, 0) * 100) / 100, 8.72);

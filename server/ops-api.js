@@ -1,4 +1,4 @@
-// Operación: chequeo de salud (público, para Render) y respaldos (solo la dueña).
+// Operación: chequeo de salud (público, para Render) y respaldos (solo el dueño).
 import express from 'express';
 import { get } from './db.js';
 import { requireRole } from './auth.js';

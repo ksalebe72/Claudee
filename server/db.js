@@ -123,6 +123,7 @@ for (const [c, d] of Object.entries({
   size_costs: "TEXT DEFAULT '{}'", price: 'REAL',
 })) addColumn('products', c, d);
 addColumn('contacts', 'tax_exempt', 'INTEGER DEFAULT 0');
+addColumn('contacts', 'salesperson_id', 'INTEGER'); // vendedor dueño del cliente
 
 db.exec(`
 CREATE TABLE IF NOT EXISTS users (

@@ -36,7 +36,7 @@ export async function startServer({ env = {}, port, skipSetup = false } = {}) {
   const cookieOf = (res) => res.headers.get('set-cookie').split(';')[0];
   let duena = null;
   if (!skipSetup) {
-    const setup = await fetch(B + '/auth/configurar', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ name: 'Dueña', username: 'duena', password: 'ClaveDuena123', codigo: env.SETUP_CODE }) });
+    const setup = await fetch(B + '/auth/configurar', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ name: 'Dueño', username: 'duena', password: 'ClaveDuena123', codigo: env.SETUP_CODE }) });
     duena = client(cookieOf(setup));
   }
 

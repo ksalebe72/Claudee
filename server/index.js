@@ -8,7 +8,8 @@ import iaApi from './ia-api.js';
 import opsApi, { healthRouter } from './ops-api.js';
 import { programarRespaldos } from './backup.js';
 import { authRouter, usersRouter, requireAuth } from './auth.js';
-import { ensurePricing, ensureCommissionSetup, aplicarCambioComisionBryan, aplicarCambioWrapsBryan, fijarReglaAutomaticaBryan } from './config.js';
+import { scopeMiddleware } from './scope.js';
+import { ensurePricing, ensureCommissionSetup, aplicarCambioComisionBryan, aplicarCambioWrapsBryan, fijarReglaAutomaticaBryan, asignarClientesExistentes } from './config.js';
 import { seedIfEmpty } from './seed.js';
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
@@ -22,12 +23,14 @@ if (seedIfEmpty({ demo: process.env.SEED_DEMO !== '0' })) console.log('Base nuev
 ensurePricing();
 ensureCommissionSetup();
 if (process.env.CAMBIO_BRYAN_DISABLED !== '1') { aplicarCambioComisionBryan(); aplicarCambioWrapsBryan(); fijarReglaAutomaticaBryan(); }
+asignarClientesExistentes();
 programarRespaldos();
 
 // Toda la API exige sesión, salvo el inicio de sesión y el portal público del cliente.
 app.use('/api', healthRouter);
 app.use('/api', authRouter);
 app.use('/api', requireAuth);
+app.use('/api', scopeMiddleware); // qué datos ve cada rol (vendedor: solo sus clientes)
 app.use('/api', usersRouter);
 app.use('/api', financeApi);
 app.use('/api', iaApi);

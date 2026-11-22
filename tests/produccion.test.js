@@ -20,19 +20,19 @@ test('chequeo de salud público para Render', async () => {
   assert.equal(r.body.ok, true);
 });
 
-test('la cuenta de la dueña solo se crea con el código de instalación', async () => {
+test('la cuenta del dueño solo se crea con el código de instalación', async () => {
   const estado = await nuevo.anon.get('/auth/estado');
   assert.equal(estado.necesitaConfiguracion, true);
   assert.equal(estado.requiereCodigo, true);
   const datos = { name: 'Intruso', username: 'intruso', password: 'ClaveLarga123' };
   assert.equal((await nuevo.anon.call('POST', '/auth/configurar', datos)).status, 403);
   assert.equal((await nuevo.anon.call('POST', '/auth/configurar', { ...datos, codigo: 'otro' })).status, 403);
-  const ok = await nuevo.anon.call('POST', '/auth/configurar', { name: 'Dueña', username: 'duena', password: 'ClaveLarga123', codigo: CODIGO });
+  const ok = await nuevo.anon.call('POST', '/auth/configurar', { name: 'Dueño', username: 'duena', password: 'ClaveLarga123', codigo: CODIGO });
   assert.equal(ok.status, 200);
   assert.equal((await nuevo.anon.call('POST', '/auth/configurar', { ...datos, codigo: CODIGO })).status, 400, 'después ya no se puede');
 });
 
-test('respaldo automático al arrancar, respaldo manual y descarga (solo la dueña)', async () => {
+test('respaldo automático al arrancar, respaldo manual y descarga (solo el dueño)', async () => {
   const lista = await s.duena.get('/respaldos');
   assert.equal(lista.length, 1, 'se crea uno al arrancar');
   const manual = await s.duena.post('/respaldos');
@@ -165,7 +165,7 @@ test('la regla automática del perfil del vendedor se pone sola en las órdenes 
   const elegida = await s.duena.post('/jobs', { title: 'Elegida', salesperson_id: bryan.id, commission_rule_id: id('Sin comisión'), items: [] });
   assert.equal(elegida.commission_rule_id, id('Sin comisión'), 'si se elige otra a mano, se respeta');
 
-  // La dueña puede cambiar la regla automática; no puede poner la regla de otro vendedor
+  // El dueño puede cambiar la regla automática; no puede poner la regla de otro vendedor
   assert.equal((await s.duena.put(`/vendedores/${isabel.id}`, { default_rule_id: id('Isabel · Cliente nuevo') })).default_rule_id, id('Isabel · Cliente nuevo'));
   assert.equal((await s.duena.call('PUT', `/vendedores/${isabel.id}`, { default_rule_id: id('Bryan · Utilidad 40%') })).status, 400);
   const ventas = await s.userWithRole('ventas');

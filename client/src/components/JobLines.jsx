@@ -73,7 +73,8 @@ function CodigoPrenda({ idx, item, products, editable, onImport, onPick }) {
   );
 }
 
-export function LineEditor({ idx, item, calc, products, editable, onChange, onRemove, onDuplicate, onImportSanmar, tamanosDtf = [] }) {
+export function LineEditor({ idx, item, calc, products, editable, onChange, onRemove, onDuplicate, onImportSanmar, tamanosDtf = [], produccion = false }) {
+  // produccion = vista de Logística: tallas y decoraciones, sin precios, costos ni márgenes
   const product = products.find((p) => p.id === Number(item.product_id));
   const tipo = item.line_type || 'prenda';
   const set = (patch) => onChange(patch);
@@ -108,7 +109,7 @@ export function LineEditor({ idx, item, calc, products, editable, onChange, onRe
           <label className="field mini-field"><span>Precio unitario</span><input type="number" step="0.01" disabled={!editable} value={blank(item.unit_price)} onChange={(e) => set({ unit_price: e.target.value })} placeholder="—" /></label>
           <label className="field mini-field"><span>Costo unitario</span><input type="number" step="0.01" disabled={!editable} value={blank(item.unit_cost)} onChange={(e) => set({ unit_cost: e.target.value })} placeholder="desconocido" /></label>
         </div>
-        <LineFoot calc={calc} />
+        {!produccion && <LineFoot calc={calc} />}
       </section>
     );
   }
@@ -152,14 +153,14 @@ export function LineEditor({ idx, item, calc, products, editable, onChange, onRe
                   if (s) { const n = { ...item.sizes, [s]: v }; if (!v) delete n[s]; set({ sizes: n }); }
                   else set({ qty: v, sizes: {} });
                 }} />
-              {t && <small className="size-price" title={`Costo ${t.costo == null ? 'desconocido' : money(t.costo)}`}>{t.precio == null ? '—' : money(t.precio)}</small>}
+              {t && !produccion && <small className="size-price" title={`Costo ${t.costo == null ? 'desconocido' : money(t.costo)}`}>{t.precio == null ? '—' : money(t.precio)}</small>}
             </label>
           );
         })}
         <div className="size total-pcs"><span>Total</span><strong>{calc?.qty || 0}</strong></div>
       </div>
 
-      <div className="row gap wrap price-row">
+      {!produccion && <div className="row gap wrap price-row">
         <label className="field mini-field"><span>Costo prenda</span>
           <input type="number" step="0.01" disabled={!editable} value={blank(item.unit_cost)} onChange={(e) => set({ unit_cost: e.target.value })} placeholder="desconocido" title="Costo del proveedor por pieza. Vacío = desconocido (nunca se toma como $0)." />
         </label>
@@ -178,7 +179,7 @@ export function LineEditor({ idx, item, calc, products, editable, onChange, onRe
           {ajustePct > 0 && <span className="badge tone-blue" title="Ajuste a la meta de margen: sube por igual la prenda y sus decoraciones"> 🎯 +{ajustePct}% ajuste a meta</span>}
           {item.override && <span className="badge tone-violet">excepción del producto</span>}
         </div>
-      </div>
+      </div>}
 
       <div className="decos">
         <div className="muted small">Decoración (sin markup de prendas)</div>
@@ -196,9 +197,10 @@ export function LineEditor({ idx, item, calc, products, editable, onChange, onRe
               </>}
               {d.process === 'bordado' && <label className="inline">Puntadas <input type="number" step="500" min="0" className="mini" disabled={!editable} value={blank(d.stitches)} onChange={(e) => setDeco(i, { stitches: e.target.value })} placeholder="opc." /></label>}
               {d.process === 'heat_transfer' && <label className="inline">Hojas/pz <input type="number" step="0.25" min="0" className="mini" disabled={!editable} value={blank(d.sheets ?? 1)} onChange={(e) => setDeco(i, { sheets: e.target.value })} /></label>}
-              <label className="inline" title="Precio por pieza a mano (queda marcado como manual)">$ man. <input type="number" step="0.01" className="mini" disabled={!editable} value={blank(d.manual_price)} onChange={(e) => setDeco(i, { manual_price: e.target.value })} placeholder="auto" /></label>
+              {!produccion && <label className="inline" title="Precio por pieza a mano (queda marcado como manual)">$ man. <input type="number" step="0.01" className="mini" disabled={!editable} value={blank(d.manual_price)} onChange={(e) => setDeco(i, { manual_price: e.target.value })} placeholder="auto" /></label>}
               <span className="small deco-calc">
-                {dc && <>{pend(dc.precioPieza)}/pz · costo {pend(dc.costoPieza)}{dc.manual && <span className="badge tone-amber">manual</span>}{dc.detalle && <div className="muted">{dc.detalle}</div>}</>}
+                {dc && produccion && dc.detalle && <div className="muted">{String(dc.detalle).replace(/ · \d+ hoja.*$/, '').replace(/ · (1ª ubicación|ubicación adicional)/, '')}</div>}
+                {dc && !produccion && <>{pend(dc.precioPieza)}/pz · costo {pend(dc.costoPieza)}{dc.manual && <span className="badge tone-amber">manual</span>}{dc.detalle && <div className="muted">{dc.detalle}</div>}</>}
               </span>
               {editable && <button className="icon-btn" onClick={() => set({ decorations: item.decorations.filter((_, j) => j !== i) })}>×</button>}
             </div>
@@ -216,7 +218,7 @@ export function LineEditor({ idx, item, calc, products, editable, onChange, onRe
           </div>
         )}
       </div>
-      <LineFoot calc={calc} />
+      {!produccion && <LineFoot calc={calc} />}
     </section>
   );
 }

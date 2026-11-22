@@ -104,7 +104,7 @@ export default function Catalog() {
               </div>
             </>}
             <fieldset className="owner-box" disabled={!esDuena}>
-              <legend>Matriz (solo la dueña{esDuena ? '' : ' · solo lectura'})</legend>
+              <legend>Matriz (solo el dueño{esDuena ? '' : ' · solo lectura'})</legend>
               {edit.kind !== 'servicio' && (
                 <div className="row gap wrap">
                   <label className="field"><span>Excepción de precio</span>

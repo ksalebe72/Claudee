@@ -41,11 +41,11 @@ npm install
 npm run demo
 ```
 
-Abre **http://localhost:3001**. La primera vez pide crear la cuenta de la dueña. El modo de prueba usa una base aparte (`data/demo.db`) con datos de ejemplo y **simuladores** de SanMar y de la IA (respuestas fijas), así que se puede probar todo sin claves. `npm run demo -- --reset` empieza de cero.
+Abre **http://localhost:3001**. La primera vez pide crear la cuenta del dueño. El modo de prueba usa una base aparte (`data/demo.db`) con datos de ejemplo y **simuladores** de SanMar y de la IA (respuestas fijas), así que se puede probar todo sin claves. `npm run demo -- --reset` empieza de cero.
 
 ## Publicarla en internet (Render)
 
-El repositorio ya trae `render.yaml`: en Render, **New → Blueprint**, eliges este repositorio y la rama, y Render crea el servicio con un disco persistente para la base, los archivos y los respaldos. La cuenta de la dueña solo se crea con el código de instalación (`SETUP_CODE`), que Render genera. Los respaldos se hacen cada día y se descargan desde **Ajustes → General → Respaldos**.
+El repositorio ya trae `render.yaml`: en Render, **New → Blueprint**, eliges este repositorio y la rama, y Render crea el servicio con un disco persistente para la base, los archivos y los respaldos. La cuenta del dueño solo se crea con el código de instalación (`SETUP_CODE`), que Render genera. Los respaldos se hacen cada día y se descargan desde **Ajustes → General → Respaldos**.
 
 Paso a paso completo: **[DESPLEGAR-EN-RENDER.md](DESPLEGAR-EN-RENDER.md)**.
 
@@ -77,14 +77,18 @@ Variables de entorno opcionales:
 
 ## Usuarios y roles
 
-La primera vez que se abre la app, pide crear la **cuenta de la dueña**. No hay contraseñas por defecto. Después, la dueña crea los demás usuarios en **Ajustes → Usuarios**.
+La primera vez que se abre la app, pide crear la **cuenta del dueño**. No hay contraseñas por defecto. Después, el dueño crea los demás usuarios en **Ajustes → Usuarios**.
 
 | Rol | Puede |
 |---|---|
-| Dueña | Todo. Es la única que cambia la matriz y las comisiones, autoriza excepciones por contribución negativa y aprueba liquidaciones. |
-| Finanzas | Registrar costos reales y créditos, confirmar costos, revisar liquidaciones y marcarlas como pagadas. |
+| Dueño | Todo. Es el único que cambia la matriz, las comisiones y los usuarios, autoriza excepciones por contribución negativa y aprueba liquidaciones. |
+| Finanzas (CFO) | Registrar costos reales y créditos, confirmar costos, revisar liquidaciones y marcarlas como pagadas, ver reportes. |
 | Gerencia | Aprobar órdenes con contribución bajo el mínimo y ver reportes y liquidaciones. |
-| Ventas | Cotizar y gestionar clientes y órdenes. No ve liquidaciones ni reportes; Ajustes solo en lectura. |
+| Coordinación de ventas | Vende, ve todos los clientes y órdenes, asigna clientes a cada vendedor y manda a producción. |
+| Ventas | Solo **sus** clientes (los que creó o le asignaron) y las órdenes de esos clientes o a su nombre. Cotiza siempre a su nombre y con su regla de comisión automática. |
+| Logística | Órdenes, producción, tareas y datos de entrega del cliente. No ve costos, márgenes ni comisiones; no cotiza ni cambia precios. |
+
+Los permisos se revisan en el servidor: si un vendedor intenta abrir un cliente u orden ajena, la app responde «no encontrado». Cada cliente tiene un **vendedor** (Contactos → editar); los clientes que ya existían quedan asignados al vendedor de sus órdenes.
 
 Las sesiones usan una cookie HttpOnly y las contraseñas se guardan con hash scrypt. El portal del cliente sigue siendo público por enlace y nunca muestra costos.
 
@@ -92,7 +96,7 @@ Las sesiones usan una cookie HttpOnly y las contraseñas se guardan con hash scr
 
 ### Matriz de precios y costos (Ajustes → Tarifas)
 
-Todo es editable solo por la dueña. Cada guardado crea una **versión nueva** y registra cada valor cambiado en el **historial**: quién, cuándo, valor anterior y valor nuevo. Una cotización guarda la versión con que se calculó, así que un cambio de tabla no la modifica. Si se quiere, se puede **recalcular con las tarifas vigentes** desde la propia cotización.
+Todo es editable solo por el dueño. Cada guardado crea una **versión nueva** y registra cada valor cambiado en el **historial**: quién, cuándo, valor anterior y valor nuevo. Una cotización guarda la versión con que se calculó, así que un cambio de tabla no la modifica. Si se quiere, se puede **recalcular con las tarifas vigentes** desde la propia cotización.
 
 | Concepto | Valores iniciales |
 |---|---|
@@ -120,7 +124,7 @@ Todo es editable solo por la dueña. Cada guardado crea una **versión nueva** y
 - Verde: ≥ objetivo.
 - Amarillo: entre el mínimo y el objetivo.
 - Rojo: bajo el mínimo. Gerencia debe aprobarla antes de marcarla como enviada o convertirla en orden.
-- Contribución negativa: requiere una excepción de la dueña, con motivo.
+- Contribución negativa: requiere una excepción del dueño, con motivo.
 
 **Costos reales.** Finanzas registra las facturas de proveedor (SanMar, S&S, Halftone, envío…) por categoría. El costo real reemplaza al cotizado y la orden muestra la diferencia. Luego Finanzas **confirma los costos**.
 
@@ -144,8 +148,8 @@ Todo es editable solo por la dueña. Cada guardado crea una **versión nueva** y
 
 1. Elige el mes. Entran las órdenes **cobradas al 100%** y con **costos confirmados**, en el mes en que se completó el cobro. Abajo se listan las que aún no entran y por qué (falta cobro o falta costo).
 2. **Finanzas** pulsa "Marcar revisada". La liquidación queda congelada.
-3. **La dueña** pulsa "Aprobar".
-4. Se paga **fuera del sistema** (cheque, transferencia, nómina). Luego Finanzas o la dueña la marcan como **pagada**, con fecha y referencia.
+3. **El dueño** pulsa "Aprobar".
+4. Se paga **fuera del sistema** (cheque, transferencia, nómina). Luego Finanzas o el dueño la marcan como **pagada**, con fecha y referencia.
 5. Si después hay una devolución, un crédito o un costo tardío, se crea un **ajuste** (negativo o positivo) en la siguiente liquidación abierta del vendedor. Una liquidación revisada, aprobada o pagada nunca se edita.
 6. Cada liquidación se exporta a **PDF** y a **Excel**.
 
@@ -245,7 +249,7 @@ Tres funciones, todas de **solo lectura o borrador**: la IA no guarda, no envía
 | Función | Dónde | Qué hace |
 |---|---|---|
 | Cotizar desde un mensaje | Cotizaciones → ✨ Cotizar desde mensaje | Pegas el email, SMS o WhatsApp del cliente y arma un borrador: cliente (reconoce contactos existentes), prendas del catálogo, tallas, decoraciones, ubicaciones, fecha y lo que falta preguntar. **Los precios los calcula la matriz, nunca la IA.** Revisas y pulsas «Crear borrador». |
-| Asistente del negocio | Menú → ✨ Asistente IA (dueña, Finanzas, Gerencia) | Responde preguntas sobre órdenes, márgenes, cobros, comisiones y tareas con los datos de los últimos ~13 meses. No puede cambiar nada. |
+| Asistente del negocio | Menú → ✨ Asistente IA (dueño, Finanzas, Gerencia) | Responde preguntas sobre órdenes, márgenes, cobros, comisiones y tareas con los datos de los últimos ~13 meses. No puede cambiar nada. |
 | Redactar mensajes | En cada cotización u orden → ✨ Redactar mensaje | Borradores (enviar cotización, seguimiento, aprobar arte, orden lista, recordatorio de pago o libre) en español o inglés, con el tono de Color Plus. Se copian o se guardan como nota; **no se envían**. La IA nunca recibe costos ni márgenes. |
 
 ### Activarla
@@ -259,7 +263,7 @@ Tres funciones, todas de **solo lectura o borrador**: la IA no guarda, no envía
 
 Opcional: `IA_MODEL` (por defecto `claude-opus-5-5`). Si el modelo rechaza una petición por sus filtros de seguridad, la API la reintenta automáticamente con otro modelo (respaldo del servidor).
 
-**Privacidad y costo:** el texto que pegas y los datos que usa el asistente se envían a la API de Anthropic para procesarlos. Hay un límite de 40 consultas por hora por usuario y la dueña ve el uso del mes en Ajustes; el gasto detallado está en console.anthropic.com. El contenido de los mensajes nunca se escribe en los logs.
+**Privacidad y costo:** el texto que pegas y los datos que usa el asistente se envían a la API de Anthropic para procesarlos. Hay un límite de 40 consultas por hora por usuario y el dueño ve el uso del mes en Ajustes; el gasto detallado está en console.anthropic.com. El contenido de los mensajes nunca se escribe en los logs.
 
 ## SMS y email reales
 

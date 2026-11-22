@@ -100,7 +100,8 @@ export default function JobEditor() {
   if (!job || !products || !methodsList || !reglas || !vendedores || !cfg) return <div className="loading">Cargando…</div>;
 
   const isOrder = job.kind === 'order';
-  const editable = !id || job.kind === 'quote' || ['arte', 'aprobacion'].includes(job.status);
+  const logistica = user.role === 'logistica'; // ve la orden y mueve producción; sin precios de costo ni márgenes
+  const editable = !logistica && (!id || job.kind === 'quote' || ['arte', 'aprobacion'].includes(job.status));
   const fin = dirty || !job.finanzas ? { ...finPreview, aprobacion: { requerida: finPreview.aprobacionRequerida, otorgada: job.margin_approval, ok: !finPreview.aprobacionRequerida || (job.margin_approval && ({ gerencia: 1, duena: 2 })[job.margin_approval.nivel] >= ({ gerencia: 1, duena: 2 })[finPreview.aprobacionRequerida]) } } : job.finanzas;
   const portalUrl = job.token ? `${location.origin}/portal/${job.token}` : null;
   const tarifaVieja = id && job.kind === 'quote' && tarifas && job.pricing_version_id && job.pricing_version_id !== tarifas.id;
@@ -185,12 +186,12 @@ export default function JobEditor() {
   return (
     <div className="job-editor">
       <PageHeader title={id ? `${docNumber} · ${job.title}` : 'Nueva cotización'} subtitle={id && <>{isOrder ? `De la cotización ${job.number}` : 'Cotización'} · <Badge status={job.status} /> · tarifas v{job.pricing_version_id}</>}>
-        <button className="btn primary" onClick={() => abrirDecorador()}>🎨 Proof</button>
-        {id && meta.integrations?.ia && <button className="btn ia-btn" onClick={() => setRedactar(true)}>✨ Redactar mensaje</button>}
+        {!logistica && <button className="btn primary" onClick={() => abrirDecorador()}>🎨 Proof</button>}
+        {id && !logistica && meta.integrations?.ia && <button className="btn ia-btn" onClick={() => setRedactar(true)}>✨ Redactar mensaje</button>}
         {id && <button className="btn" onClick={() => window.print()}>Imprimir</button>}
-        {id && <button className="btn" onClick={duplicate}>Duplicar</button>}
-        {id && <button className="btn danger-ghost" onClick={remove}>Eliminar</button>}
-        <button className="btn primary" onClick={save} disabled={!dirty && !!id}>{dirty || !id ? 'Guardar' : 'Guardado ✓'}</button>
+        {id && !logistica && <button className="btn" onClick={duplicate}>Duplicar</button>}
+        {id && !logistica && <button className="btn danger-ghost" onClick={remove}>Eliminar</button>}
+        {!logistica && <button className="btn primary" onClick={save} disabled={!dirty && !!id}>{dirty || !id ? 'Guardar' : 'Guardado ✓'}</button>}
       </PageHeader>
 
       {tarifaVieja && (
@@ -253,7 +254,7 @@ export default function JobEditor() {
               </Field>
               {isOrder ? (
                 <Field label="Fecha de factura">
-                  <input type="date" value={job.invoice_date || ''} disabled={!finanzasRol} onChange={(e) => setInvoiceDate(e.target.value)} title="Solo Finanzas o la dueña" />
+                  <input type="date" value={job.invoice_date || ''} disabled={!finanzasRol} onChange={(e) => setInvoiceDate(e.target.value)} title="Solo Finanzas o el dueño" />
                 </Field>
               ) : <Field label="Responsable"><input value={job.assignee || ''} onChange={(e) => set({ assignee: e.target.value })} placeholder="Quién lo lleva" /></Field>}
             </div>
@@ -261,7 +262,7 @@ export default function JobEditor() {
 
           {job.items.map((it, idx) => (
             <LineEditor key={idx} idx={idx} item={it} calc={calcs[idx]} products={products} editable={editable}
-              onImportSanmar={meta.integrations?.sanmar ? importarSanmar : null} tamanosDtf={cfg.dtf.tamanos || []}
+              onImportSanmar={meta.integrations?.sanmar ? importarSanmar : null} tamanosDtf={cfg.dtf.tamanos || []} produccion={logistica}
               onChange={(p) => setItem(idx, p)}
               onRemove={() => set({ items: job.items.filter((_, i) => i !== idx) })}
               onDuplicate={() => set({ items: [...job.items.slice(0, idx + 1), structuredClone(it), ...job.items.slice(idx + 1)] })} />
@@ -277,24 +278,24 @@ export default function JobEditor() {
             </div>
           )}
 
-          <EnvioCostosCard job={job} set={set} editable={editable || finanzasRol} />
-          <VendedorCard job={job} set={set} vendedores={vendedores} reglas={reglas} editable={editable || finanzasRol} />
+          {!logistica && <EnvioCostosCard job={job} set={set} editable={editable || finanzasRol} />}
+          {!logistica && <VendedorCard job={job} set={set} vendedores={vendedores} reglas={reglas} editable={(editable || finanzasRol) && user.role !== 'ventas'} />}
 
           <section className="card">
-            <Field label="Notas (visibles para el cliente y producción)"><textarea rows={3} value={job.notes || ''} onChange={(e) => set({ notes: e.target.value })} /></Field>
+            <Field label="Notas (visibles para el cliente y producción)"><textarea rows={3} disabled={logistica} value={job.notes || ''} onChange={(e) => set({ notes: e.target.value })} /></Field>
           </section>
         </div>
 
         <div className="stack sticky">
-          {id && <Proofs job={job} setJob={setJob} notify={notify} onDesign={abrirDecorador} />}
+          {id && !logistica && <Proofs job={job} setJob={setJob} notify={notify} onDesign={abrirDecorador} />}
           {editable && (
             <div className="row gap ajuste-meta">
               <button className="btn" onClick={ajustarAMeta} title="Sube los precios automáticos lo justo para llegar a la meta, ya contando la comisión del vendedor">🎯 Ajustar a {Math.round(cfg.margen.objetivo * 100)}%</button>
               {job.items.some((it) => Number(it.ajuste_pct) > 0) && <button className="link-btn" onClick={quitarAjuste}>Quitar ajuste</button>}
             </div>
           )}
-          <RentabilidadCard fin={fin} preview={dirty} margen={cfg.margen} user={user} jobId={job.id} notify={notify} onUpdated={reload} />
-          {id && isOrder && (
+          {!logistica && <RentabilidadCard fin={fin} preview={dirty} margen={cfg.margen} user={user} jobId={job.id} notify={notify} onUpdated={reload} />}
+          {id && isOrder && !logistica && (
             <section className="card">
               <h3>Cobro</h3>
               <div className="row between"><span>Pagado</span><span className="ok">{money(job.finanzas?.cobro?.pagado)}</span></div>
@@ -302,9 +303,9 @@ export default function JobEditor() {
               <div className="muted small">{job.finanzas?.cobro?.completo ? `Cobrada al 100% el ${fmtDate(job.finanzas.cobro.fechaCobroCompleto)}` : 'Aún no está cobrada al 100%'}</div>
             </section>
           )}
-          {id && <Payments job={job} setJob={setJob} notify={notify} deposit={meta.settings.deposit_pct} canDelete={finanzasRol} />}
-          {id && isOrder && <CostosRealesCard job={job} user={user} onUpdated={reload} notify={notify} />}
-          {id && isOrder && <CreditosCard job={job} user={user} onUpdated={reload} notify={notify} />}
+          {id && !logistica && <Payments job={job} setJob={setJob} notify={notify} deposit={meta.settings.deposit_pct} canDelete={finanzasRol} />}
+          {id && isOrder && !logistica && <CostosRealesCard job={job} user={user} onUpdated={reload} notify={notify} />}
+          {id && isOrder && !logistica && <CreditosCard job={job} user={user} onUpdated={reload} notify={notify} />}
           {id && job.contact && (
             <section className="card">
               <h3>Cliente</h3>

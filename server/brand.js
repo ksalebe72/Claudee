@@ -1,5 +1,5 @@
 // Identidad visual de Color Plus: logo, ícono y colores.
-// Por defecto usa la marca de Color Plus (client/public/brand); la dueña puede reemplazarla en Ajustes.
+// Por defecto usa la marca de Color Plus (client/public/brand); el dueño puede reemplazarla en Ajustes.
 import { writeFileSync, unlinkSync, existsSync } from 'node:fs';
 import { resolve, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';

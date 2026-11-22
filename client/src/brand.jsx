@@ -1,4 +1,4 @@
-// Aplica la marca (colores y logo) cargada por la dueña en Ajustes → General.
+// Aplica la marca (colores y logo) cargada por el dueño en Ajustes → General.
 const hexToRgb = (h) => [1, 3, 5].map((i) => parseInt(h.slice(i, i + 2), 16));
 const luminance = ([r, g, b]) => 0.299 * r + 0.587 * g + 0.114 * b;
 const mix = (rgb, to, t) => rgb.map((c, i) => Math.round(c + (to[i] - c) * t));

@@ -11,7 +11,7 @@ before(async () => {
   mock = await startAnthropicMock(MOCK);
   s = await startServer({ env: { SEED_DEMO: '0', ANTHROPIC_API_KEY: 'sk-ant-prueba-NO-REAL', ANTHROPIC_BASE_URL: `http://localhost:${MOCK}` } });
   sinClave = await startServer({ env: { SEED_DEMO: '0', ANTHROPIC_API_KEY: '' } });
-  ventas = await s.userWithRole('ventas');
+  ventas = await s.userWithRole('coordinacion'); // ve todas las órdenes, pero el borrador no lleva costos
   producto = await s.duena.post('/products', { sku: 'PC61', name: 'Port & Company Essential Tee', brand: 'Port & Company', category: 'Camisetas', supplier: 'SanMar', base_cost: 3.37, sizes: ['S', 'M', 'L', 'XL', '2XL'], colors: ['Jet Black'] });
   const c = await s.duena.post('/contacts', { name: 'Ana Torres', company: 'Gym FitZone', email: 'ana@fitzone.com' });
   const q = await s.duena.post('/jobs', { contact_id: c.id, title: 'Camisetas staff', items: [{ product_id: producto.id, sizes: { M: 10 }, decorations: [{ process: 'dtf', location: 'Frente', width: 4, height: 4 }] }] });
@@ -82,7 +82,7 @@ test('errores claros: rechazo del modelo y clave inválida', async () => {
   assert.ok(!s.salida().includes('sk-ant-prueba-NO-REAL'), 'la clave nunca aparece en los logs');
 });
 
-test('la dueña ve el uso del mes', async () => {
+test('el dueño ve el uso del mes', async () => {
   const e = await s.duena.get('/ia/estado');
   assert.equal(e.configurada, true);
   assert.ok(e.usoDelMes.find((u) => u.feature === 'cotizar').consultas >= 1);

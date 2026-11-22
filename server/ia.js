@@ -5,6 +5,7 @@
 //   3. redactarMensaje: escribe un borrador para el cliente (no se envía; nunca incluye costos).
 // La clave va en ANTHROPIC_API_KEY (variable de entorno). Nunca se registra el contenido de los mensajes.
 import Anthropic from '@anthropic-ai/sdk';
+import { filtroContactos } from './scope.js';
 import { z } from 'zod';
 import { betaZodOutputFormat } from '@anthropic-ai/sdk/helpers/beta/zod';
 import { all, get, insert, run, getSetting } from './db.js';
@@ -127,7 +128,7 @@ export async function cotizarDesdeMensaje(texto, user) {
     revisarRespuesta(r);
     const out = r.parsed_output;
     if (!out) throw fail(422, 'La IA no devolvió un borrador válido. Intenta de nuevo.');
-    return validarBorrador(out);
+    return validarBorrador(out, user);
   } catch (e) { throw errorIA(e); }
 }
 
@@ -138,7 +139,7 @@ const ALIAS_TALLA = {
 };
 export const normalizarTalla = (t) => { const k = String(t || '').trim().toUpperCase(); return TALLAS.includes(k) ? k : ALIAS_TALLA[k] || null; };
 /** Revisa lo que propuso la IA contra la base de datos y sugiere el cliente existente. */
-function validarBorrador(out) {
+function validarBorrador(out, user = null) {
   const ids = new Set(all('SELECT id FROM products').map((p) => p.id));
   const lineas = out.lineas.map((l) => ({
     ...l,
@@ -152,20 +153,23 @@ function validarBorrador(out) {
     decoraciones: l.decoraciones.map((d) => ({ ...d, ancho: d.ancho > 0 ? d.ancho : null, alto: d.alto > 0 ? d.alto : null })),
   }));
   const c = out.cliente;
+  // Un vendedor solo puede «encontrar» a sus propios clientes
+  const f = filtroContactos(user, 'contacts');
+  const buscar = (cond, ...p) => get(`SELECT id, name, company FROM contacts WHERE ${cond} AND ${f.sql}`, ...p, ...f.params);
   let existente = null;
-  if (c.email) existente = get('SELECT id, name, company FROM contacts WHERE lower(email) = lower(?)', c.email);
+  if (c.email) existente = buscar('lower(email) = lower(?)', c.email);
   if (!existente && c.telefono) {
     const digitos = c.telefono.replace(/\D/g, '').slice(-10);
-    if (digitos.length >= 7) existente = all('SELECT id, name, company, phone FROM contacts').find((x) => (x.phone || '').replace(/\D/g, '').endsWith(digitos)) || null;
+    if (digitos.length >= 7) existente = all(`SELECT id, name, company, phone FROM contacts WHERE ${f.sql}`, ...f.params).find((x) => (x.phone || '').replace(/\D/g, '').endsWith(digitos)) || null;
   }
-  if (!existente && c.empresa) existente = get('SELECT id, name, company FROM contacts WHERE lower(company) = lower(?)', c.empresa);
-  if (!existente && c.nombre) existente = get('SELECT id, name, company FROM contacts WHERE lower(name) = lower(?)', c.nombre);
+  if (!existente && c.empresa) existente = buscar('lower(company) = lower(?)', c.empresa);
+  if (!existente && c.nombre) existente = buscar('lower(name) = lower(?)', c.nombre);
   const fecha = /^\d{4}-\d{2}-\d{2}$/.test(out.fechaEntrega || '') ? out.fechaEntrega : null;
   return { ...out, fechaEntrega: fecha, lineas, clienteExistente: existente ? { id: existente.id, name: existente.name, company: existente.company } : null };
 }
 
 // ============ 2. Preguntarle al negocio ============
-const SISTEMA_NEGOCIO = `Eres el analista interno de Color Plus LLC. Respondes preguntas de la dueña, Finanzas y Gerencia sobre los datos del negocio que se te entregan en <datos>.
+const SISTEMA_NEGOCIO = `Eres el analista interno de Color Plus LLC. Respondes preguntas del dueño, Finanzas y Gerencia sobre los datos del negocio que se te entregan en <datos>.
 Reglas:
 - Responde solo con base en <datos>. Si algo no está en los datos, dilo claramente; no inventes cifras.
 - Montos en USD con dos decimales. Cita los números de orden (OT-xxxx) o cotización (COT-xxxx) cuando hables de casos concretos.

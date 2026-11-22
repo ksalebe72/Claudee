@@ -11,7 +11,7 @@ export const CATEGORIAS_COSTO = {
   servicios: 'Servicios / Diseño', otros: 'Setup y otros directos', envio: 'Envío',
 };
 
-// Valores iniciales de la matriz. Todo es editable desde Ajustes (dueña) y queda versionado.
+// Valores iniciales de la matriz. Todo es editable desde Ajustes (dueño) y queda versionado.
 export const DEFAULT_PRICING = {
   prendas: {
     modo: 'escalonado', // 'escalonado' | 'fijo'
@@ -20,7 +20,7 @@ export const DEFAULT_PRICING = {
   },
   bordado: {
     // puntadasHasta null = cualquier cantidad de puntadas; cantidadDesde = desde N piezas.
-    filas: [{ puntadasHasta: null, cantidadDesde: 1, costo: 4.5, precio: 7.5 }], // costo $4.50 · precio al cliente $7.50 (dueña)
+    filas: [{ puntadasHasta: null, cantidadDesde: 1, costo: 4.5, precio: 7.5 }], // costo $4.50 · precio al cliente $7.50 (dueño)
   },
   dtf: {
     // Costo del material: 'hoja' = hojas de 12×12 (se cuentan las hojas que necesita la línea completa) · 'area' = por pie² del diseño
@@ -31,7 +31,7 @@ export const DEFAULT_PRICING = {
     costoPieCuadrado: 4.0, // material por pie² (144 in²), solo en modo 'area'
     costoAplicacion: 1.6, // costo de aplicar el DTF
     aplicacionPor: 'prenda', // 'prenda' = una vez por prenda aunque lleve varias ubicaciones · 'ubicacion' = por cada ubicación
-    // Sin el salto a $25 (pedido de la dueña): tramo hasta 144 in² (cabe en la hoja 12×12) y tramo final para diseños más grandes
+    // Sin el salto a $25 (pedido del dueño): tramo hasta 144 in² (cabe en la hoja 12×12) y tramo final para diseños más grandes
     primera: [{ hasta: 15, precio: 6.0 }, { hasta: 95, precio: 10.5 }, { hasta: 105, precio: 11.5 }, { hasta: 144, precio: 13.0 }, { hasta: null, precio: 18.5 }],
     adicional: [{ hasta: 15, precio: 1.0 }, { hasta: 95, precio: 5.5 }, { hasta: 144, precio: 8.5 }, { hasta: null, precio: 13.5 }],
     minimo: null, // piezas mínimas; null = sin mínimo

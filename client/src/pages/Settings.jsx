@@ -13,7 +13,7 @@ export default function Settings() {
   const [toast, notify] = useToast();
   return (
     <>
-      <PageHeader title="Ajustes" subtitle={esDuena ? 'Matriz de precios y costos, comisiones y usuarios. Cada cambio queda en el historial.' : 'Solo la dueña puede modificar estos valores. Aquí los ves en modo lectura.'} />
+      <PageHeader title="Ajustes" subtitle={esDuena ? 'Matriz de precios y costos, comisiones y usuarios. Cada cambio queda en el historial.' : 'Solo el dueño puede modificar estos valores. Aquí los ves en modo lectura.'} />
       <div className="tabs big">
         {Object.entries(TABS).filter(([k]) => esDuena || ['tarifas', 'comisiones'].includes(k)).map(([k, v]) => (
           <button key={k} className={tab === k ? 'active' : ''} onClick={() => setTab(k)}>{v}</button>
@@ -176,7 +176,7 @@ function Tarifas({ editable, notify }) {
           <label className="inline">Contribución mínima % <NumIn disabled={dis} pct value={c.margen.minimo} onChange={(v) => upd((n) => { n.margen.minimo = v ?? 0; })} /></label>
           <label className="inline">Día de pago de comisiones <NumIn disabled={dis} step="1" value={c.liquidacion.diaPago} onChange={(v) => upd((n) => { n.liquidacion.diaPago = v; })} /></label>
         </div>
-        <p className="muted small">Impuesto sobre productos + envío cobrado; clientes exentos = 0%. Verde ≥ objetivo · amarillo entre mínimo y objetivo · rojo bajo el mínimo (aprueba gerencia) · contribución negativa: excepción de la dueña.</p>
+        <p className="muted small">Impuesto sobre productos + envío cobrado; clientes exentos = 0%. Verde ≥ objetivo · amarillo entre mínimo y objetivo · rojo bajo el mínimo (aprueba gerencia) · contribución negativa: excepción del dueño.</p>
       </section>
 
       {editable && changed && (
@@ -305,7 +305,7 @@ function Usuarios({ notify }) {
         <select value={f.salesperson_id} onChange={(e) => setF({ ...f, salesperson_id: e.target.value })}><option value="">Sin vendedor</option>{vend.map((v) => <option key={v.id} value={v.id}>{v.name}</option>)}</select>
         <button className="btn primary">Crear</button>
       </form>
-      <p className="muted small">Dueña: ajustes, excepciones y aprobación de liquidaciones · Finanzas: costos reales, confirmar costos, revisar y marcar pagadas · Gerencia: aprobar márgenes bajos y ver reportes · Ventas: cotizar.</p>
+      <p className="muted small"><strong>Dueño:</strong> todo · <strong>Finanzas (CFO):</strong> costos reales, confirmar costos, revisar y marcar liquidaciones pagadas, reportes · <strong>Gerencia:</strong> aprobar márgenes bajos, ver reportes y liquidaciones · <strong>Coordinación de ventas:</strong> vende, ve todos los clientes y órdenes, asigna clientes a los vendedores y manda a producción · <strong>Ventas:</strong> solo sus propios clientes y órdenes · <strong>Logística:</strong> órdenes y producción, sin costos ni márgenes.</p>
     </section>
   );
 }

@@ -5,7 +5,7 @@ import ExcelJS from 'exceljs';
 const money = (n) => (n == null ? '—' : (n < 0 ? '-$' : '$') + Math.abs(n).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }));
 const pctTxt = (t) => (t == null ? '—' : `${Math.round(t * 10000) / 100}%`);
 const BASES = { venta_neta: 'Venta neta', ganancia_producto: 'Ganancia de producto', ganancia_total: 'Ganancia producto + envío' };
-const ESTADOS = { borrador: 'Borrador', revisada: 'Revisada por Finanzas', aprobada: 'Aprobada por la dueña', pagada: 'Pagada' };
+const ESTADOS = { borrador: 'Borrador', revisada: 'Revisada por Finanzas', aprobada: 'Aprobada por el dueño', pagada: 'Pagada' };
 
 const COLUMNAS = [
   ['Tipo', (e) => (e.tipo === 'ajuste' ? 'Ajuste' : 'Orden')],

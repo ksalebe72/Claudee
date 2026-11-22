@@ -23,11 +23,12 @@ export default function Dashboard() {
       </PageHeader>
 
       <div className="kpis">
-        <Kpi label="Pipeline abierto" value={money(pipeValue)} sub={`${openPipeline.reduce((a, p) => a + p.count, 0)} oportunidades`} to="/pipeline" />
-        <Kpi label="Cotizaciones abiertas" value={money(d.openQuotes.value)} sub={`${d.openQuotes.count} sin cerrar`} to="/cotizaciones" />
+        {/* Logística no ve montos: el servidor no los envía */}
+        {d.openQuotes && <Kpi label="Pipeline abierto" value={money(pipeValue)} sub={`${openPipeline.reduce((a, p) => a + p.count, 0)} oportunidades`} to="/pipeline" />}
+        {d.openQuotes && <Kpi label="Cotizaciones abiertas" value={money(d.openQuotes.value)} sub={`${d.openQuotes.count} sin cerrar`} to="/cotizaciones" />}
         <Kpi label="Órdenes activas" value={activeOrders} sub={`${d.overdue.length} atrasadas · ${d.pendingProofs} pruebas pendientes`} to="/produccion" warn={d.overdue.length > 0} />
-        <Kpi label="Cobrado este mes" value={money(d.revenue)} sub={`Vendido: ${money(d.booked)}`} to="/cobranza" />
-        <Kpi label="Por cobrar" value={money(d.ar)} sub="Saldo de órdenes" to="/cobranza" />
+        {d.revenue != null && <Kpi label="Cobrado este mes" value={money(d.revenue)} sub={`Vendido: ${money(d.booked)}`} to="/cobranza" />}
+        {d.ar != null && <Kpi label="Por cobrar" value={money(d.ar)} sub="Saldo de órdenes" to="/cobranza" />}
       </div>
 
       <div className="grid-2">

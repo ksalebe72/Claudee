@@ -8,7 +8,7 @@ const ESTADO = {
   'sin movimientos': { tone: 'gray', label: 'Sin movimientos' },
   borrador: { tone: 'blue', label: 'Borrador · por revisar' },
   revisada: { tone: 'amber', label: 'Revisada por Finanzas · falta aprobación' },
-  aprobada: { tone: 'violet', label: 'Aprobada por la dueña · por pagar' },
+  aprobada: { tone: 'violet', label: 'Aprobada por el dueño · por pagar' },
   pagada: { tone: 'green', label: 'Pagada' },
 };
 const ESTADO_FILA = { 'pendiente de cobro': 'gray', 'pendiente de costo': 'amber', lista: 'blue', aprobada: 'violet', pagada: 'green' };
@@ -73,8 +73,8 @@ export default function Liquidaciones() {
                 {L.id && <a className="btn" href={`/api/liquidaciones/${periodo}/${v.vendedor.id}/exportar.xlsx`}>⬇ Excel</a>}
                 {L.status === 'borrador' && ['finanzas', 'duena'].includes(rol) && <button className="btn primary" onClick={() => accion('revisar')}>1 · Marcar revisada (Finanzas)</button>}
                 {L.status === 'revisada' && ['finanzas', 'duena'].includes(rol) && <button className="btn" onClick={() => accion('devolver')}>Devolver a borrador</button>}
-                {L.status === 'revisada' && rol === 'duena' && <button className="btn primary" onClick={() => accion('aprobar')}>2 · Aprobar (dueña)</button>}
-                {L.status === 'revisada' && rol !== 'duena' && <span className="muted small">Espera la aprobación de la dueña</span>}
+                {L.status === 'revisada' && rol === 'duena' && <button className="btn primary" onClick={() => accion('aprobar')}>2 · Aprobar (dueño)</button>}
+                {L.status === 'revisada' && rol !== 'duena' && <span className="muted small">Espera la aprobación del dueño</span>}
               </div>
             </div>
             {L.status === 'aprobada' && ['finanzas', 'duena'].includes(rol) && (

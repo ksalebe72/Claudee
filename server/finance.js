@@ -132,7 +132,7 @@ export function computeJob(jobOrId, { persist = true } = {}) {
 export function assertMarginApproved(jobId) {
   const { fin } = computeJob(jobId);
   if (fin.aprobacion.ok) return;
-  const quien = fin.aprobacion.requerida === 'duena' ? 'una excepción de la dueña (contribución negativa)' : 'aprobación de gerencia (contribución menor al mínimo)';
+  const quien = fin.aprobacion.requerida === 'duena' ? 'una excepción del dueño (contribución negativa)' : 'aprobación de gerencia (contribución menor al mínimo)';
   throw fail(409, `Esta cotización necesita ${quien} antes de continuar.`);
 }
 
@@ -140,8 +140,8 @@ export function approveMargin(jobId, user, nota) {
   const { fin } = computeJob(jobId);
   const req = fin.aprobacion.requerida;
   if (!req) throw fail(400, 'Esta orden no necesita aprobación de margen.');
-  if (req === 'duena' && user.role !== 'duena') throw fail(403, 'La contribución es negativa: solo la dueña puede autorizar una excepción.');
-  if (req === 'gerencia' && !['gerencia', 'duena'].includes(user.role)) throw fail(403, 'Solo gerencia o la dueña pueden aprobar márgenes bajos.');
+  if (req === 'duena' && user.role !== 'duena') throw fail(403, 'La contribución es negativa: solo el dueño puede autorizar una excepción.');
+  if (req === 'gerencia' && !['gerencia', 'duena'].includes(user.role)) throw fail(403, 'Solo gerencia o el dueño pueden aprobar márgenes bajos.');
   if (req === 'duena' && !nota) throw fail(400, 'Escribe el motivo de la excepción.');
   const aprob = { nivel: user.role === 'duena' ? 'duena' : 'gerencia', por: user.name, rol: user.role, fecha: new Date().toISOString(), nota: nota || null, contribucionPct: fin.contribucionPct, contribucion: fin.contribucion };
   run('UPDATE jobs SET margin_approval = ? WHERE id = ?', JSON.stringify(aprob), jobId);
@@ -271,7 +271,7 @@ export function changeLiquidationStatus(id, accion, user, datos = {}) {
     pagar: { de: 'aprobada', a: 'pagada', roles: ['finanzas', 'duena'] },
   }[accion];
   if (!paso) throw fail(400, 'Acción inválida');
-  if (!paso.roles.includes(rol)) throw fail(403, `Solo ${paso.roles.map((r) => (r === 'duena' ? 'la dueña' : r)).join(' o ')} puede ${accion} una liquidación.`);
+  if (!paso.roles.includes(rol)) throw fail(403, `Solo ${paso.roles.map((r) => (r === 'duena' ? 'el dueño' : r)).join(' o ')} puede ${accion} una liquidación.`);
   if (liq.status !== paso.de) throw fail(409, `La liquidación está «${liq.status}»; para ${accion} debe estar «${paso.de}».`);
   if (accion === 'revisar') syncLiquidation(liq.period, liq.salesperson_id); // revisa con datos al día
   const cambios = { status: paso.a };

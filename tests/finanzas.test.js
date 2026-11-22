@@ -68,7 +68,7 @@ test('Prendas: $4.00 → $8.80 (escalonado) y $8.00 (fijo); $10.00 → $20.00. B
   assert.equal(b2.finanzas.porProceso.bordado.venta, 150.0);
 });
 
-test('Ajustes: solo la dueña cambia tarifas y queda historial con antes y después', async () => {
+test('Ajustes: solo el dueño cambia tarifas y queda historial con antes y después', async () => {
   const t = await duena.get('/tarifas');
   const cfg = structuredClone(t.config);
   cfg.dtf.costoAplicacion = 1.75;
@@ -77,7 +77,7 @@ test('Ajustes: solo la dueña cambia tarifas y queda historial con antes y despu
   await duena.put('/tarifas', { config: cfg, nota: 'Sube aplicación DTF' });
   const hist = await duena.get('/auditoria?area=tarifas');
   const c = hist.find((h) => h.field === 'dtf.costoAplicacion');
-  assert.equal(c.user_name, 'Dueña');
+  assert.equal(c.user_name, 'Dueño');
   assert.equal(JSON.parse(c.old_value), 1.6);
   assert.equal(JSON.parse(c.new_value), 1.75);
   assert.equal((await ventas.call('GET', '/auditoria')).status, 403);
@@ -143,7 +143,7 @@ test('Orden con costo faltante: rentabilidad y comisión «incompletas», nunca 
   assert.equal(f2.gananciaProducto, 150 - 57);
 });
 
-test('Contribución negativa: pide excepción de la dueña; gerencia no puede darla', async () => {
+test('Contribución negativa: pide excepción del dueño; gerencia no puede darla', async () => {
   const p = await producto({ sku: 'CARA', name: 'Prenda cara', base_cost: 20 });
   const q = await duena.post('/jobs', { title: 'Pérdida', items: [{ product_id: p.id, qty: 10, price_mode: 'manual', manual_price: 10 }] });
   assert.equal(q.finanzas.semaforo, 'rojo');
@@ -161,7 +161,7 @@ test('Margen menor a 30%: lo aprueba gerencia', async () => {
   const p = await producto({ sku: 'BAJO', name: 'Margen bajo', base_cost: 10 });
   const q = await duena.post('/jobs', { title: 'Bajo', items: [{ product_id: p.id, qty: 10, price_mode: 'manual', manual_price: 13 }] });
   assert.equal(q.finanzas.aprobacion.requerida, 'gerencia');
-  assert.equal((await ventas.call('POST', `/jobs/${q.id}/aprobar-margen`, {})).status, 403);
+  assert.ok([403, 404].includes((await ventas.call('POST', `/jobs/${q.id}/aprobar-margen`, {})).status), 'ventas no aprueba (ni ve órdenes ajenas)');
   const f = await gerencia.post(`/jobs/${q.id}/aprobar-margen`, {});
   assert.equal(f.aprobacion.ok, true);
 });
@@ -212,7 +212,7 @@ test('Factura cobrada en dos partes: entra a liquidación solo cuando se complet
   assert.equal(e.fechaCobroCompleto, '2026-11-15');
   assert.equal(nov.liquidacion.fechaPagoPrevista, '2026-12-15');
 
-  // Flujo: Finanzas revisa → la dueña aprueba → se marca pagada (nadie más puede aprobar)
+  // Flujo: Finanzas revisa → el dueño aprueba → se marca pagada (nadie más puede aprobar)
   assert.equal((await duena.call('POST', `/liquidaciones/2026-11/${bryan}/accion`, { accion: 'aprobar' })).status, 409, 'no se aprueba sin revisión de Finanzas');
   await finanzas.post(`/liquidaciones/2026-11/${bryan}/accion`, { accion: 'revisar' });
   assert.equal((await finanzas.call('POST', `/liquidaciones/2026-11/${bryan}/accion`, { accion: 'aprobar' })).status, 403);

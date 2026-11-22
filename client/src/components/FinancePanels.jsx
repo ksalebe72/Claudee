@@ -60,17 +60,17 @@ export function RentabilidadCard({ fin, preview, margen, user, jobId, onUpdated,
       {req && (
         <div className={`approval ${ok ? 'ok' : ''}`}>
           {ok ? (
-            <p>✔ {req === 'duena' ? 'Excepción autorizada por la dueña' : otorgada?.nivel === 'duena' ? 'Margen aprobado por la dueña' : 'Margen aprobado por gerencia'}: {otorgada?.por} · {fmtDateTime(otorgada?.fecha?.replace('T', ' ').slice(0, 19))}{otorgada?.nota ? ` · «${otorgada.nota}»` : ''}</p>
+            <p>✔ {req === 'duena' ? 'Excepción autorizada por el dueño' : otorgada?.nivel === 'duena' ? 'Margen aprobado por el dueño' : 'Margen aprobado por gerencia'}: {otorgada?.por} · {fmtDateTime(otorgada?.fecha?.replace('T', ' ').slice(0, 19))}{otorgada?.nota ? ` · «${otorgada.nota}»` : ''}</p>
           ) : (
             <>
-              <p><strong>{req === 'duena' ? 'Contribución negativa: requiere excepción de la dueña.' : 'Contribución menor al mínimo: requiere aprobación de gerencia.'}</strong> No se puede enviar ni convertir en orden hasta aprobarla.</p>
+              <p><strong>{req === 'duena' ? 'Contribución negativa: requiere excepción del dueño.' : 'Contribución menor al mínimo: requiere aprobación de gerencia.'}</strong> No se puede enviar ni convertir en orden hasta aprobarla.</p>
               {!preview && jobId && puede && (
                 <div className="row gap">
                   <input className="grow" placeholder={req === 'duena' ? 'Motivo de la excepción (obligatorio)' : 'Nota (opcional)'} value={nota} onChange={(e) => setNota(e.target.value)} />
                   <button className="btn primary" onClick={aprobar}>{req === 'duena' ? 'Autorizar excepción' : 'Aprobar margen'}</button>
                 </div>
               )}
-              {!puede && <p className="muted small">Pídele a {req === 'duena' ? 'la dueña' : 'gerencia o a la dueña'} que la revise.</p>}
+              {!puede && <p className="muted small">Pídele a {req === 'duena' ? 'el dueño' : 'gerencia o al dueño'} que la revise.</p>}
               {preview && <p className="muted small">Guarda los cambios para poder aprobar.</p>}
             </>
           )}

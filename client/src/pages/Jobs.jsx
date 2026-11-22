@@ -9,6 +9,7 @@ import { useToast } from '../components/ui.jsx';
 
 export default function Jobs({ kind }) {
   const meta = useMeta();
+  const verMargen = meta.user.role !== 'logistica';
   const [status, setStatus] = useState('');
   const [list] = useLoad(() => api.get(`/jobs?kind=${kind}${status ? `&status=${status}` : ''}`), [kind, status]);
   const statuses = kind === 'quote' ? meta.quoteStatuses : meta.orderStatuses;
@@ -33,7 +34,7 @@ export default function Jobs({ kind }) {
               <th>#</th><th>Trabajo</th><th>Cliente</th><th className="num">Piezas</th><th className="num">Total</th>
               {!isQuote && <th className="num">Saldo</th>}
               {!isQuote && <th>Arte</th>}
-              <th>{isQuote ? 'Creada' : 'Entrega'}</th><th>Contribución</th><th>Estado</th>
+              <th>{isQuote ? 'Creada' : 'Entrega'}</th>{verMargen && <th>Contribución</th>}<th>Estado</th>
             </tr>
           </thead>
           <tbody>
@@ -47,7 +48,7 @@ export default function Jobs({ kind }) {
                 {!isQuote && <td className={`num ${j.total - j.paid > 0.009 ? 'danger' : 'ok'}`}>{money(j.total - j.paid)}</td>}
                 {!isQuote && <td>{j.proof_status ? <Badge status={j.proof_status} /> : <span className="muted">—</span>}</td>}
                 <td className={!isQuote && j.due_date && j.due_date < today() && j.status !== 'entregado' ? 'danger' : ''}>{fmtDate(isQuote ? j.created_at : j.due_date)}</td>
-                <td><Semaforo fin={j.fin} small />{j.fin?.aprobacion?.requerida && !j.fin.aprobacion.ok && <div className="danger small">requiere aprobación</div>}</td>
+                {verMargen && <td><Semaforo fin={j.fin} small />{j.fin?.aprobacion?.requerida && !j.fin.aprobacion.ok && <div className="danger small">requiere aprobación</div>}</td>}
                 <td><Badge status={j.status} /></td>
               </tr>
             ))}

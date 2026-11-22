@@ -12,7 +12,7 @@ Guía paso a paso para tener la app en internet con tu propio enlace (por ejempl
 |---|---|
 | `render.yaml` | Render lee este archivo y crea el servicio solo: cómo construir, cómo arrancar y el disco. |
 | Disco persistente (`/var/data`, 1 GB) | Aquí viven la base de datos, los logos y artes subidos y los respaldos. Sobreviven a cada actualización. |
-| Código de instalación (`SETUP_CODE`) | Render lo genera al azar. Sin ese código nadie puede crear la cuenta de la dueña. |
+| Código de instalación (`SETUP_CODE`) | Render lo genera al azar. Sin ese código nadie puede crear la cuenta del dueño. |
 | Conexión segura (https) | Render pone el candado. La app marca la cookie de sesión como segura. |
 | Chequeo de salud (`/api/salud`) | Si la app se cae, Render la reinicia sola. |
 | Respaldos diarios | Una copia de la base cada día. Se guardan las últimas 14. Se descargan en **Ajustes → General → Respaldos**. |
@@ -38,7 +38,7 @@ Guía paso a paso para tener la app en internet con tu propio enlace (por ejempl
 
 > El plan es **Starter** porque el plan gratis **no permite disco**. Sin disco, la base de datos se borraría en cada reinicio. Revisa el precio en la página de Render antes de confirmar: desde aquí no pude verificarlo. Calcula unos USD 7/mes por el servicio, más unos centavos por GB de disco.
 
-## Paso 3 · Crear la cuenta de la dueña (hazlo enseguida)
+## Paso 3 · Crear la cuenta del dueño (hazlo enseguida)
 
 1. En Render abre el servicio **colorplus-os → Environment** y copia el valor de **`SETUP_CODE`**.
 2. Abre el enlace de la app, que aparece arriba en el panel del servicio, tipo `https://colorplus-os.onrender.com`.
@@ -97,7 +97,7 @@ Guía paso a paso para tener la app en internet con tu propio enlace (por ejempl
 | `UPLOAD_DIR` | `/var/data/uploads` | Logos y artes. |
 | `BACKUP_DIR` | `/var/data/respaldos` | Respaldos diarios. |
 | `SEED_DEMO` | `0` | Sin datos de prueba. |
-| `SETUP_CODE` | generado por Render | Solo para crear la cuenta de la dueña. |
+| `SETUP_CODE` | generado por Render | Solo para crear la cuenta del dueño. |
 | `ANTHROPIC_API_KEY` | tú la pones | Secreto. |
 | `SANMAR_*` | tú los pones | Secretos. |
 | `IA_MODEL` | opcional | Si no se pone, usa el modelo por defecto. |

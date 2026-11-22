@@ -1,13 +1,13 @@
 // Usuarios, roles y sesiones.
-// Roles: duena (dueña: ajustes, aprobaciones finales), finanzas (costos, revisión de liquidaciones),
+// Roles: duena (dueño: ajustes, aprobaciones finales), finanzas (costos, revisión de liquidaciones),
 // gerencia (aprueba márgenes bajos), ventas.
-// La primera vez que se abre la app se crea la cuenta de la dueña (no hay contraseñas por defecto).
+// La primera vez que se abre la app se crea la cuenta del dueño (no hay contraseñas por defecto).
 import express from 'express';
 import { randomBytes, scryptSync, timingSafeEqual } from 'node:crypto';
 import { all, get, run, insert } from './db.js';
 import { getBrand } from './brand.js';
 
-export const ROLES = { duena: 'Dueña', finanzas: 'Finanzas', gerencia: 'Gerencia', ventas: 'Ventas' };
+export const ROLES = { duena: 'Dueño', finanzas: 'Finanzas (CFO)', gerencia: 'Gerencia', coordinacion: 'Coordinación de ventas', ventas: 'Ventas', logistica: 'Logística' };
 const COOKIE = 'cp_session';
 const SESSION_DAYS = 14;
 
@@ -76,8 +76,8 @@ authRouter.get('/auth/estado', wrap((req) => ({
 })));
 
 authRouter.post('/auth/configurar', wrap((req, res) => {
-  if (get('SELECT COUNT(*) AS c FROM users').c > 0) throw fail(400, 'La cuenta de la dueña ya existe.');
-  // En un servidor público, solo quien tenga el código de instalación (SETUP_CODE) puede crear la cuenta de la dueña.
+  if (get('SELECT COUNT(*) AS c FROM users').c > 0) throw fail(400, 'La cuenta del dueño ya existe.');
+  // En un servidor público, solo quien tenga el código de instalación (SETUP_CODE) puede crear la cuenta del dueño.
   if (process.env.SETUP_CODE) {
     const a = Buffer.from(String(req.body.codigo || ''));
     const b = Buffer.from(process.env.SETUP_CODE);
@@ -111,7 +111,7 @@ authRouter.post('/auth/salir', wrap((req, res) => {
   return { ok: true };
 }));
 
-// ---------- administración de usuarios (solo dueña) ----------
+// ---------- administración de usuarios (solo dueño) ----------
 export const usersRouter = express.Router();
 usersRouter.get('/usuarios', wrap((req) => { requireRole(req, 'duena'); return all('SELECT * FROM users ORDER BY id').map(publicUser); }));
 usersRouter.post('/usuarios', wrap((req) => {
@@ -128,7 +128,7 @@ usersRouter.put('/usuarios/:id', wrap((req) => {
   if (!u) throw fail(404, 'No encontrado');
   const { name, role, active, password, salesperson_id } = req.body;
   if (role && !ROLES[role]) throw fail(400, 'Rol inválido');
-  if (u.id === req.user.id && (role && role !== 'duena' || active === false)) throw fail(400, 'No puedes quitarte el rol de dueña ni desactivarte.');
+  if (u.id === req.user.id && (role && role !== 'duena' || active === false)) throw fail(400, 'No puedes quitarte el rol de dueño ni desactivarte.');
   run('UPDATE users SET name = ?, role = ?, active = ?, salesperson_id = ? WHERE id = ?',
     name ?? u.name, role ?? u.role, active === undefined ? u.active : active ? 1 : 0, salesperson_id === undefined ? u.salesperson_id : salesperson_id || null, u.id);
   if (password) {

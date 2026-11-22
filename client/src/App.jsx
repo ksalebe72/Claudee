@@ -22,25 +22,26 @@ import Portal from './pages/Portal.jsx';
 import Asistente from './pages/Asistente.jsx';
 
 const GESTION = ['duena', 'finanzas', 'gerencia'];
+const SIN_LOGISTICA = ['duena', 'finanzas', 'gerencia', 'coordinacion', 'ventas'];
 const NAV = [
   { group: 'General', items: [{ to: '/', label: 'Tablero', icon: '◧', end: true }, { to: '/asistente', label: 'Asistente IA', icon: '✨', roles: GESTION }] },
   { group: 'Ventas y CRM', items: [
     { to: '/contactos', label: 'Contactos', icon: '☺' },
-    { to: '/pipeline', label: 'Pipeline', icon: '⇶' },
+    { to: '/pipeline', label: 'Pipeline', icon: '⇶', roles: SIN_LOGISTICA },
     { to: '/tareas', label: 'Tareas', icon: '✓' },
-    { to: '/automatizaciones', label: 'Automatizaciones', icon: '⚡' },
+    { to: '/automatizaciones', label: 'Automatizaciones', icon: '⚡', roles: GESTION },
   ] },
   { group: 'Pedidos y producción', items: [
-    { to: '/cotizaciones', label: 'Cotizaciones', icon: '✎' },
+    { to: '/cotizaciones', label: 'Cotizaciones', icon: '✎', roles: SIN_LOGISTICA },
     { to: '/ordenes', label: 'Órdenes', icon: '▤' },
     { to: '/produccion', label: 'Producción', icon: '⚙' },
-    { to: '/catalogo', label: 'Catálogo', icon: '▦' },
+    { to: '/catalogo', label: 'Catálogo', icon: '▦', roles: SIN_LOGISTICA },
   ] },
   { group: 'Finanzas', items: [
-    { to: '/cobranza', label: 'Cobranza', icon: '$' },
+    { to: '/cobranza', label: 'Cobranza', icon: '$', roles: SIN_LOGISTICA },
     { to: '/liquidaciones', label: 'Liquidación de comisiones', icon: '◎', roles: GESTION },
     { to: '/reportes', label: 'Reportes', icon: '▥', roles: GESTION },
-    { to: '/ajustes', label: 'Ajustes', icon: '⚙' },
+    { to: '/ajustes', label: 'Ajustes', icon: '⚙', roles: SIN_LOGISTICA },
   ] },
 ];
 
@@ -83,7 +84,7 @@ export default function App() {
               <small>ColorPlus OS</small>
             </div>
           </div>
-          {NAV.map((g) => (
+          {NAV.filter((g) => g.items.some((i) => !i.roles || i.roles.includes(user.role))).map((g) => (
             <nav key={g.group}>
               <div className="nav-group">{g.group}</div>
               {g.items.filter((i) => !i.roles || i.roles.includes(user.role)).map((i) => (

@@ -1,4 +1,4 @@
-// Logo y colores de la marca: solo la dueña, con validación.
+// Logo y colores de la marca: solo el dueño, con validación.
 import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
 import { startServer } from './helpers.js';
@@ -16,7 +16,7 @@ test('sin configurar nada, la marca es Color Plus', async () => {
   assert.equal(meta.brand.personalizada, false);
 });
 
-test('la dueña sube el logo y define colores; se ven en meta, login y portal', async () => {
+test('el dueño sube el logo y define colores; se ven en meta, login y portal', async () => {
   const b = await s.duena.post('/settings/logo', { file: PNG });
   assert.match(b.logo, /^\/uploads\/brand-logo-\d+\.png$/);
   await s.duena.put('/settings', { brand_primary: '#e30613', brand_sidebar: '#1a1a1a' });

@@ -2,23 +2,25 @@ import React, { useState } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { api } from '../api.js';
 import { money, useLoad } from '../utils.js';
-import { Badge, Empty, Field, Modal, PageHeader } from '../components/ui.jsx';
+import { Badge, Empty, Field, Modal, PageHeader, useMeta } from '../components/ui.jsx';
 
 export default function Contacts() {
   const [params, setParams] = useSearchParams();
   const [q, setQ] = useState('');
   const [list, reload] = useLoad(() => api.get(`/contacts?q=${encodeURIComponent(q)}`), [q]);
   const showNew = params.get('nuevo') === '1';
+  const meta = useMeta();
+  const asigna = !['ventas', 'logistica'].includes(meta.user.role);
 
   return (
     <>
       <PageHeader title="Contactos" subtitle="Clientes, prospectos y empresas">
         <input className="search" placeholder="Buscar nombre, empresa, email, etiqueta…" value={q} onChange={(e) => setQ(e.target.value)} />
-        <button className="btn primary" onClick={() => setParams({ nuevo: '1' })}>+ Nuevo contacto</button>
+        {meta.user.role !== 'logistica' && <button className="btn primary" onClick={() => setParams({ nuevo: '1' })}>+ Nuevo contacto</button>}
       </PageHeader>
       <div className="card no-pad">
         <table className="table">
-          <thead><tr><th>Nombre</th><th>Empresa</th><th>Teléfono</th><th>Email</th><th>Etiquetas</th><th>Origen</th><th className="num">Órdenes</th><th className="num">Valor</th></tr></thead>
+          <thead><tr><th>Nombre</th><th>Empresa</th><th>Teléfono</th><th>Email</th><th>Etiquetas</th><th>Origen</th>{asigna && <th>Vendedor</th>}<th className="num">Órdenes</th><th className="num">Valor</th></tr></thead>
           <tbody>
             {list?.map((c) => (
               <tr key={c.id}>
@@ -28,6 +30,7 @@ export default function Contacts() {
                 <td>{c.email}</td>
                 <td>{(c.tags || []).map((t) => <Badge key={t} tone="indigo">{t}</Badge>)}</td>
                 <td className="muted">{c.source}</td>
+                {asigna && <td>{c.salesperson_name || <span className="muted">sin asignar</span>}</td>}
                 <td className="num">{c.orders_count}</td>
                 <td className="num">{money(c.lifetime_value)}</td>
               </tr>
@@ -46,6 +49,10 @@ export function ContactForm({ contact, onClose, onSaved }) {
   const [f, setF] = useState(contact ? { ...contact, tags: (contact.tags || []).join(', ') } : { name: '', company: '', email: '', phone: '', tags: '', source: '', address: '', notes: '', oppTitle: '', oppValue: '' });
   const [err, setErr] = useState(null);
   const set = (k) => (e) => setF({ ...f, [k]: e.target.value });
+  const meta = useMeta();
+  // Dueño, Finanzas, Gerencia y Coordinación asignan el cliente a un vendedor; un vendedor siempre se lo queda él
+  const asigna = !['ventas', 'logistica'].includes(meta.user.role);
+  const [vendedores] = useLoad(() => (asigna ? api.get('/vendedores') : Promise.resolve([])), [asigna]);
 
   async function save(e) {
     e.preventDefault();
@@ -76,6 +83,14 @@ export function ContactForm({ contact, onClose, onSaved }) {
         </div>
         <datalist id="sources">{['Instagram', 'Facebook', 'Google Ads', 'Referido', 'Sitio web', 'Visita a tienda', 'Llamada'].map((s) => <option key={s} value={s} />)}</datalist>
         <Field label="Dirección"><input value={f.address || ''} onChange={set('address')} /></Field>
+        {asigna && (
+          <Field label="Vendedor del cliente" hint="Un vendedor solo ve a sus propios clientes">
+            <select value={f.salesperson_id || ''} onChange={(e) => setF({ ...f, salesperson_id: e.target.value ? Number(e.target.value) : null })}>
+              <option value="">— Sin asignar —</option>
+              {(vendedores || []).filter((v) => v.active || v.id === f.salesperson_id).map((v) => <option key={v.id} value={v.id}>{v.name}</option>)}
+            </select>
+          </Field>
+        )}
         <label className="inline"><input type="checkbox" checked={!!f.tax_exempt} onChange={(e) => setF({ ...f, tax_exempt: e.target.checked ? 1 : 0 })} /> Exento de impuesto (Maryland)</label>
         <Field label="Notas"><textarea rows={2} value={f.notes || ''} onChange={set('notes')} /></Field>
         {!contact && (

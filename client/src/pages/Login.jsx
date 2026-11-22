@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { api } from '../api.js';
 import { BrandLogo } from '../brand.jsx';
 
-/** Inicio de sesión. Si no existe ningún usuario, crea la cuenta de la dueña. */
+/** Inicio de sesión. Si no existe ningún usuario, crea la cuenta del dueño. */
 export default function Login({ setup, onDone, brand, requiereCodigo }) {
   const [f, setF] = useState({ name: '', username: '', password: '', password2: '', codigo: '' });
   const [err, setErr] = useState(null);
@@ -25,7 +25,7 @@ export default function Login({ setup, onDone, brand, requiereCodigo }) {
     <div className="login">
       <form className="login-card" onSubmit={submit}>
         <div className="login-brand"><BrandLogo brand={brand} /><small>ColorPlus OS · sistema interno</small></div>
-        <h2>{setup ? 'Crear la cuenta de la dueña' : 'Iniciar sesión'}</h2>
+        <h2>{setup ? 'Crear la cuenta del dueño' : 'Iniciar sesión'}</h2>
         {setup && <p className="muted">Es la primera vez que se abre el sistema. Esta cuenta tendrá acceso a Ajustes, tarifas y aprobaciones.</p>}
         {setup && requiereCodigo && <label className="field"><span>Código de instalación</span><input required value={f.codigo} onChange={set('codigo')} autoComplete="off" placeholder="Está en Render → Environment → SETUP_CODE" /></label>}
         {setup && <label className="field"><span>Nombre</span><input required value={f.name} onChange={set('name')} autoFocus /></label>}

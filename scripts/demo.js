@@ -43,7 +43,7 @@ app.stdout.on('data', (d) => {
   ColorPlus OS · MODO DE PRUEBA
   Abre: http://localhost:${PORT}
 
-  · La primera vez te pide crear la cuenta de la dueña (usa la contraseña que quieras).
+  · La primera vez te pide crear la cuenta del dueño (usa la contraseña que quieras).
   · Datos de ejemplo: clientes y prendas de prueba (no son datos reales).
   · SanMar y la IA están SIMULADOS: responden siempre lo mismo.
       - SanMar: en Catálogo → Importar de SanMar, usa el estilo PC61.
