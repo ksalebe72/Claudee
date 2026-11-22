@@ -33,10 +33,7 @@ export function clearSanmarCache(estilo) {
 export const sanmar = createSanmarClient({ cache: sqliteCache });
 export const sanmarConfigured = () => sanmar.configurado();
 
-// ---------- precio de venta ----------
-/** Markup sobre el costo de SanMar. 1 = 100% (precio de venta = costo × 2). */
-export const getSanmarMarkup = () => Number(getSetting('sanmar_markup', 1));
-export const precioVenta = (costo, markup = getSanmarMarkup()) => (costo == null ? null : Math.round(costo * (1 + markup) * 100) / 100);
+// El precio de venta de las prendas se calcula con la matriz de Ajustes → Tarifas (shared/pricing.js).
 
 // ---------- fotos ----------
 export function isAllowedImageUrl(u) {

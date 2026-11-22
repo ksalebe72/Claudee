@@ -13,28 +13,14 @@ if (isMain && process.argv.includes('--reset')) {
 const { get, insert, setSetting, run } = await import(`./db.js${isMain ? '?fresh' : ''}`);
 
 export function seedIfEmpty({ demo = true } = {}) {
-  if (get('SELECT COUNT(*) AS c FROM decoration_methods').c > 0) return false;
+  if (get('SELECT COUNT(*) AS c FROM decoration_methods').c > 0 || get('SELECT COUNT(*) AS c FROM products').c > 0) return false;
 
-  setSetting('business_name', 'Mi Taller de Impresión');
-  setSetting('markup', 0.6);
-  setSetting('tax_rate', 0.07);
+  setSetting('business_name', 'Color Plus LLC');
   setSetting('deposit_pct', 0.5);
   setSetting('seq_quote', 1000);
   setSetting('seq_order', 2000);
 
-  const methods = [
-    { code: 'serigrafia', name: 'Serigrafía', setup_fee: 25, setup_per_color: 1, color_price: 0.5,
-      tiers: [{ min: 1, price: 6 }, { min: 24, price: 3.5 }, { min: 48, price: 2.5 }, { min: 144, price: 1.75 }, { min: 500, price: 1.2 }] },
-    { code: 'bordado', name: 'Bordado', setup_fee: 35, setup_per_color: 0, color_price: 0,
-      tiers: [{ min: 1, price: 9 }, { min: 12, price: 7 }, { min: 48, price: 5.5 }, { min: 144, price: 4.5 }] },
-    { code: 'dtf', name: 'DTF', setup_fee: 0, setup_per_color: 0, color_price: 0,
-      tiers: [{ min: 1, price: 7 }, { min: 12, price: 5.5 }, { min: 50, price: 4.25 }, { min: 100, price: 3.5 }] },
-    { code: 'vinil', name: 'Vinil textil (HTV)', setup_fee: 0, setup_per_color: 0, color_price: 1.5,
-      tiers: [{ min: 1, price: 6 }, { min: 12, price: 4.5 }, { min: 48, price: 3.5 }] },
-    { code: 'sublimacion', name: 'Sublimación', setup_fee: 0, setup_per_color: 0, color_price: 0,
-      tiers: [{ min: 1, price: 8 }, { min: 24, price: 6 }, { min: 100, price: 4.5 }] },
-  ];
-  for (const m of methods) insert('decoration_methods', m);
+
 
   const apparel = ['XS', 'S', 'M', 'L', 'XL', '2XL', '3XL'];
   const products = [
@@ -45,7 +31,11 @@ export function seedIfEmpty({ demo = true } = {}) {
     { sku: '112', name: 'Gorra trucker', brand: 'Richardson', category: 'Gorras', base_cost: 6.2, colors: ['Negro/Blanco', 'Navy/Blanco', 'Charcoal'], sizes: [], supplier: 'SanMar' },
     { sku: 'TOTE', name: 'Bolsa tote de lona', brand: 'Liberty Bags', category: 'Promocionales', base_cost: 2.4, colors: ['Natural', 'Negro'], sizes: [], supplier: 'alphabroder' },
   ];
-  for (const p of products) insert('products', p);
+  // Prendas de ejemplo (costos de demostración) solo con SEED_DEMO; en producción se importan de SanMar/S&S.
+  if (demo) for (const p of products) insert('products', p);
+  // Servicios mensuales: no comisionables. Precio y costo quedan vacíos hasta que se configuren (no se inventan).
+  insert('products', { sku: 'WEB-MES', name: 'Website · mensualidad', category: 'Servicios', kind: 'servicio', commissionable: 0, base_cost: null, price: null, colors: [], sizes: [] });
+  insert('products', { sku: 'MEDIA-MES', name: 'Media player · mensualidad', category: 'Servicios', kind: 'servicio', commissionable: 0, base_cost: null, price: null, colors: [], sizes: [] });
 
   const autos = [
     { name: 'Seguimiento a nuevo lead', trigger: 'contact.created', action: 'create_task', params: { title: 'Llamar a {{contact.name}} (nuevo lead)', due_in_days: 0 } },
@@ -63,7 +53,8 @@ export function seedIfEmpty({ demo = true } = {}) {
     { name: 'Orden entregada → pedir reseña', trigger: 'order.status_changed', condition: { to: 'entregado' }, action: 'send_email', params: { subject: '¿Cómo te fue con tu pedido?', message: 'Gracias por tu compra, {{contact.name}}. ¿Nos dejas una reseña?' } },
     { name: 'Cliente que paga → etiqueta "cliente"', trigger: 'payment.received', action: 'add_tag', params: { tag: 'cliente' } },
   ];
-  for (const a of autos) insert('automations', { condition: {}, ...a });
+  // Regla de Color Plus: el sistema no envía nada al cliente; las automatizaciones de SMS/email quedan apagadas.
+  for (const a of autos) insert('automations', { condition: {}, ...a, active: a.action === 'send_sms' || a.action === 'send_email' ? 0 : 1 });
 
   if (demo) {
     const c1 = insert('contacts', { name: 'Laura Méndez', company: 'Escuela Los Pinos', email: 'laura@lospinos.edu', phone: '+1 305 555 0101', tags: ['escuela', 'cliente'], source: 'Referido' });

@@ -104,9 +104,70 @@ CREATE TABLE IF NOT EXISTS automations (
 // ---------- migraciones ----------
 const cols = (t) => db.prepare(`PRAGMA table_info(${t})`).all().map((c) => c.name);
 if (!cols('proofs').includes('design')) db.exec('ALTER TABLE proofs ADD COLUMN design TEXT');
+const addColumn = (table, col, def) => { if (!cols(table).includes(col)) db.exec(`ALTER TABLE ${table} ADD COLUMN ${col} ${def}`); };
+
+// --- Costos, rentabilidad y comisiones (ColorPlus OS) ---
+for (const [c, d] of Object.entries({
+  pricing_version_id: 'INTEGER', shipping_charged: 'REAL DEFAULT 0', shipping_cost: 'REAL', extra_costs: "TEXT DEFAULT '[]'",
+  tax_exempt: 'INTEGER DEFAULT 0', salesperson_id: 'INTEGER', commission_rule_id: 'INTEGER', client_status: 'TEXT',
+  client_status_manual: 'INTEGER DEFAULT 0', invoice_date: 'TEXT', costs_confirmed_at: 'TEXT', costs_confirmed_by: 'TEXT',
+  margin_approval: 'TEXT', fin: 'TEXT',
+})) addColumn('jobs', c, d);
+for (const [c, d] of Object.entries({
+  line_type: "TEXT DEFAULT 'prenda'", unit_cost: 'REAL', size_costs: "TEXT DEFAULT '{}'", price_mode: "TEXT DEFAULT 'auto'",
+  manual_price: 'REAL', override: 'TEXT', line_discount: 'REAL DEFAULT 0', commissionable: 'INTEGER DEFAULT 1', cost_total: 'REAL', calc: 'TEXT',
+})) addColumn('job_items', c, d);
+for (const [c, d] of Object.entries({
+  kind: "TEXT DEFAULT 'prenda'", commissionable: 'INTEGER DEFAULT 1', markup_mode: 'TEXT', markup_value: 'REAL',
+  size_costs: "TEXT DEFAULT '{}'", price: 'REAL',
+})) addColumn('products', c, d);
+addColumn('contacts', 'tax_exempt', 'INTEGER DEFAULT 0');
+
+db.exec(`
+CREATE TABLE IF NOT EXISTS users (
+  id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL, username TEXT UNIQUE NOT NULL, password_hash TEXT NOT NULL,
+  role TEXT NOT NULL, salesperson_id INTEGER, active INTEGER DEFAULT 1, created_at TEXT DEFAULT (datetime('now'))
+);
+CREATE TABLE IF NOT EXISTS sessions (token TEXT PRIMARY KEY, user_id INTEGER NOT NULL, expires_at TEXT NOT NULL);
+CREATE TABLE IF NOT EXISTS pricing_versions (
+  id INTEGER PRIMARY KEY AUTOINCREMENT, config TEXT NOT NULL, note TEXT, created_by TEXT, created_at TEXT DEFAULT (datetime('now'))
+);
+CREATE TABLE IF NOT EXISTS audit_log (
+  id INTEGER PRIMARY KEY AUTOINCREMENT, at TEXT DEFAULT (datetime('now')), user_id INTEGER, user_name TEXT,
+  area TEXT, field TEXT, old_value TEXT, new_value TEXT, ref TEXT
+);
+CREATE TABLE IF NOT EXISTS salespeople (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL, active INTEGER DEFAULT 1);
+CREATE TABLE IF NOT EXISTS commission_rules (
+  id INTEGER PRIMARY KEY AUTOINCREMENT, salesperson_id INTEGER, name TEXT NOT NULL,
+  base TEXT NOT NULL DEFAULT 'venta_neta', client_type TEXT, active INTEGER DEFAULT 1
+);
+CREATE TABLE IF NOT EXISTS commission_rates (
+  id INTEGER PRIMARY KEY AUTOINCREMENT, rule_id INTEGER NOT NULL REFERENCES commission_rules(id) ON DELETE CASCADE,
+  rate REAL NOT NULL, effective_from TEXT NOT NULL, created_by TEXT, created_at TEXT DEFAULT (datetime('now'))
+);
+CREATE TABLE IF NOT EXISTS job_actual_costs (
+  id INTEGER PRIMARY KEY AUTOINCREMENT, job_id INTEGER REFERENCES jobs(id) ON DELETE CASCADE, category TEXT NOT NULL,
+  supplier TEXT, invoice_ref TEXT, amount REAL NOT NULL, cost_date TEXT, note TEXT, created_by TEXT, created_at TEXT DEFAULT (datetime('now'))
+);
+CREATE TABLE IF NOT EXISTS job_credits (
+  id INTEGER PRIMARY KEY AUTOINCREMENT, job_id INTEGER REFERENCES jobs(id) ON DELETE CASCADE, type TEXT NOT NULL,
+  amount REAL NOT NULL, credit_date TEXT, note TEXT, created_by TEXT, created_at TEXT DEFAULT (datetime('now'))
+);
+CREATE TABLE IF NOT EXISTS liquidations (
+  id INTEGER PRIMARY KEY AUTOINCREMENT, period TEXT NOT NULL, salesperson_id INTEGER NOT NULL, status TEXT NOT NULL DEFAULT 'borrador',
+  total REAL DEFAULT 0, reviewed_by TEXT, reviewed_at TEXT, approved_by TEXT, approved_at TEXT,
+  paid_at TEXT, paid_reference TEXT, paid_by TEXT, created_at TEXT DEFAULT (datetime('now')),
+  UNIQUE(period, salesperson_id)
+);
+CREATE TABLE IF NOT EXISTS commission_entries (
+  id INTEGER PRIMARY KEY AUTOINCREMENT, liquidation_id INTEGER REFERENCES liquidations(id) ON DELETE CASCADE,
+  job_id INTEGER, salesperson_id INTEGER, period TEXT, type TEXT NOT NULL, amount REAL NOT NULL, snapshot TEXT,
+  created_at TEXT DEFAULT (datetime('now'))
+);
+`);
 
 // ---------- helpers ----------
-const JSON_COLS = new Set(['tags', 'colors', 'sizes', 'decorations', 'tiers', 'condition', 'params']);
+const JSON_COLS = new Set(['tags', 'colors', 'sizes', 'decorations', 'tiers', 'condition', 'params', 'size_costs', 'extra_costs', 'override', 'margin_approval', 'fin', 'calc', 'config', 'snapshot']);
 
 export function parseRow(row) {
   if (!row) return row;

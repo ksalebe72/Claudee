@@ -1,35 +1,26 @@
 // Endpoints internos de la app sobre el simulador de SanMar.
 import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
-import { spawn } from 'node:child_process';
-import { mkdtempSync, rmSync } from 'node:fs';
-import { tmpdir } from 'node:os';
-import { join } from 'node:path';
 import { startMock } from './fixtures/sanmar-mock.js';
+import { startServer } from './helpers.js';
 
-const dir = mkdtempSync(join(tmpdir(), 'taller-sm-'));
 const MOCK = 4600 + Math.floor(Math.random() * 90);
-const PORT = MOCK + 100;
-const B = `http://localhost:${PORT}/api`;
-let srv, mock, salida = '';
-const json = async (url, opts) => { const r = await fetch(B + url, opts); return { status: r.status, body: await r.json() }; };
+let srv, mock, api;
+const json = async (url, opts = {}) => {
+  const r = await api.call(opts.method || 'GET', url, opts.body ? JSON.parse(opts.body) : undefined);
+  return { status: r.status, body: r.body };
+};
 
 before(async () => {
   mock = await startMock(MOCK);
-  srv = spawn(process.execPath, ['server/index.js'], {
-    stdio: ['ignore', 'pipe', 'pipe'],
-    env: { ...process.env, PORT, DB_PATH: join(dir, 't.db'), SANMAR_BASE_URL: `http://localhost:${MOCK}`, SANMAR_CUSTOMER_NUMBER: '1', SANMAR_USERNAME: 'test', SANMAR_PASSWORD: 'ClaveDePrueba123', SANMAR_EXTRA_IMAGE_HOSTS: `localhost:${MOCK}` },
-  });
-  srv.stdout.on('data', (d) => (salida += d));
-  srv.stderr.on('data', (d) => (salida += d));
-  for (let i = 0; i < 50; i++) { try { await fetch(B + '/meta'); return; } catch { await new Promise((r) => setTimeout(r, 100)); } }
+  srv = await startServer({ env: { SANMAR_BASE_URL: `http://localhost:${MOCK}`, SANMAR_CUSTOMER_NUMBER: '1', SANMAR_USERNAME: 'test', SANMAR_PASSWORD: 'ClaveDePrueba123', SANMAR_EXTRA_IMAGE_HOSTS: `localhost:${MOCK}` } });
+  api = srv.duena;
 });
-after(() => { srv.kill(); mock.close(); rmSync(dir, { recursive: true, force: true }); });
+after(() => { srv.stop(); mock.close(); });
 
 test('GET /api/sanmar/style/:estilo', async () => {
   const meta = (await json('/meta')).body;
   assert.equal(meta.integrations.sanmar, true);
-  assert.equal(meta.settings.sanmar_markup, 1);
   const { status, body } = await json('/sanmar/style/PC61');
   assert.equal(status, 200);
   assert.equal(body.estilo, 'PC61');
@@ -37,22 +28,26 @@ test('GET /api/sanmar/style/:estilo', async () => {
   assert.ok(body.colores[0].fotos.frente);
 });
 
-test('GET /api/sanmar/style/:estilo/:color con precio de venta = costo × 2', async () => {
+test('GET /api/sanmar/style/:estilo/:color con precio de venta según la matriz de prendas', async () => {
   const { status, body } = await json('/sanmar/style/PC61/Navy');
   assert.equal(status, 200);
-  assert.equal(body.markup, 1);
+  assert.equal(body.modoMarkup, 'escalonado');
   const s = body.tallas.find((t) => t.talla === 'S');
   assert.equal(s.costo, 3.18);
-  assert.equal(s.precioVenta, 6.36);
+  assert.equal(s.precioVenta, 7.0); // $3.18 < $5.00 → ×2.20
+  assert.equal(body.tallas.find((t) => t.talla === '2XL').precioVenta, 10.24); // $5.12 ≥ $5.00 → ×2.00
   assert.equal(s.inventario, 300);
   assert.equal(s.almacenes.length, 3);
 });
 
-test('el markup es configurable', async () => {
-  await fetch(B + '/settings', { method: 'PUT', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ sanmar_markup: 0.5 }) });
+test('en modo fijo el precio de venta es costo × 2', async () => {
+  const t = await api.get('/tarifas');
+  const cfg = structuredClone(t.config);
+  cfg.prendas.modo = 'fijo';
+  await api.put('/tarifas', { config: cfg });
   const { body } = await json('/sanmar/style/PC61/Navy');
-  assert.equal(body.tallas[0].precioVenta, 4.77);
-  await fetch(B + '/settings', { method: 'PUT', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ sanmar_markup: 1 }) });
+  assert.equal(body.tallas[0].precioVenta, 6.36);
+  await api.put('/tarifas', { config: t.config });
 });
 
 test('errores con código claro', async () => {
@@ -65,8 +60,8 @@ test('errores con código claro', async () => {
 
 test('fotos solo de hosts permitidos', async () => {
   const { body } = await json('/sanmar/style/PC61');
-  assert.equal((await fetch(B + '/sanmar/image?u=' + encodeURIComponent(body.colores[0].fotos.frente))).status, 200);
-  assert.equal((await fetch(B + '/sanmar/image?u=' + encodeURIComponent('http://169.254.169.254/latest'))).status, 400);
+  assert.equal((await api.call('GET', '/sanmar/image?u=' + encodeURIComponent(body.colores[0].fotos.frente))).status, 200);
+  assert.equal((await api.call('GET', '/sanmar/image?u=' + encodeURIComponent('http://169.254.169.254/latest'))).status, 400);
 });
 
 test('importa el estilo al catálogo con el costo de la cuenta', async () => {
@@ -78,5 +73,5 @@ test('importa el estilo al catálogo con el costo de la cuenta', async () => {
 });
 
 test('la contraseña nunca aparece en los logs del servidor', () => {
-  assert.ok(!salida.includes('ClaveDePrueba123'));
+  assert.ok(!srv.salida().includes('ClaveDePrueba123'));
 });

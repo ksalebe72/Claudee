@@ -1,0 +1,121 @@
+// Tarifas versionadas e historial de cambios.
+// Cada guardado de la matriz crea una versión nueva; las cotizaciones guardan el id de la versión
+// con la que se calcularon, así un cambio de tabla nunca altera una cotización existente.
+import { all, get, run, insert } from './db.js';
+import { DEFAULT_PRICING } from '../shared/pricing.js';
+
+const fail = (status, msg) => Object.assign(new Error(msg), { status });
+
+/** Completa con valores por defecto las claves que falten (por si se agregan secciones nuevas). */
+function withDefaults(cfg) {
+  const out = structuredClone(DEFAULT_PRICING);
+  for (const [k, v] of Object.entries(cfg || {})) out[k] = v && typeof v === 'object' && !Array.isArray(v) ? { ...out[k], ...v } : v;
+  return out;
+}
+
+export function ensurePricing() {
+  if (!get('SELECT id FROM pricing_versions LIMIT 1')) {
+    insert('pricing_versions', { config: DEFAULT_PRICING, note: 'Valores iniciales (matriz Color Plus)', created_by: 'sistema' });
+  }
+}
+
+export function currentPricing() {
+  ensurePricing();
+  const v = get('SELECT * FROM pricing_versions ORDER BY id DESC LIMIT 1');
+  return { id: v.id, config: withDefaults(v.config), created_at: v.created_at, created_by: v.created_by, note: v.note };
+}
+
+export function pricingVersion(id) {
+  if (!id) return currentPricing();
+  const v = get('SELECT * FROM pricing_versions WHERE id = ?', id);
+  return v ? { id: v.id, config: withDefaults(v.config), created_at: v.created_at } : currentPricing();
+}
+
+export function audit(user, area, field, oldValue, newValue, ref = null) {
+  insert('audit_log', {
+    user_id: user?.id ?? null, user_name: user?.name ?? 'sistema', area, field,
+    old_value: oldValue === undefined ? null : JSON.stringify(oldValue),
+    new_value: newValue === undefined ? null : JSON.stringify(newValue),
+    ref,
+  });
+}
+
+/** Lista de diferencias { ruta, antes, despues } entre dos objetos. */
+export function diff(a, b, path = '') {
+  if (JSON.stringify(a) === JSON.stringify(b)) return [];
+  const isObj = (x) => x && typeof x === 'object';
+  if (Array.isArray(a) || Array.isArray(b) || !isObj(a) || !isObj(b)) return [{ ruta: path, antes: a, despues: b }];
+  const keys = new Set([...Object.keys(a), ...Object.keys(b)]);
+  return [...keys].flatMap((k) => diff(a[k], b[k], path ? `${path}.${k}` : k));
+}
+
+// ---------- validación ----------
+const isNumOrNull = (v) => v === null || (typeof v === 'number' && Number.isFinite(v) && v >= 0);
+function validar(cfg) {
+  const errs = [];
+  const p = cfg.prendas;
+  if (!['escalonado', 'fijo'].includes(p.modo)) errs.push('Modo de markup inválido');
+  if (!(p.fijo.factor > 0)) errs.push('El factor del modo fijo debe ser mayor que 0');
+  if (!p.escalonado.length || p.escalonado.some((t) => !(t.factor > 0) || !(t.menorQue === null || t.menorQue > 0))) errs.push('Revisa los tramos del modo escalonado');
+  if (p.escalonado.filter((t) => t.menorQue === null).length !== 1) errs.push('El modo escalonado necesita exactamente un tramo final (sin límite)');
+  for (const f of cfg.bordado.filas) if (!isNumOrNull(f.costo) || !isNumOrNull(f.precio) || !(f.cantidadDesde >= 1) || !isNumOrNull(f.puntadasHasta)) errs.push('Revisa la tabla de bordado');
+  if (!(cfg.dtf.costoPieCuadrado >= 0) || !(cfg.dtf.costoAplicacion >= 0)) errs.push('Revisa los costos de DTF');
+  for (const t of [cfg.dtf.primera, cfg.dtf.adicional]) {
+    if (!t.length || t.filter((f) => f.hasta === null).length !== 1 || t.some((f) => !isNumOrNull(f.precio) || f.precio === null)) errs.push('Cada tabla de DTF necesita precios y un tramo final sin límite');
+  }
+  if (!isNumOrNull(cfg.dtf.minimo) || !isNumOrNull(cfg.heatTransfer.minimo)) errs.push('Mínimo inválido');
+  for (const f of cfg.heatTransfer.hojas) if (!isNumOrNull(f.costo) || !isNumOrNull(f.precio) || !(f.cantidadDesde >= 1)) errs.push('Revisa los tramos de heat transfer');
+  if (!isNumOrNull(cfg.heatTransfer.aplicacion.costo) || !isNumOrNull(cfg.heatTransfer.aplicacion.precio)) errs.push('Revisa la aplicación de heat transfer');
+  if (!(cfg.impuesto.tasa >= 0 && cfg.impuesto.tasa < 1)) errs.push('Tasa de impuesto inválida');
+  if (!(cfg.margen.minimo >= 0 && cfg.margen.objetivo >= cfg.margen.minimo && cfg.margen.objetivo < 1)) errs.push('Umbrales de margen inválidos (objetivo ≥ mínimo)');
+  const dia = cfg.liquidacion.diaPago;
+  if (!(Number.isInteger(dia) && dia >= 1 && dia <= 28)) errs.push('El día de pago debe estar entre 1 y 28');
+  if (errs.length) throw fail(400, [...new Set(errs)].join('. '));
+}
+
+/** Guarda una nueva versión de la matriz y registra cada valor cambiado en el historial. */
+export function savePricing(newCfg, user, note) {
+  const actual = currentPricing();
+  const cfg = withDefaults(newCfg);
+  validar(cfg);
+  const cambios = diff(actual.config, cfg);
+  if (!cambios.length) return { ...actual, cambios: 0 };
+  const id = insert('pricing_versions', { config: cfg, note: note || null, created_by: user?.name || 'sistema' });
+  for (const c of cambios) audit(user, 'tarifas', c.ruta, c.antes, c.despues, `versión ${id}`);
+  return { ...currentPricing(), cambios: cambios.length };
+}
+
+// ---------- vendedores y reglas de comisión iniciales ----------
+export function ensureCommissionSetup() {
+  if (get('SELECT COUNT(*) AS c FROM commission_rules').c > 0) return;
+  const bryan = insert('salespeople', { name: 'Bryan' });
+  const isabel = insert('salespeople', { name: 'Isabel' });
+  const desde = '2000-01-01';
+  const reglas = [
+    { salesperson_id: bryan, name: 'Bryan · Ventas', base: 'venta_neta', client_type: null, rate: 0.25 },
+    { salesperson_id: bryan, name: 'Bryan · Wraps', base: 'ganancia_producto', client_type: null, rate: 0.5 },
+    { salesperson_id: isabel, name: 'Isabel · Cliente existente', base: 'venta_neta', client_type: 'existente', rate: 0.05 },
+    { salesperson_id: isabel, name: 'Isabel · Cliente nuevo', base: 'venta_neta', client_type: 'nuevo', rate: 0.1 },
+    { salesperson_id: null, name: 'Sin comisión', base: 'venta_neta', client_type: null, rate: 0 },
+  ];
+  for (const r of reglas) {
+    const id = insert('commission_rules', { salesperson_id: r.salesperson_id, name: r.name, base: r.base, client_type: r.client_type });
+    insert('commission_rates', { rule_id: id, rate: r.rate, effective_from: desde, created_by: 'sistema' });
+  }
+}
+
+/** Regla con la tasa vigente en una fecha (YYYY-MM-DD). tasa = null si no hay tasa vigente. */
+export function ruleAt(ruleId, date) {
+  if (!ruleId) return null;
+  const r = get('SELECT * FROM commission_rules WHERE id = ?', ruleId);
+  if (!r) return null;
+  const rate = get('SELECT * FROM commission_rates WHERE rule_id = ? AND effective_from <= ? ORDER BY effective_from DESC, id DESC LIMIT 1', ruleId, date);
+  return { id: r.id, nombre: r.name, base: r.base, client_type: r.client_type, salesperson_id: r.salesperson_id, tasa: rate ? rate.rate : null, vigenteDesde: rate?.effective_from ?? null };
+}
+
+export function listRules() {
+  return all(`SELECT r.*, s.name AS salesperson_name FROM commission_rules r LEFT JOIN salespeople s ON s.id = r.salesperson_id ORDER BY r.active DESC, s.name, r.id`).map((r) => ({
+    ...r,
+    tasas: all('SELECT * FROM commission_rates WHERE rule_id = ? ORDER BY effective_from DESC, id DESC', r.id),
+  }));
+}

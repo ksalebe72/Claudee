@@ -3,11 +3,14 @@ import { randomBytes } from 'node:crypto';
 import { writeFileSync } from 'node:fs';
 import { resolve, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { all, get, run, insert, update, getSetting, setSetting, methodsMap, transaction } from './db.js';
+import { all, get, run, insert, update, getSetting, setSetting, transaction } from './db.js';
 import { fire, registerHandler, TRIGGERS, ACTIONS } from './automations.js';
-import { priceItem, jobTotals } from '../shared/pricing.js';
+import { PROCESOS, precioPrenda } from '../shared/pricing.js';
+import { computeJob, productSnapshot, computeClientStatus, assertMarginApproved, today as hoy } from './finance.js';
+import { currentPricing, pricingVersion, audit, listRules } from './config.js';
+import { ROLES, requireRole } from './auth.js';
 import { sendMessage } from './messaging.js';
-import { sanmar, sanmarConfigured, cacheImage, getStyleAreas, setStyleAreas, getSanmarMarkup, precioVenta, clearSanmarCache } from './sanmar.js';
+import { sanmar, sanmarConfigured, cacheImage, getStyleAreas, setStyleAreas, clearSanmarCache } from './sanmar.js';
 
 export const UPLOAD_DIR = resolve(dirname(fileURLToPath(import.meta.url)), 'uploads');
 
@@ -60,26 +63,40 @@ function loadJob(id) {
   job.balance = Math.round((job.total - job.paid) * 100) / 100;
   job.contact = contactById(job.contact_id);
   job.opportunity = job.opportunity_id ? get('SELECT * FROM opportunities WHERE id = ?', job.opportunity_id) : null;
+  const { fin } = computeJob(job, { persist: false });
+  job.finanzas = fin;
+  job.pricing = pricingVersion(job.pricing_version_id);
+  job.costosReales = all('SELECT * FROM job_actual_costs WHERE job_id = ? ORDER BY id', id);
+  job.creditos = all('SELECT * FROM job_credits WHERE job_id = ? ORDER BY id', id);
   return job;
 }
 
-function saveItems(jobId, items, discount, taxRate) {
-  const methods = methodsMap();
-  const markup = getSetting('markup', 0.6);
+const numOrNull = (v) => (v === '' || v == null || !Number.isFinite(Number(v)) ? null : Number(v));
+
+/** Guarda las líneas. Al agregar un producto se congela su costo y su excepción de markup en la línea. */
+function saveItems(jobId, items) {
   run('DELETE FROM job_items WHERE job_id = ?', jobId);
-  const priced = items.map((it, idx) => {
+  items.forEach((it, idx) => {
     const product = it.product_id ? get('SELECT * FROM products WHERE id = ?', it.product_id) : null;
-    const p = priceItem(it, product, methods, markup);
+    const snap = it.unit_cost === undefined && product ? productSnapshot(product) : {};
+    const lineType = product ? (product.kind === 'servicio' ? 'servicio' : 'prenda') : it.line_type || 'prenda';
     insert('job_items', {
       job_id: jobId, product_id: it.product_id || null, description: it.description || product?.name || '',
-      color: it.color || '', sizes: it.sizes || {}, decorations: it.decorations || [],
-      custom_price: it.custom_price === '' || it.custom_price == null ? null : Number(it.custom_price),
-      qty: p.qty, unit_price: p.unit_price, setup: p.setup, total: p.total, position: idx,
+      color: it.color || '', sizes: it.sizes || {}, decorations: lineType === 'prenda' ? it.decorations || [] : [],
+      line_type: lineType,
+      unit_cost: it.unit_cost !== undefined ? numOrNull(it.unit_cost) : snap.unit_cost ?? null,
+      size_costs: it.size_costs ?? snap.size_costs ?? {},
+      price_mode: it.price_mode === 'manual' ? 'manual' : 'auto',
+      manual_price: numOrNull(it.manual_price),
+      override: it.override !== undefined ? it.override : snap.override ?? null,
+      unit_price: it.unit_price !== undefined ? numOrNull(it.unit_price) : snap.unit_price ?? null,
+      line_discount: numOrNull(it.line_discount) || 0,
+      // «Comisionable» es parte de la matriz: lo define el producto, no la línea. Diseño/Digitalizado nunca comisiona.
+      commissionable: lineType === 'diseno' ? 0 : product ? (product.commissionable === 0 ? 0 : 1) : it.commissionable === false || it.commissionable === 0 ? 0 : 1,
+      qty: Number(it.qty) || 0, position: idx,
     });
-    return p;
   });
-  const t = jobTotals(priced, discount, taxRate);
-  run("UPDATE jobs SET subtotal = ?, tax = ?, total = ?, updated_at = datetime('now') WHERE id = ?", t.subtotal, t.tax, t.total, jobId);
+  computeJob(jobId);
 }
 
 function logSystem(job, body) {
@@ -107,11 +124,14 @@ function convertToOrder(id) {
   const job = get('SELECT * FROM jobs WHERE id = ?', id);
   if (!job) throw fail(404, 'No encontrado');
   if (job.kind === 'order') return job;
+  assertMarginApproved(id);
   const orderNumber = nextNumber('OT', 'seq_order');
+  const clientStatus = job.client_status_manual ? job.client_status : computeClientStatus(job.contact_id, job.id);
   run(
-    "UPDATE jobs SET kind = 'order', status = 'arte', order_number = ?, updated_at = datetime('now') WHERE id = ?",
-    orderNumber, id
+    "UPDATE jobs SET kind = 'order', status = 'arte', order_number = ?, invoice_date = ?, client_status = ?, updated_at = datetime('now') WHERE id = ?",
+    orderNumber, hoy(), clientStatus, id
   );
+  computeJob(id);
   const updated = get('SELECT * FROM jobs WHERE id = ?', id);
   logSystem(updated, `Cotización ${job.number} convertida en orden ${orderNumber}`);
   fire('order.created', { job: updated, contact: contactById(job.contact_id) });
@@ -142,21 +162,23 @@ registerHandler('convertToOrder', convertToOrder);
 registerHandler('moveOpportunity', moveOpportunity);
 
 // ---------- meta / ajustes ----------
-api.get('/meta', wrap(() => ({
+api.get('/meta', wrap((req) => ({
+  usuario: req.user,
   oppStages: OPP_STAGES, quoteStatuses: QUOTE_STATUSES, orderStatuses: ORDER_STATUSES,
   triggers: TRIGGERS, actions: ACTIONS,
   settings: {
     business_name: getSetting('business_name', 'Mi Taller'),
-    markup: getSetting('markup', 0.6),
-    tax_rate: getSetting('tax_rate', 0),
     deposit_pct: getSetting('deposit_pct', 0.5),
-    sanmar_markup: getSanmarMarkup(),
   },
+  procesos: PROCESOS,
+  roles: ROLES,
+  pricingVersion: currentPricing().id,
   integrations: { sanmar: sanmarConfigured() },
 })));
 
 api.put('/settings', wrap((req) => {
-  for (const k of ['business_name', 'markup', 'tax_rate', 'deposit_pct', 'sanmar_markup']) if (k in req.body) setSetting(k, req.body[k]);
+  requireRole(req, 'duena');
+  for (const k of ['business_name', 'deposit_pct']) if (k in req.body) { audit(req.user, 'ajustes', k, getSetting(k), req.body[k]); setSetting(k, req.body[k]); }
   return { ok: true };
 }));
 
@@ -205,7 +227,7 @@ api.get('/contacts/:id', wrap((req) => {
   return c;
 }));
 
-const CONTACT_FIELDS = ['name', 'company', 'email', 'phone', 'tags', 'source', 'address', 'notes'];
+const CONTACT_FIELDS = ['name', 'company', 'email', 'phone', 'tags', 'source', 'address', 'notes', 'tax_exempt'];
 api.post('/contacts', wrap((req) => {
   if (!req.body.name) throw fail(400, 'El nombre es obligatorio');
   const data = Object.fromEntries(CONTACT_FIELDS.filter((k) => k in req.body).map((k) => [k, req.body[k]]));
@@ -271,25 +293,39 @@ api.put('/tasks/:id', wrap((req) => {
 api.delete('/tasks/:id', wrap((req) => { run('DELETE FROM tasks WHERE id = ?', req.params.id); return { ok: true }; }));
 
 // ---------- catálogo ----------
-const PRODUCT_FIELDS = ['sku', 'name', 'brand', 'category', 'base_cost', 'colors', 'sizes', 'supplier', 'active'];
+const PRODUCT_FIELDS = ['sku', 'name', 'brand', 'category', 'base_cost', 'colors', 'sizes', 'supplier', 'active', 'kind', 'size_costs', 'price'];
+// La excepción de markup y la casilla «comisionable» son parte de la matriz: solo la dueña, con historial.
+const PRODUCT_OWNER_FIELDS = ['markup_mode', 'markup_value', 'commissionable'];
+function productData(req, current = {}) {
+  const data = Object.fromEntries(PRODUCT_FIELDS.filter((k) => k in req.body).map((k) => [k, req.body[k]]));
+  for (const k of ['base_cost', 'price']) if (k in data) data[k] = numOrNull(data[k]);
+  const owner = PRODUCT_OWNER_FIELDS.filter((k) => k in req.body && String(req.body[k] ?? '') !== String(current[k] ?? ''));
+  if (owner.length) {
+    requireRole(req, 'duena');
+    for (const k of owner) {
+      data[k] = k === 'markup_value' ? numOrNull(req.body[k]) : k === 'commissionable' ? (req.body[k] ? 1 : 0) : req.body[k] || null;
+      audit(req.user, 'productos', `${current.name || req.body.name}: ${k}`, current[k] ?? null, data[k], String(current.id || ''));
+    }
+  }
+  if (data.markup_mode && !['porcentaje', 'precio_fijo'].includes(data.markup_mode)) throw fail(400, 'Excepción inválida');
+  return data;
+}
 api.get('/products', wrap(() => all('SELECT * FROM products ORDER BY category, name')));
 api.post('/products', wrap((req) => {
   if (!req.body.name) throw fail(400, 'Nombre obligatorio');
-  const id = insert('products', Object.fromEntries(PRODUCT_FIELDS.filter((k) => k in req.body).map((k) => [k, req.body[k]])));
+  const id = insert('products', productData(req));
   return get('SELECT * FROM products WHERE id = ?', id);
 }));
-api.put('/products/:id', wrap((req) => { update('products', req.params.id, req.body, PRODUCT_FIELDS); return get('SELECT * FROM products WHERE id = ?', req.params.id); }));
+api.put('/products/:id', wrap((req) => {
+  const p = get('SELECT * FROM products WHERE id = ?', req.params.id);
+  if (!p) throw fail(404, 'No encontrado');
+  update('products', p.id, productData(req, p));
+  return get('SELECT * FROM products WHERE id = ?', p.id);
+}));
 api.delete('/products/:id', wrap((req) => { run('DELETE FROM products WHERE id = ?', req.params.id); return { ok: true }; }));
 
-const METHOD_FIELDS = ['code', 'name', 'setup_fee', 'setup_per_color', 'color_price', 'tiers'];
-api.get('/methods', wrap(() => all('SELECT * FROM decoration_methods ORDER BY name')));
-api.post('/methods', wrap((req) => {
-  if (!req.body.code || !req.body.name) throw fail(400, 'Código y nombre obligatorios');
-  const id = insert('decoration_methods', Object.fromEntries(METHOD_FIELDS.filter((k) => k in req.body).map((k) => [k, req.body[k]])));
-  return get('SELECT * FROM decoration_methods WHERE id = ?', id);
-}));
-api.put('/methods/:id', wrap((req) => { update('decoration_methods', req.params.id, req.body, METHOD_FIELDS); return get('SELECT * FROM decoration_methods WHERE id = ?', req.params.id); }));
-api.delete('/methods/:id', wrap((req) => { run('DELETE FROM decoration_methods WHERE id = ?', req.params.id); return { ok: true }; }));
+// Procesos de decoración: solo Bordado, DTF y Heat Transfer. Sus tarifas están en Ajustes → Tarifas.
+api.get('/methods', wrap(() => Object.entries(PROCESOS).map(([code, name]) => ({ code, name }))));
 
 // ---------- cotizaciones y órdenes ----------
 api.get('/jobs', wrap((req) => {
@@ -311,28 +347,58 @@ api.get('/jobs/:id', wrap((req) => loadJob(req.params.id)));
 api.post('/jobs', wrap((req) => {
   const b = req.body;
   const id = transaction(() => {
+    const contact = contactById(b.contact_id);
     const id = insert('jobs', {
       kind: 'quote', number: nextNumber('COT', 'seq_quote'), status: 'borrador',
       contact_id: b.contact_id || null, opportunity_id: b.opportunity_id || null,
       title: b.title || 'Nueva cotización', due_date: b.due_date || null, notes: b.notes || '',
-      tax_rate: b.tax_rate ?? getSetting('tax_rate', 0), discount: Number(b.discount) || 0, token: token(),
+      discount: Number(b.discount) || 0, token: token(),
+      pricing_version_id: currentPricing().id,
+      tax_exempt: b.tax_exempt !== undefined ? (b.tax_exempt ? 1 : 0) : contact?.tax_exempt ? 1 : 0,
+      shipping_charged: numOrNull(b.shipping_charged) || 0, shipping_cost: numOrNull(b.shipping_cost),
+      extra_costs: b.extra_costs || [],
+      salesperson_id: b.salesperson_id || null, commission_rule_id: b.commission_rule_id || null,
+      client_status: b.client_status || computeClientStatus(b.contact_id, 0), client_status_manual: b.client_status ? 1 : 0,
     });
-    saveItems(id, b.items || [], b.discount, b.tax_rate ?? getSetting('tax_rate', 0));
+    saveItems(id, b.items || []);
     return id;
   });
   return loadJob(id);
 }));
 
-const JOB_FIELDS = ['contact_id', 'opportunity_id', 'title', 'due_date', 'priority', 'assignee', 'notes', 'discount', 'tax_rate'];
+const JOB_FIELDS = ['contact_id', 'opportunity_id', 'title', 'due_date', 'priority', 'assignee', 'notes', 'discount',
+  'shipping_charged', 'shipping_cost', 'extra_costs', 'tax_exempt', 'salesperson_id', 'commission_rule_id', 'client_status', 'client_status_manual', 'invoice_date'];
 api.put('/jobs/:id', wrap((req) => {
   const id = Number(req.params.id);
+  const antes = get('SELECT * FROM jobs WHERE id = ?', id);
+  if (!antes) throw fail(404, 'No encontrado');
+  const b = { ...req.body };
+  for (const k of ['discount', 'shipping_charged']) if (k in b) b[k] = numOrNull(b[k]) || 0;
+  if ('shipping_cost' in b) b.shipping_cost = numOrNull(b.shipping_cost);
+  if ('tax_exempt' in b) b.tax_exempt = b.tax_exempt ? 1 : 0;
+  if ('invoice_date' in b) {
+    requireRole(req, 'finanzas', 'duena'); // la fecha de factura afecta comisiones
+    if (b.invoice_date && !/^\d{4}-\d{2}-\d{2}$/.test(b.invoice_date)) throw fail(400, 'Fecha de factura inválida');
+    audit(req.user, 'ordenes', `fecha de factura orden ${id}`, antes.invoice_date, b.invoice_date || null, String(id));
+  }
+  if ('extra_costs' in b) b.extra_costs = (b.extra_costs || []).map((x) => ({ concepto: x.concepto || 'Costo directo', tipo: x.tipo === 'setup' ? 'setup' : 'otro', monto: numOrNull(x.monto) }));
+  if ('client_status' in b) { b.client_status_manual = b.client_status ? 1 : 0; if (!b.client_status) b.client_status = computeClientStatus(b.contact_id ?? antes.contact_id, id); }
+  else if ('contact_id' in b && b.contact_id !== antes.contact_id && !antes.client_status_manual) b.client_status = computeClientStatus(b.contact_id, id);
   transaction(() => {
-    update('jobs', id, req.body, JOB_FIELDS);
-    const job = get('SELECT * FROM jobs WHERE id = ?', id);
-    if (req.body.items) saveItems(id, req.body.items, job.discount, job.tax_rate);
-    else saveItems(id, all('SELECT * FROM job_items WHERE job_id = ?', id), job.discount, job.tax_rate);
+    update('jobs', id, b, JOB_FIELDS);
+    if (req.body.items) saveItems(id, req.body.items);
+    else computeJob(id);
   });
   return loadJob(id);
+}));
+
+// Recalcula una cotización en borrador con las tarifas vigentes (por defecto conserva las de cuando se creó).
+api.post('/jobs/:id/actualizar-tarifas', wrap((req) => {
+  const job = get('SELECT * FROM jobs WHERE id = ?', req.params.id);
+  if (!job || job.kind !== 'quote') throw fail(400, 'Solo cotizaciones');
+  run('UPDATE jobs SET pricing_version_id = ? WHERE id = ?', currentPricing().id, job.id);
+  computeJob(job.id);
+  return loadJob(job.id);
 }));
 
 api.delete('/jobs/:id', wrap((req) => { run('DELETE FROM jobs WHERE id = ?', req.params.id); return { ok: true }; }));
@@ -340,6 +406,7 @@ api.delete('/jobs/:id', wrap((req) => { run('DELETE FROM jobs WHERE id = ?', req
 api.post('/jobs/:id/send', wrap((req) => {
   const job = get('SELECT * FROM jobs WHERE id = ?', req.params.id);
   if (!job || job.kind !== 'quote') throw fail(400, 'Solo cotizaciones');
+  assertMarginApproved(job.id);
   run("UPDATE jobs SET status = 'enviada', updated_at = datetime('now') WHERE id = ?", job.id);
   logSystem(job, `Cotización ${job.number} enviada al cliente`);
   const base = `${req.protocol}://${req.get('host')}`;
@@ -356,9 +423,12 @@ api.post('/jobs/:id/duplicate', wrap((req) => {
   const id = transaction(() => {
     const id = insert('jobs', {
       kind: 'quote', number: nextNumber('COT', 'seq_quote'), status: 'borrador', contact_id: src.contact_id,
-      title: `${src.title} (copia)`, notes: src.notes, discount: src.discount, tax_rate: src.tax_rate, token: token(),
+      title: `${src.title} (copia)`, notes: src.notes, discount: src.discount, token: token(),
+      pricing_version_id: currentPricing().id, tax_exempt: src.tax_exempt, shipping_charged: src.shipping_charged,
+      shipping_cost: src.shipping_cost, extra_costs: src.extra_costs || [], salesperson_id: src.salesperson_id,
+      commission_rule_id: src.commission_rule_id, client_status: computeClientStatus(src.contact_id, 0),
     });
-    saveItems(id, src.items, src.discount, src.tax_rate);
+    saveItems(id, src.items.map(({ id: _i, calc: _c, ...it }) => it));
     return id;
   });
   return loadJob(id);
@@ -408,10 +478,19 @@ api.post('/jobs/:id/payments', wrap((req) => {
   if (!(amount > 0)) throw fail(400, 'Monto inválido');
   const pid = insert('payments', { job_id: job.id, amount, method: req.body.method || 'efectivo', reference: req.body.reference || null, paid_at: req.body.paid_at || now().slice(0, 10) });
   logSystem(job, `Pago recibido: $${amount.toFixed(2)} (${req.body.method || 'efectivo'})`);
+  computeJob(job.id);
   fire('payment.received', { job, payment: { id: pid, amount }, contact: contactById(job.contact_id) });
   return loadJob(job.id);
 }));
-api.delete('/payments/:id', wrap((req) => { run('DELETE FROM payments WHERE id = ?', req.params.id); return { ok: true }; }));
+api.delete('/payments/:id', wrap((req) => {
+  requireRole(req, 'finanzas', 'duena');
+  const p = get('SELECT * FROM payments WHERE id = ?', req.params.id);
+  if (!p) throw fail(404, 'No encontrado');
+  run('DELETE FROM payments WHERE id = ?', p.id);
+  audit(req.user, 'pagos', `pago eliminado orden ${p.job_id}`, p, null, String(p.id));
+  computeJob(p.job_id);
+  return { ok: true };
+}));
 
 // ---------- SanMar (solo lectura) ----------
 // Estilo: descripción, marca, colores con fotos y tallas.
@@ -424,8 +503,8 @@ api.get('/sanmar/style/:estilo', awrap(async (req) => {
 api.get('/sanmar/style/:estilo/:color', awrap(async (req) => {
   if (req.query.refresh) clearSanmarCache(req.params.estilo);
   const d = await sanmar.obtenerDetalleColor(req.params.estilo, req.params.color);
-  const markup = getSanmarMarkup();
-  return { ...d, markup, tallas: d.tallas.map((t) => ({ ...t, precioVenta: precioVenta(t.costo, markup) })) };
+  const cfg = currentPricing().config;
+  return { ...d, modoMarkup: cfg.prendas.modo, tallas: d.tallas.map((t) => ({ ...t, precioVenta: precioPrenda(t.costo, cfg).precio })) };
 }));
 api.get('/sanmar/image', awrap(async (req, res) => {
   const file = await cacheImage(String(req.query.u || ''), UPLOAD_DIR);
@@ -480,13 +559,19 @@ function portalJob(tok) {
   if (!j) throw fail(404, 'Enlace inválido');
   const job = loadJob(j.id);
   const { email, phone, name, company } = job.contact || {};
-  const methods = methodsMap();
-  for (const it of job.items) it.decorations = (it.decorations || []).map((d) => ({ ...d, method_name: methods[d.method]?.name || d.method }));
+  // Solo datos de venta: nunca costos, márgenes ni comisiones.
+  const items = job.items.map((it) => ({
+    id: it.id, description: it.description, color: it.color, sizes: it.sizes, qty: it.qty, unit_price: it.unit_price, total: it.total,
+    line_discount: it.line_discount || 0,
+    decorations: (it.decorations || []).map((d) => ({ location: d.location, width: d.width, height: d.height, method_name: PROCESOS[d.process] || PROCESOS[d.method] || d.process || d.method })),
+  }));
+  const proofs = job.proofs.map(({ id, version, file_url, note, status, customer_comment, created_at }) => ({ id, version, file_url, note, status, customer_comment, created_at }));
+  const f = job.finanzas;
   return {
     id: job.id, kind: job.kind, number: job.number, order_number: job.order_number, title: job.title, status: job.status,
-    due_date: job.due_date, notes: job.notes, subtotal: job.subtotal, discount: job.discount, tax: job.tax, total: job.total,
-    paid: job.paid, balance: job.balance, items: job.items, proofs: job.proofs,
-    contact: { name, company, email, phone }, business_name: getSetting('business_name', 'Mi Taller'),
+    due_date: job.due_date, notes: job.notes, subtotal: f.ventaProductos, discount: f.descuentoGlobal + f.creditos, shipping: f.envioCobrado,
+    tax: f.impuesto, total: f.total, paid: job.paid, balance: job.balance, items, proofs,
+    contact: { name, company, email, phone }, business_name: getSetting('business_name', 'Color Plus LLC'),
     deposit_pct: getSetting('deposit_pct', 0.5),
   };
 }
