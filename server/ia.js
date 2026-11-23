@@ -49,6 +49,8 @@ function registrarUso(feature, user, response) {
 
 /** Traduce los errores del SDK a mensajes claros (sin exponer detalles internos). */
 function errorIA(e) {
+  // Para Render → Logs: solo el tipo y el código, nunca la clave ni los datos
+  console.error(`[IA] ${e?.constructor?.name || 'Error'} status=${e?.status ?? '-'} request=${e?.requestID || e?.request_id || '-'} ${e instanceof Anthropic.APIError ? '' : String(e?.message || '').slice(0, 200)}`);
   if (e.status && !e.error && !(e instanceof Anthropic.APIError)) return e; // errores propios
   if (e instanceof Anthropic.AuthenticationError || e instanceof Anthropic.PermissionDeniedError) return fail(502, 'La clave de IA no es válida o no tiene permiso. Revisa ANTHROPIC_API_KEY en Render → Environment (que esté completa y sin espacios).');
   if (e instanceof Anthropic.RateLimitError) return fail(429, 'La IA está recibiendo demasiadas consultas. Intenta en un minuto.');
@@ -194,6 +196,7 @@ Aquí trabajas como el analista interno del equipo. Te preguntan de dos cosas:
 2) Dudas del oficio (procesos, telas, arte, producción, ventas): respóndelas con tu experiencia.
 Reglas:
 - Para cifras, clientes, órdenes y precios de Color Plus usa solo <datos>. Si algo no está, dilo claramente; no inventes cifras.
+- Para «quién no ha comprado hace rato», clientes inactivos o a quién reactivar, usa <datos>.clientesPorUltimaCompra: ya trae la última compra (app + DecoNetwork) y los días sin comprar calculados; no hagas tú las restas de fechas. Muestra una tabla con cliente, última compra, días, compras y ventas, empezando por los de más días, y sugiere a quién llamar primero (los que más compraban).
 - Cuando expliques el oficio, sé práctico: qué es, cómo funciona, ventajas, desventajas y cuándo conviene; si sirve, compara en una tabla corta.
 - Montos en USD con dos decimales. Cita los números de orden (OT-xxxx) o cotización (COT-xxxx) cuando hables de casos concretos.
 - Una orden "incompleta" tiene costos desconocidos: no la cuentes como ganancia cero; menciónala aparte.
@@ -225,6 +228,33 @@ function tarifasParaDonPixel(conCostos) {
  * · Coordinación: todas las órdenes y cotizaciones, sin liquidaciones.
  * · Dueño, Finanzas y Gerencia: todo.
  */
+/**
+ * Cada cliente visible con su última compra (órdenes de la app + historial de DecoNetwork) y los días que lleva sin comprar,
+ * ya calculados, del que más tiempo lleva al que menos. Los que nunca han comprado van al final con ultimaCompra null.
+ */
+function recenciaClientes(user, vendedores, logistica) {
+  const fc = filtroContactos(user, 'c');
+  const hoy = today();
+  const dias = (f) => Math.round((Date.parse(`${hoy}T00:00:00Z`) - Date.parse(`${f}T00:00:00Z`)) / 86400000);
+  return all(`SELECT c.id, c.name, c.company, c.salesperson_id,
+      (SELECT MAX(substr(o.fecha,1,10)) FROM historial_ordenes o WHERE o.contact_id = c.id) AS ultDeco,
+      (SELECT COUNT(*) FROM historial_ordenes o WHERE o.contact_id = c.id) AS nDeco,
+      (SELECT COALESCE(SUM(o.ventas),0) FROM historial_ordenes o WHERE o.contact_id = c.id) AS vDeco,
+      (SELECT MAX(COALESCE(j.invoice_date, substr(j.created_at,1,10))) FROM jobs j WHERE j.contact_id = c.id AND j.kind = 'order') AS ultApp,
+      (SELECT COUNT(*) FROM jobs j WHERE j.contact_id = c.id AND j.kind = 'order') AS nApp,
+      (SELECT COALESCE(SUM(j.subtotal),0) FROM jobs j WHERE j.contact_id = c.id AND j.kind = 'order') AS vApp
+    FROM contacts c WHERE ${fc.sql} LIMIT 400`, ...fc.params)
+    .map((c) => {
+      const ultima = [c.ultDeco, c.ultApp].filter(Boolean).sort().pop() || null;
+      return {
+        cliente: c.company ? `${c.name} (${c.company})` : c.name, vendedor: vendedores[c.salesperson_id] || 'sin asignar',
+        ultimaCompra: ultima, diasSinComprar: ultima ? dias(ultima) : null, compras: c.nDeco + c.nApp,
+        ...(logistica ? {} : { ventasSinImpuesto: Math.round((c.vDeco + c.vApp) * 100) / 100 }),
+      };
+    })
+    .sort((a, b) => (b.diasSinComprar ?? -1) - (a.diasSinComprar ?? -1));
+}
+
 function fotoDelNegocio(user) {
   const desde = new Date(Date.now() - 400 * 86400000).toISOString().slice(0, 10);
   const vendedores = Object.fromEntries(all('SELECT id, name FROM salespeople').map((s) => [s.id, s.name]));
@@ -270,7 +300,7 @@ function fotoDelNegocio(user) {
   const historialDeco = all(`SELECT c.name, c.company, COUNT(o.id) AS ordenes, MAX(o.fecha) AS ultima, ROUND(SUM(o.ventas),2) AS ventas, ROUND(SUM(o.total),2) AS total
     FROM historial_ordenes o JOIN contacts c ON c.id = o.contact_id WHERE ${fcH.sql} GROUP BY c.id ORDER BY ventas DESC LIMIT 150`, ...fcH.params)
     .map((h) => ({ cliente: h.company ? `${h.name} (${h.company})` : h.name, ordenes: h.ordenes, ultimaCompra: h.ultima?.slice(0, 10), ...(logistica ? {} : { ventasSinImpuesto: h.ventas, totalFacturado: h.total }) }));
-  const datos = { hoy: today(), negocio: getSetting('business_name', 'Color Plus LLC'), quienPregunta: { nombre: user?.name, rol: user?.role, alcance }, ordenes, tareasPendientes: tareas, historialDecoNetwork: historialDeco };
+  const datos = { hoy: today(), negocio: getSetting('business_name', 'Color Plus LLC'), quienPregunta: { nombre: user?.name, rol: user?.role, alcance }, ordenes, tareasPendientes: tareas, historialDecoNetwork: historialDeco, clientesPorUltimaCompra: recenciaClientes(user, vendedores, logistica) };
   if (!logistica) Object.assign(datos, { margen: currentPricing().config.margen, cotizacionesAbiertas: cotizaciones, liquidacionesDeComisiones: liquidaciones, tarifasVigentes: tarifasParaDonPixel(gestion) });
   return datos;
 }

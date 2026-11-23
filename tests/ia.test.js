@@ -195,3 +195,19 @@ test('el nombre del asistente se cambia en Ajustes (solo el dueño) y la IA lo u
   await s.duena.post('/ia/preguntar', { pregunta: '¿Cómo te llamas?' });
   assert.match(mock.peticiones[antes2].raw, /Eres Don Vergas,/);
 });
+
+test('«¿quién no ha comprado hace rato?»: recibe la última compra y los días sin comprar ya calculados', async () => {
+  const sinCompras = await s.duena.post('/contacts', { name: 'Nunca Compró', company: 'Cliente Frío' });
+  const antes = mock.peticiones.length;
+  const r = await s.duena.post('/ia/preguntar', { pregunta: '¿Qué clientes no han comprado hace rato?' });
+  assert.ok(r.respuesta.length > 0);
+  const body = mock.peticiones[antes].body;
+  const datos = JSON.parse(body.messages[0].content[0].text.replace(/^<datos>\n|\n<\/datos>$/g, ''));
+  assert.ok(Array.isArray(datos.clientesPorUltimaCompra));
+  const frio = datos.clientesPorUltimaCompra.find((c) => c.cliente.includes('Cliente Frío'));
+  assert.equal(frio.ultimaCompra, null);
+  assert.equal(frio.diasSinComprar, null);
+  assert.ok(datos.clientesPorUltimaCompra.every((c) => 'vendedor' in c && 'compras' in c));
+  assert.match(body.system[0]?.text ?? body.system, /clientesPorUltimaCompra/);
+  await s.duena.del?.(`/contacts/${sinCompras.id}`);
+});

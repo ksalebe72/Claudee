@@ -8,6 +8,7 @@ const OFICIO = ['¿Qué diferencia hay entre DTF y serigrafía?', '¿Cuándo con
 
 const SUGERENCIAS = [
   '¿Qué órdenes están por debajo del 30% de contribución y por qué?',
+  '¿Qué clientes no han comprado hace rato?',
   '¿Qué clientes me dejan más ganancia este año?',
   '¿Cuánto tengo por cobrar y quién me debe más?',
   '¿Qué órdenes están atrasadas o vencen esta semana?',
@@ -41,20 +42,19 @@ export default function Asistente() {
     return () => clearInterval(t);
   }, [busy]);
 
-  async function preguntar(texto) {
+  async function preguntar(texto, base = chat) {
     const pregunta = (texto ?? q).trim();
     if (!pregunta || busy) return;
-    const historial = chat.map((m) => ({ role: m.role, content: m.content }));
-    setChat((c) => [...c, { role: 'user', content: pregunta }]);
+    const historial = base.filter((m) => !m.error).map((m) => ({ role: m.role, content: m.content }));
+    setChat([...base, { role: 'user', content: pregunta }]);
     setQ('');
     setBusy(true);
     try {
       const r = await api.post('/ia/preguntar', { pregunta, historial });
       setChat((c) => [...c, { role: 'assistant', content: r.respuesta }]);
     } catch (e) {
-      notify(e.message, true);
-      setChat((c) => c.slice(0, -1));
-      setQ(pregunta);
+      // El error queda en el chat (no solo en un aviso que se va) y la pregunta se puede repetir
+      setChat((c) => [...c, { role: 'assistant', error: true, content: `⚠️ No pude responder: ${e.message}`, pregunta }]);
     }
     setBusy(false);
   }
@@ -91,7 +91,7 @@ export default function Asistente() {
           {chat.map((m, i) => (
             <div key={i} className={`msg ${m.role}`}>
               {m.role === 'assistant' && <DonPixel size={26} className="msg-avatar" />}
-              {m.role === 'assistant' ? <div className="msg-cuerpo"><Markdown text={m.content} /></div> : m.content}
+              {m.role === 'assistant' ? <div className="msg-cuerpo"><Markdown text={m.content} />{m.error && <button className="btn small" disabled={busy} onClick={() => preguntar(m.pregunta, chat.slice(0, Math.max(0, i - 1)))}>Intentar de nuevo</button>}</div> : m.content}
             </div>
           ))}
           {busy && <div className="msg assistant typing"><DonPixel size={26} className="msg-avatar" />{FRASES_PENSANDO[frase % FRASES_PENSANDO.length]}</div>}
