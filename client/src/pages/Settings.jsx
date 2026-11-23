@@ -224,6 +224,7 @@ function Comisiones({ editable, notify }) {
                   {reglas.filter((r) => r.active && (r.salesperson_id === v.id || !r.salesperson_id)).map((r) => <option key={r.id} value={r.id}>{r.name}</option>)}
                 </select>
               </label>
+              {editable && <button className="link-btn" onClick={() => run(() => api.put(`/vendedores/${v.id}`, { es_dueno: !v.es_dueno }), v.es_dueno ? 'Ahora cobra comisión según su regla' : 'Marcado como dueño: sin comisión')}>{v.es_dueno ? 'Quitar «dueño»' : 'Es el dueño (sin comisión)'}</button>}
               {editable && <button className="link-btn" onClick={() => run(() => api.put(`/vendedores/${v.id}`, { active: !v.active }), 'Actualizado')}>{v.active ? 'Desactivar' : 'Activar'}</button>}</li>
           ))}
         </ul>
@@ -484,36 +485,55 @@ function VendedorPorEmpresa({ vend, notify }) {
   const [reglas, recargar] = useLoad(() => api.get('/importar/deco/reglas'));
   const [texto, setTexto] = useState('');
   const [sp, setSp] = useState('');
+  const [previa, setPrevia] = useState(null);
   const [busy, setBusy] = useState(false);
-  async function asignar() {
-    setBusy(true);
-    try {
-      const r = await api.post('/importar/deco/asignar-vendedor', { texto, salesperson_id: Number(sp), guardarRegla: true });
-      notify(`${r.vendedor}: ${r.clientes} cliente(s) y ${r.ordenesDeco} orden(es) de Deco asignadas`);
-      setTexto(''); recargar();
-    } catch (e) { notify(e.message, true); }
-    setBusy(false);
-  }
+  const datos = { texto, salesperson_id: Number(sp) };
+  async function paso(fn) { setBusy(true); try { await fn(); } catch (e) { notify(e.message, true); } setBusy(false); }
+  const verPrevia = () => paso(async () => setPrevia(await api.post('/importar/deco/asignar-vendedor/previa', datos)));
+  const asignar = () => paso(async () => {
+    const r = await api.post('/importar/deco/asignar-vendedor', datos);
+    notify(`${r.vendedor}: ${r.clientes} cliente(s) y ${r.ordenesDeco} orden(es) de Deco asignadas`);
+    setTexto(''); setPrevia(null); recargar();
+  });
+  const borrar = (t) => paso(async () => { if (!window.confirm(`¿Borrar la regla «${t}»? Los clientes ya asignados no cambian.`)) return; await api.del(`/importar/deco/reglas/${encodeURIComponent(t)}`); recargar(); notify('Regla borrada'); });
+  const cambian = previa?.clientes.filter((c) => c.cambia) || [];
   return (
     <section className="card wide">
       <h3>Vendedor por empresa</h3>
-      <p className="muted small">Asigna todos los clientes cuya empresa contenga un texto (p. ej. «guapo») a un vendedor, junto con sus compras de Deco. La regla se guarda y se aplica a los clientes que se importen después.</p>
+      <p className="muted small">Asigna a un vendedor todos los clientes cuya empresa contenga un texto (p. ej. «guapo»), junto con sus compras de Deco. Primero ves a quiénes movería. La regla se guarda y se aplica a los clientes que se importen después; cada cambio queda en el Historial con el vendedor anterior.</p>
       {reglas?.length > 0 && (
         <table className="table mini-table">
-          <thead><tr><th>Empresa contiene</th><th>Vendedor</th></tr></thead>
-          <tbody>{reglas.map((r) => <tr key={r.texto}><td>«{r.texto}»</td><td>{r.vendedor}</td></tr>)}</tbody>
+          <thead><tr><th>Empresa contiene</th><th>Vendedor</th><th /></tr></thead>
+          <tbody>{reglas.map((r) => <tr key={r.texto}><td>«{r.texto}»</td><td>{r.vendedor}</td><td className="num"><button className="link-btn small" disabled={busy} onClick={() => borrar(r.texto)}>Borrar regla</button></td></tr>)}</tbody>
         </table>
       )}
       <div className="row gap wrap" style={{ marginTop: 12 }}>
-        <label className="inline">Empresa contiene <input value={texto} onChange={(e) => setTexto(e.target.value)} placeholder="guapo" /></label>
+        <label className="inline">Empresa contiene <input value={texto} onChange={(e) => { setTexto(e.target.value); setPrevia(null); }} placeholder="guapo" /></label>
         <label className="inline">Vendedor
-          <select value={sp} onChange={(e) => setSp(e.target.value)}>
+          <select value={sp} onChange={(e) => { setSp(e.target.value); setPrevia(null); }}>
             <option value="">— Elegir —</option>
             {(vend || []).filter((v) => v.active).map((v) => <option key={v.id} value={v.id}>{v.name}</option>)}
           </select>
         </label>
-        <button className="btn primary" disabled={busy || texto.trim().length < 2 || !sp} onClick={asignar}>Asignar</button>
+        <button className="btn" disabled={busy || texto.trim().length < 3 || !sp} onClick={verPrevia}>Ver a quiénes movería</button>
       </div>
+      {previa && (
+        <div style={{ marginTop: 12 }}>
+          {!previa.clientes.length ? <p className="muted">Ningún cliente coincide con «{previa.texto}».</p> : (
+            <>
+              <p><strong>{previa.clientes.length}</strong> cliente(s) coinciden con «{previa.texto}»; <strong>{cambian.length}</strong> cambiarían de vendedor a <strong>{previa.vendedor}</strong>.</p>
+              <table className="table mini-table">
+                <thead><tr><th>Cliente</th><th>Vendedor hoy</th><th className="num">Órdenes de Deco</th></tr></thead>
+                <tbody>{previa.clientes.map((c) => <tr key={c.id}><td>{c.cliente}</td><td className={c.cambia && c.vendedorActual ? 'warn-txt' : ''}>{c.vendedorActual || 'sin asignar'}</td><td className="num">{c.ordenesDeco}</td></tr>)}</tbody>
+              </table>
+              <div className="row gap" style={{ marginTop: 8 }}>
+                <button className="btn primary" disabled={busy} onClick={asignar}>✓ Asignar a {previa.vendedor}</button>
+                <button className="btn" disabled={busy} onClick={() => setPrevia(null)}>Cancelar</button>
+              </div>
+            </>
+          )}
+        </div>
+      )}
     </section>
   );
 }

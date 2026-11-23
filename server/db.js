@@ -189,6 +189,7 @@ CREATE TABLE IF NOT EXISTS historial_lineas (
 );
 CREATE INDEX IF NOT EXISTS idx_historial_contacto ON historial_ordenes(contact_id);
 `);
+db.exec('CREATE INDEX IF NOT EXISTS idx_jobs_contacto ON jobs(contact_id, kind)'); // última compra por cliente (tablero y asistente)
 addColumn('contacts', 'deco_customer_id', 'TEXT'); // Customer ID de DecoNetwork (para no duplicar al importar)
 addColumn('historial_ordenes', 'salesperson_id', 'INTEGER'); // quién vendió esa orden de Deco (para el reporte de comisiones históricas)
 
@@ -239,7 +240,20 @@ export function methodsMap() {
   return Object.fromEntries(all('SELECT * FROM decoration_methods').map((m) => [m.code, m]));
 }
 
+let enTransaccion = 0;
+/** Todo o nada. Se puede anidar: la interna usa un punto de guardado dentro de la externa. */
 export function transaction(fn) {
-  db.exec('BEGIN');
-  try { const r = fn(); db.exec('COMMIT'); return r; } catch (e) { db.exec('ROLLBACK'); throw e; }
+  const nombre = `sp${enTransaccion}`;
+  db.exec(enTransaccion ? `SAVEPOINT ${nombre}` : 'BEGIN');
+  enTransaccion++;
+  try {
+    const r = fn();
+    enTransaccion--;
+    db.exec(enTransaccion ? `RELEASE ${nombre}` : 'COMMIT');
+    return r;
+  } catch (e) {
+    enTransaccion--;
+    db.exec(enTransaccion ? `ROLLBACK TO ${nombre}; RELEASE ${nombre}` : 'ROLLBACK');
+    throw e;
+  }
 }

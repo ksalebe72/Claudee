@@ -44,7 +44,7 @@ export function RentabilidadCard({ fin, preview, margen, user, jobId, onUpdated,
       <div className="row between"><span>Ganancia de producto</span><span>{pend(fin.gananciaProducto, '—')}</span></div>
       <div className="row between"><span>Ganancia de envío</span><span>{pend(fin.gananciaEnvio, '—')}</span></div>
       <div className="row between"><span>Ganancia bruta</span><strong>{pend(fin.gananciaBruta, '—')}</strong></div>
-      <div className="row between"><span>Comisión {c.tasa != null && c.regla ? `(${Math.round(c.tasa * 1000) / 10}%)` : ''}</span><span>{c.estado === 'sin_regla' ? <span className="muted">sin regla</span> : pend(c.monto)}</span></div>
+      <div className="row between"><span>Comisión {c.tasa != null && c.regla ? `(${Math.round(c.tasa * 1000) / 10}%)` : ''}</span><span>{c.estado === 'sin_regla' ? <span className="muted">sin regla</span> : c.estado === 'dueno' ? <span className="muted">dueño · sin comisión</span> : pend(c.monto)}</span></div>
       {c.regla && <div className="muted small">{c.regla} · sobre {BASES[c.baseTipo]}{c.base != null ? ` · base ${money(c.base)}` : ''}{c.motivo ? ` · ${c.motivo}` : ''}</div>}
       <div className="row between total"><span>Contribución</span><span>{pend(fin.contribucion, '—')}{fin.contribucionPct != null && <small> ({fin.contribucionPct}%)</small>}</span></div>
       {margen && <div className="muted small">Objetivo {Math.round(margen.objetivo * 100)}% · mínimo {Math.round(margen.minimo * 100)}%</div>}

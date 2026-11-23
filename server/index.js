@@ -10,8 +10,7 @@ import { programarRespaldos } from './backup.js';
 import { authRouter, usersRouter, requireAuth } from './auth.js';
 import { scopeMiddleware } from './scope.js';
 import { tableroApi } from './tablero.js';
-import { prepararKarolGuapos, marcarKarolDueno } from './importar-deco.js';
-import { ensurePricing, ensureCommissionSetup, aplicarCambioComisionBryan, aplicarCambioWrapsBryan, fijarReglaAutomaticaBryan, asignarClientesExistentes } from './config.js';
+import { aplicarMigraciones } from './migraciones.js';
 import { seedIfEmpty } from './seed.js';
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
@@ -22,12 +21,7 @@ if (process.env.TRUST_PROXY !== '0') app.set('trust proxy', 1);
 app.use(express.json({ limit: '20mb' }));
 
 if (seedIfEmpty({ demo: process.env.SEED_DEMO !== '0' })) console.log('Base nueva: datos iniciales cargados');
-ensurePricing();
-ensureCommissionSetup();
-if (process.env.CAMBIO_BRYAN_DISABLED !== '1') { aplicarCambioComisionBryan(); aplicarCambioWrapsBryan(); fijarReglaAutomaticaBryan(); }
-asignarClientesExistentes();
-prepararKarolGuapos(); // pedido del dueño: los Guapo's son de Karol
-marcarKarolDueno(); // Karol es el dueño: cuentas de la casa, sin comisión
+aplicarMigraciones(); // tarifas, comisiones iniciales y ajustes puntuales del dueño (cada uno una sola vez)
 programarRespaldos();
 
 // Toda la API exige sesión, salvo el inicio de sesión y el portal público del cliente.

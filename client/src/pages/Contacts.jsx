@@ -3,6 +3,7 @@ import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { api } from '../api.js';
 import { money, useLoad } from '../utils.js';
 import { Badge, Empty, Field, Modal, PageHeader, useMeta } from '../components/ui.jsx';
+import TablaClientesInactivos from '../components/ClientesInactivos.jsx';
 
 export default function Contacts() {
   const [params, setParams] = useSearchParams();
@@ -11,7 +12,6 @@ export default function Contacts() {
   const showNew = params.get('nuevo') === '1';
   const meta = useMeta();
   const asigna = !['ventas', 'logistica'].includes(meta.user.role);
-  if (params.get('inactivos') === '1') return <ClientesInactivos />;
 
   return (
     <>
@@ -45,33 +45,18 @@ export default function Contacts() {
   );
 }
 
-function ClientesInactivos() {
-  const [data] = useLoad(() => api.get('/clientes-inactivos'));
+/** Lista completa de clientes sin comprar (/contactos/inactivos). */
+export function ClientesInactivos() {
+  const [data, , , error] = useLoad(() => api.get('/clientes-inactivos'));
   const meta = useMeta();
-  const conMontos = meta.user.role !== 'logistica';
   return (
     <>
-      <PageHeader title="Clientes sin comprar" subtitle={data ? `${data.lista.length} cliente(s) con más de ${data.dias} días desde su última compra (app + DecoNetwork). Primero los que más compraban.` : ''}>
+      <PageHeader title="Clientes sin comprar" subtitle={data ? `${data.total} cliente(s) con más de ${data.dias} días desde su última compra (app + DecoNetwork). Primero los que más compraban.` : ''}>
         <Link className="btn" to="/contactos">← Todos los contactos</Link>
         <Link className="btn btn-morado" to="/asistente">💡 Pedirle ideas a {meta.asistente?.nombre || 'Don'}</Link>
       </PageHeader>
-      {!data ? <div className="loading">Cargando…</div> : !data.lista.length ? <Empty>Todos tus clientes han comprado en los últimos {data.dias} días. 🎉</Empty> : (
-        <div className="card no-pad">
-          <table className="table">
-            <thead><tr><th>Cliente</th><th>Contacto</th><th>Teléfono</th><th>Última compra</th><th className="num">Días</th><th className="num">Compras</th>{conMontos && <th className="num">Vendido s/imp.</th>}<th>Vendedor</th></tr></thead>
-            <tbody>
-              {data.lista.map((c) => (
-                <tr key={c.id}>
-                  <td><Link to={`/contactos/${c.id}`}><strong>{c.cliente}</strong></Link>{c.cotizacionesAbiertas > 0 && <span className="badge tone-blue" style={{ marginLeft: 6 }}>cotización abierta</span>}</td>
-                  <td>{c.contacto}</td><td>{c.telefono}</td><td>{c.ultimaCompra}</td>
-                  <td className={`num ${c.dias > data.dias * 2 ? 'danger' : 'warn-txt'}`}>{c.dias}</td>
-                  <td className="num">{c.compras}</td>{conMontos && <td className="num">{money(c.ventas)}</td>}
-                  <td className="muted">{c.vendedor || 'sin asignar'}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+      {error ? <Empty>{error}</Empty> : !data ? <div className="loading">Cargando…</div> : !data.lista.length ? <Empty>Todos tus clientes han comprado en los últimos {data.dias} días. 🎉</Empty> : (
+        <div className="card no-pad"><TablaClientesInactivos lista={data.lista} dias={data.dias} completa /></div>
       )}
     </>
   );

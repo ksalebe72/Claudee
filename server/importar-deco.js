@@ -225,7 +225,7 @@ export async function importar(archivo, nombre, { salesperson_id } = {}, user) {
         const id = insert('contacts', {
           name: c.name, company: c.company, email: c.email, phone: c.phone, address: c.address,
           tags: ['DecoNetwork', ...c.tiendas.filter((t) => norm(t) !== 'color plus')], source: 'DecoNetwork', notes: c.notas,
-          deco_customer_id: c.cid, salesperson_id: vendedorPorRegla(c.company) ?? sp, idioma: 'es',
+          deco_customer_id: c.cid, salesperson_id: vendedorPorRegla({ company: c.company, name: c.name }) ?? sp, idioma: 'es',
         });
         idPorCid.set(claveCliente(c), id);
         res.clientesCreados++;
@@ -266,38 +266,75 @@ export function historialCliente(contactId, { conMontos = true } = {}) {
 // ---------- Vendedores de las ventas de Deco y comisiones históricas ----------
 /** Reglas de asignación por empresa: [{ texto: 'guapo', salesperson_id }] (Ajustes → Importar de DecoNetwork). */
 export const reglasVendedor = () => getSetting('deco_reglas_vendedor', []);
-/** Vendedor que corresponde a una empresa según las reglas (o null). */
-export function vendedorPorRegla(empresa) {
-  const e = norm(empresa);
-  const r = reglasVendedor().find((x) => x.texto && e.includes(norm(x.texto)));
-  return r ? r.salesperson_id : null;
+/** ¿El cliente coincide con «empresa contiene X»? Mira la empresa; si no tiene empresa, el nombre. Una sola regla para todo. */
+export function coincideEmpresa(contacto, texto) {
+  const t = norm(texto);
+  return !!t && (contacto.company ? norm(contacto.company).includes(t) : norm(contacto.name).includes(t));
+}
+/** Vendedor que corresponde a un cliente según las reglas guardadas (o null). */
+export function vendedorPorRegla(contacto) {
+  return reglasVendedor().find((r) => coincideEmpresa(contacto, r.texto))?.salesperson_id ?? null;
+}
+
+function prepararRegla({ texto, salesperson_id }) {
+  const t = norm(texto);
+  if (t.length < 3) throw fail(400, 'Escribe al menos 3 letras del nombre de la empresa (ej. «guapo»).');
+  const sp = get('SELECT * FROM salespeople WHERE id = ?', Number(salesperson_id));
+  if (!sp) throw fail(400, 'Elige el vendedor.');
+  const contactos = all(`SELECT c.id, c.name, c.company, c.salesperson_id, s.name AS vendedor_actual,
+      (SELECT COUNT(*) FROM historial_ordenes o WHERE o.contact_id = c.id) AS ordenes_deco
+    FROM contacts c LEFT JOIN salespeople s ON s.id = c.salesperson_id ORDER BY c.company, c.name`).filter((c) => coincideEmpresa(c, t));
+  return { t, sp, contactos };
+}
+
+/** Vista previa de una regla «empresa contiene X → vendedor»: a quiénes movería y de quién son hoy. No cambia nada. */
+export function previaVendedorPorEmpresa(datos) {
+  const { t, sp, contactos } = prepararRegla(datos);
+  return {
+    texto: t, vendedor: sp.name,
+    clientes: contactos.map((c) => ({ id: c.id, cliente: c.company || c.name, vendedorActual: c.vendedor_actual || null, cambia: c.salesperson_id !== sp.id, ordenesDeco: c.ordenes_deco })),
+  };
 }
 
 /**
- * Aplica una regla «empresa contiene X → vendedor»: asigna ese vendedor a los clientes que coinciden
- * (también a los de la app, no solo de Deco) y a sus órdenes de Deco. Guarda la regla para próximas importaciones.
+ * Aplica la regla: asigna el vendedor a los clientes que coinciden (de la app y de Deco) y le atribuye sus órdenes de Deco.
+ * Queda en el historial cada cliente con su vendedor anterior, y la regla se guarda para próximas importaciones.
  */
-export function asignarVendedorPorEmpresa({ texto, salesperson_id, guardarRegla = true }, user) {
-  const t = norm(texto);
-  if (t.length < 2) throw fail(400, 'Escribe parte del nombre de la empresa (ej. «guapo»).');
-  const sp = get('SELECT * FROM salespeople WHERE id = ?', Number(salesperson_id));
-  if (!sp) throw fail(400, 'Elige el vendedor.');
-  const contactos = all('SELECT id, company, name FROM contacts').filter((c) => norm(c.company).includes(t) || (!c.company && norm(c.name).includes(t)));
+export function asignarVendedorPorEmpresa(datos, user) {
+  const { t, sp, contactos } = prepararRegla(datos);
   let ordenes = 0;
   transaction(() => {
     for (const c of contactos) {
-      run('UPDATE contacts SET salesperson_id = ? WHERE id = ?', sp.id, c.id);
-      ordenes += Number(run('UPDATE historial_ordenes SET salesperson_id = ? WHERE contact_id = ?', sp.id, c.id).changes || 0);
+      if (c.salesperson_id !== sp.id) {
+        run('UPDATE contacts SET salesperson_id = ? WHERE id = ?', sp.id, c.id);
+        audit(user, 'clientes', `vendedor del cliente ${c.company || c.name} (regla «${t}»)`, c.vendedor_actual || null, sp.name, String(c.id));
+      }
+      ordenes += Number(run('UPDATE historial_ordenes SET salesperson_id = ? WHERE contact_id = ? AND salesperson_id IS NOT ?', sp.id, c.id, sp.id).changes || 0);
     }
-    if (guardarRegla) setSetting('deco_reglas_vendedor', [...reglasVendedor().filter((r) => norm(r.texto) !== t), { texto: t, salesperson_id: sp.id }]);
+    if (datos.guardarRegla !== false) setSetting('deco_reglas_vendedor', [...reglasVendedor().filter((r) => norm(r.texto) !== t), { texto: t, salesperson_id: sp.id }]);
   });
-  audit(user, 'clientes', `vendedor por empresa «${t}»`, null, { vendedor: sp.name, clientes: contactos.length, ordenesDeco: ordenes }, null);
+  audit(user, 'clientes', `regla vendedor por empresa «${t}»`, null, { vendedor: sp.name, clientes: contactos.length, ordenesDeco: ordenes }, null);
   return { vendedor: sp.name, clientes: contactos.length, ordenesDeco: ordenes };
 }
 
-/** Pone a las órdenes de Deco el vendedor actual de su cliente (para las que no tienen vendedor). */
-export function completarVendedoresDesdeClientes() {
-  return Number(run('UPDATE historial_ordenes SET salesperson_id = (SELECT salesperson_id FROM contacts c WHERE c.id = historial_ordenes.contact_id) WHERE salesperson_id IS NULL').changes || 0);
+/** Borra una regla guardada (no cambia los clientes ya asignados). */
+export function borrarReglaVendedor(texto, user) {
+  const t = norm(texto);
+  const antes = reglasVendedor();
+  const regla = antes.find((r) => norm(r.texto) === t);
+  if (!regla) throw fail(404, 'Esa regla no existe.');
+  setSetting('deco_reglas_vendedor', antes.filter((r) => r !== regla));
+  audit(user, 'clientes', `regla vendedor por empresa «${t}»`, regla, 'borrada', null);
+  return reglasVendedor();
+}
+
+/**
+ * Pone a las órdenes de Deco SIN vendedor el vendedor actual de su cliente (de todos, o de un cliente).
+ * Las que ya tienen vendedor no se tocan: cada venta vieja se queda con quien la vendió.
+ */
+export function completarVendedoresDesdeClientes(contactId = null) {
+  return Number(run(`UPDATE historial_ordenes SET salesperson_id = (SELECT salesperson_id FROM contacts c WHERE c.id = historial_ordenes.contact_id)
+    WHERE salesperson_id IS NULL AND (? IS NULL OR contact_id = ?)`, contactId, contactId).changes || 0);
 }
 
 /**
@@ -339,30 +376,4 @@ export function comisionesDeco({ desde, hasta } = {}) {
   }
   const filas = [...grupos.values()].map((g) => ({ ...g, reglas: [...g.reglas] })).sort((a, b) => a.vendedor.localeCompare(b.vendedor) || a.mes.localeCompare(b.mes));
   return { filas, informativo: true, nota: 'Ventas de DecoNetwork: solo informativo. No entra a las liquidaciones ni se paga desde la app.' };
-}
-
-/**
- * Una sola vez (pedido del dueño): «todas las de Guapo's son de Karol». Crea a Karol como vendedora si no existe
- * (sin regla de comisión: el dueño la define en Ajustes) y deja la regla «empresa contiene guapo → Karol».
- */
-export function prepararKarolGuapos() {
-  if (getSetting('karol_guapos')) return false;
-  let karol = get("SELECT * FROM salespeople WHERE lower(name) = 'karol'");
-  if (!karol) { insert('salespeople', { name: 'Karol' }); karol = get("SELECT * FROM salespeople WHERE lower(name) = 'karol'"); audit(null, 'comisiones', 'vendedor Karol', null, 'creado (sin regla de comisión todavía)', String(karol.id)); }
-  asignarVendedorPorEmpresa({ texto: 'guapo', salesperson_id: karol.id }, null);
-  completarVendedoresDesdeClientes();
-  setSetting('karol_guapos', true);
-  return true;
-}
-
-/** «I'm Karol the owner»: Karol es el dueño → sus ventas (Guapo's) son de la casa y no generan comisión. */
-export function marcarKarolDueno() {
-  if (getSetting('karol_es_dueno')) return false;
-  const karol = get("SELECT * FROM salespeople WHERE lower(name) = 'karol'");
-  if (karol) {
-    run('UPDATE salespeople SET es_dueno = 1 WHERE id = ?', karol.id);
-    audit(null, 'comisiones', 'vendedor Karol', { es_dueno: false }, { es_dueno: true, nota: 'Karol es el dueño: sin comisión' }, String(karol.id));
-  }
-  setSetting('karol_es_dueno', true);
-  return true;
 }

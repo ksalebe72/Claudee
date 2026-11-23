@@ -4,6 +4,7 @@ import { Link } from 'react-router-dom';
 import { api } from '../api.js';
 import { money, fmtDate, fmtDateTime, label, useLoad } from '../utils.js';
 import { Empty, useMeta } from '../components/ui.jsx';
+import TablaClientesInactivos from '../components/ClientesInactivos.jsx';
 import { BarrasMensuales, TablaMensual, DonaContribucion } from '../components/Graficas.jsx';
 import DonPixel, { saludoDonPixel, useNombreAsistente } from '../components/DonPixel.jsx';
 
@@ -157,23 +158,9 @@ export default function Dashboard() {
         <section className="card tarjeta-inactivos">
           <div className="card-head">
             <div><h3 className="titulo-seccion">Clientes para reactivar</h3><p className="muted small">{t.inactivos.total} cliente(s) llevan más de {t.inactivos.dias} días sin comprar · antes compraban {money(t.inactivos.ventas)} · primero los que más compraban</p></div>
-            <Link to="/contactos?inactivos=1">Ver todos →</Link>
+            <Link to="/contactos/inactivos">Ver todos →</Link>
           </div>
-          <div className="tabla-desliza"><table className="table mini-table">
-            <thead><tr><th>Cliente</th><th>Última compra</th><th className="num">Días</th><th className="num">Compras</th><th className="num">Vendido</th><th>Vendedor</th></tr></thead>
-            <tbody>
-              {t.inactivos.lista.map((c) => (
-                <tr key={c.id}>
-                  <td><Link to={`/contactos/${c.id}`}><strong>{c.cliente}</strong></Link>{c.cotizacionesAbiertas > 0 && <span className="badge tone-blue" style={{ marginLeft: 6 }}>cotización abierta</span>}</td>
-                  <td>{fmtDate(c.ultimaCompra)}</td>
-                  <td className={`num ${c.dias > t.inactivos.dias * 2 ? 'danger' : 'warn-txt'}`}>{c.dias}</td>
-                  <td className="num">{c.compras}</td>
-                  <td className="num">{money(c.ventas)}</td>
-                  <td className="muted">{c.vendedor || 'sin asignar'}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table></div>
+          <TablaClientesInactivos lista={t.inactivos.lista} dias={t.inactivos.dias} />
         </section>
       )}
 

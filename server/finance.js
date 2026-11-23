@@ -64,11 +64,15 @@ export function computeClientStatus(contactId, excludeJobId) {
   return get('SELECT id FROM historial_ordenes WHERE contact_id = ? LIMIT 1', contactId) ? 'existente' : 'nuevo';
 }
 
+/** El dueño vende pero no cobra comisión (cuentas de la casa). Una sola regla para todo el cálculo de comisiones. */
+export const esDueno = (salespersonId) => !!(salespersonId && get('SELECT es_dueno FROM salespeople WHERE id = ?', salespersonId)?.es_dueno);
+
 /** Ajusta la regla de comisión al tipo de cliente (p. ej. Isabel nuevo/existente). */
 /** Regla automática del vendedor (su perfil). Si no tiene, la primera regla activa suya que no sea especial (wraps). */
 export function reglaAutomatica(salespersonId) {
   if (!salespersonId) return null;
   const sp = get('SELECT * FROM salespeople WHERE id = ?', salespersonId);
+  if (sp?.es_dueno) return null;
   if (sp?.default_rule_id && get('SELECT id FROM commission_rules WHERE id = ? AND active = 1', sp.default_rule_id)) return sp.default_rule_id;
   const r = get("SELECT id FROM commission_rules WHERE salesperson_id = ? AND active = 1 ORDER BY (name LIKE '%Wrap%'), id LIMIT 1", salespersonId);
   return r?.id ?? null;
@@ -97,7 +101,8 @@ export function computeJob(jobOrId, { persist = true } = {}) {
   const creditos = round2(get('SELECT COALESCE(SUM(amount),0) AS t FROM job_credits WHERE job_id = ?', job.id).t);
 
   const fechaRegla = job.invoice_date || today();
-  const ruleId = resolveRule(job);
+  const dueno = esDueno(job.salesperson_id);
+  const ruleId = dueno ? null : resolveRule(job);
   const regla = ruleAt(ruleId, fechaRegla);
 
   const fin = calcularRentabilidad({
@@ -105,6 +110,7 @@ export function computeJob(jobOrId, { persist = true } = {}) {
     costoEnvio: job.shipping_cost, costosExtra: job.extra_costs || [], tasaImpuesto: cfg.impuesto.tasa,
     exento: !!job.tax_exempt, reales, regla, margen: cfg.margen,
   });
+  if (dueno) fin.comision = { ...fin.comision, estado: 'dueno', regla: null, monto: 0, tasa: null, motivo: 'Venta del dueño: sin comisión' };
   const cobro = paymentStatus(job, fin.total);
   const aprob = job.margin_approval || null;
   const nivel = { gerencia: 1, duena: 2 };
@@ -199,6 +205,7 @@ function entrySnapshot(job, fin, tipo, monto, nota) {
  * Una liquidación revisada, aprobada o pagada nunca se modifica.
  */
 export function syncLiquidation(period, spId) {
+  if (esDueno(spId)) return null; // el dueño no tiene liquidaciones
   if (isFrozen(period, spId)) return liqOf(period, spId);
   const nuevas = [];
   for (const job of ordersOf(spId)) {
@@ -345,7 +352,7 @@ export function profitabilityReport({ desde, hasta, agrupar = 'orden' }) {
 
 export function commissionReport({ desde, hasta }) {
   const out = [];
-  for (const sp of all('SELECT * FROM salespeople ORDER BY name')) {
+  for (const sp of all('SELECT * FROM salespeople WHERE COALESCE(es_dueno,0) = 0 ORDER BY name')) {
     const r = { vendedor: sp.name, id: sp.id, pendienteCobro: 0, pendienteCosto: 0, listas: 0, aprobadas: 0, pagadas: 0, ajustes: 0 };
     const enRango = (p) => (!desde || p >= periodOf(desde)) && (!hasta || p <= periodOf(hasta));
     for (const e of all('SELECT e.*, l.status FROM commission_entries e JOIN liquidations l ON l.id = e.liquidation_id WHERE e.salesperson_id = ?', sp.id)) {

@@ -6,6 +6,7 @@ import { currentPricing, pricingVersion, savePricing, audit, listRules } from '.
 import {
   computeJob, approveMargin, confirmCosts, liquidationView, changeLiquidationStatus, syncLiquidation,
   profitabilityReport, commissionReport, today,
+  esDueno,
 } from './finance.js';
 import { liquidationPdf, liquidationXlsx } from './exports.js';
 import { logoFilePath } from './brand.js';
@@ -64,7 +65,7 @@ r.put('/vendedores/:id', wrap((req) => {
     datos.default_rule_id = rid;
   }
   update('salespeople', s.id, datos);
-  audit(req.user, 'comisiones', `vendedor ${s.name}`, { name: s.name, active: s.active, regla_automatica: s.default_rule_id ?? null }, { name: datos.name, active: datos.active, regla_automatica: datos.default_rule_id }, String(s.id));
+  audit(req.user, 'comisiones', `vendedor ${s.name}`, { name: s.name, active: s.active, regla_automatica: s.default_rule_id ?? null, dueno_sin_comision: !!s.es_dueno }, { name: datos.name, active: datos.active, regla_automatica: datos.default_rule_id, dueno_sin_comision: !!datos.es_dueno }, String(s.id));
   return get('SELECT * FROM salespeople WHERE id = ?', s.id);
 }));
 
@@ -180,16 +181,18 @@ r.get('/liquidaciones', wrap((req) => {
 }));
 r.get('/liquidaciones/historial', wrap((req) => {
   requireRole(req, ...GESTION);
-  return all('SELECT l.*, s.name AS vendedor FROM liquidations l JOIN salespeople s ON s.id = l.salesperson_id ORDER BY l.period DESC, s.name LIMIT 200');
+  return all('SELECT l.*, s.name AS vendedor FROM liquidations l JOIN salespeople s ON s.id = l.salesperson_id WHERE COALESCE(s.es_dueno,0) = 0 ORDER BY l.period DESC, s.name LIMIT 200');
 }));
 r.get('/liquidaciones/:periodo/:vendedor', wrap((req) => {
   requireRole(req, ...GESTION);
   if (!PERIODO.test(req.params.periodo)) throw fail(400, 'Mes inválido (AAAA-MM)');
+  if (esDueno(Number(req.params.vendedor))) throw fail(400, 'El dueño no tiene liquidaciones de comisión.');
   return liquidationView(req.params.periodo, Number(req.params.vendedor));
 }));
 r.post('/liquidaciones/:periodo/:vendedor/accion', wrap((req) => {
   if (!PERIODO.test(req.params.periodo)) throw fail(400, 'Mes inválido (AAAA-MM)');
   const sp = Number(req.params.vendedor);
+  if (esDueno(sp)) throw fail(400, 'El dueño no tiene liquidaciones de comisión.');
   const liq = syncLiquidation(req.params.periodo, sp) || get('SELECT * FROM liquidations WHERE period = ? AND salesperson_id = ?', req.params.periodo, sp);
   if (!liq) throw fail(400, 'No hay comisiones en esta liquidación.');
   changeLiquidationStatus(liq.id, req.body.accion, req.user, req.body);

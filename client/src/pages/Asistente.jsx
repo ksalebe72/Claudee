@@ -54,7 +54,7 @@ export default function Asistente() {
       setChat((c) => [...c, { role: 'assistant', content: r.respuesta }]);
     } catch (e) {
       // El error queda en el chat (no solo en un aviso que se va) y la pregunta se puede repetir
-      setChat((c) => [...c, { role: 'assistant', error: true, content: `⚠️ No pude responder: ${e.message}`, pregunta }]);
+      setChat((c) => [...c, { role: 'assistant', error: true, content: `⚠️ No pude responder: ${e.message}`, pregunta, base }]);
     }
     setBusy(false);
   }
@@ -91,7 +91,7 @@ export default function Asistente() {
           {chat.map((m, i) => (
             <div key={i} className={`msg ${m.role}`}>
               {m.role === 'assistant' && <DonPixel size={26} className="msg-avatar" />}
-              {m.role === 'assistant' ? <div className="msg-cuerpo"><Markdown text={m.content} />{m.error && <button className="btn small" disabled={busy} onClick={() => preguntar(m.pregunta, chat.slice(0, Math.max(0, i - 1)))}>Intentar de nuevo</button>}</div> : m.content}
+              {m.role === 'assistant' ? <div className="msg-cuerpo"><Markdown text={m.content} />{m.error && <button className="btn small" disabled={busy} onClick={() => preguntar(m.pregunta, m.base)}>Intentar de nuevo</button>}</div> : m.content}
             </div>
           ))}
           {busy && <div className="msg assistant typing"><DonPixel size={26} className="msg-avatar" />{FRASES_PENSANDO[frase % FRASES_PENSANDO.length]}</div>}

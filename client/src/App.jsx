@@ -7,7 +7,7 @@ import TopBar from './components/TopBar.jsx';
 import DonPixel from './components/DonPixel.jsx';
 import { applyBrand, BrandMark } from './brand.jsx';
 import Dashboard from './pages/Dashboard.jsx';
-import Contacts from './pages/Contacts.jsx';
+import Contacts, { ClientesInactivos } from './pages/Contacts.jsx';
 import ContactDetail from './pages/ContactDetail.jsx';
 import Pipeline from './pages/Pipeline.jsx';
 import Jobs from './pages/Jobs.jsx';
@@ -105,6 +105,7 @@ export default function App() {
           <Routes>
             <Route path="/" element={<Dashboard />} />
             <Route path="/contactos" element={<Contacts />} />
+            <Route path="/contactos/inactivos" element={<ClientesInactivos />} />
             <Route path="/contactos/:id" element={<ContactDetail />} />
             <Route path="/pipeline" element={<Pipeline />} />
             <Route path="/tareas" element={<Tasks />} />

@@ -203,7 +203,11 @@ test('alerta de clientes sin comprar: cuenta las compras de Deco, respeta los d�
   assert.equal(t.inactivos.total, esperados.length);
 
   await s.duena.put('/settings', { dias_cliente_inactivo: 730 });
-  assert.equal((await s.duena.get('/clientes-inactivos')).lista.length, 0);
+  assert.equal((await s.duena.get('/clientes-inactivos')).lista.length, Object.values(ultimas).filter((f) => dias(f) > 730).length);
+  // Un valor inválido no guarda nada del formulario (antes quedaba medio guardado)
+  const nombreAntes = (await s.duena.get('/meta')).settings.business_name;
+  assert.equal((await s.duena.call('PUT', '/settings', { business_name: 'Otro nombre', dias_cliente_inactivo: '' })).status, 400);
+  assert.equal((await s.duena.get('/meta')).settings.business_name, nombreAntes);
   assert.equal((await s.duena.call('PUT', '/settings', { dias_cliente_inactivo: 3 })).status, 400);
 
   // Logística no ve montos ni la tarjeta; un vendedor solo sus clientes
@@ -215,4 +219,50 @@ test('alerta de clientes sin comprar: cuenta las compras de Deco, respeta los d�
   const v = await s.userWithRole('ventas', karol.id);
   assert.ok((await v.get('/clientes-inactivos')).lista.every((c) => /guapo/i.test(c.cliente)));
   await s.duena.put('/settings', { dias_cliente_inactivo: 90 });
+});
+
+test('vendedor por empresa: vista previa sin cambios, historial por cliente, mínimo 3 letras y borrar regla', async () => {
+  const vend = await s.duena.get('/vendedores');
+  const bryan = vend.find((v) => v.name === 'Bryan');
+  const isabel = vend.find((v) => v.name === 'Isabel');
+  assert.equal((await s.duena.call('POST', '/importar/deco/asignar-vendedor/previa', { texto: 'co', salesperson_id: isabel.id })).status, 400, 'muy corto: movería medio mundo');
+  const previa = await s.duena.post('/importar/deco/asignar-vendedor/previa', { texto: 'acme', salesperson_id: isabel.id });
+  assert.deepEqual(previa.clientes.map((c) => [c.cliente, c.vendedorActual, c.cambia]), [['Acme Gym', 'Bryan', true]]);
+  const acme = (await s.duena.get('/contacts')).find((c) => c.company === 'Acme Gym');
+  assert.equal(acme.salesperson_id, bryan.id, 'la vista previa no cambia nada');
+
+  await s.duena.post('/importar/deco/asignar-vendedor', { texto: 'acme', salesperson_id: isabel.id });
+  const hist = await s.duena.get('/auditoria?area=clientes');
+  assert.ok(hist.some((h) => JSON.stringify(h).includes('Acme Gym (regla «acme»)') && JSON.stringify(h).includes('Bryan')), 'queda el vendedor anterior de cada cliente');
+
+  // Cambiar el vendedor desde la ficha NO mueve sus ventas viejas de Deco: cada una se queda con quien la vendió
+  await s.duena.put(`/contacts/${acme.id}`, { salesperson_id: bryan.id });
+  const rep = await s.duena.get('/reportes/comisiones-deco');
+  assert.equal(rep.filas.filter((f) => f.vendedor === 'Isabel').reduce((a, f) => a + f.ordenes, 0), 3);
+  assert.equal(rep.filas.filter((f) => f.vendedor === 'Bryan').reduce((a, f) => a + f.ordenes, 0), 0);
+
+  const reglas = await s.duena.del('/importar/deco/reglas/acme');
+  assert.ok(!reglas.some((r) => r.texto === 'acme'));
+  assert.equal((await s.duena.call('DELETE', '/importar/deco/reglas/acme')).status, 404);
+});
+
+test('el dueño no cobra comisión en ningún lado, aunque tenga una regla, y el cambio de la marca queda registrado', async () => {
+  const karol = (await s.duena.get('/vendedores')).find((v) => v.name === 'Karol');
+  const regla = await s.duena.post('/comisiones/reglas', { name: 'Karol · prueba', base: 'venta_neta', rate: 0.1, salesperson_id: karol.id, effective_from: '2000-01-01' });
+  const prod = await s.duena.post('/products', { sku: 'DUE1', name: 'Tee dueño', base_cost: 4, sizes: ['M'], colors: ['Black'] });
+  const job = await s.duena.post('/jobs', { title: 'Venta del dueño', salesperson_id: karol.id, commission_rule_id: regla.id, items: [{ product_id: prod.id, sizes: { M: 10 } }] });
+  assert.equal(job.fin.comision.estado, 'dueno');
+  assert.equal(job.fin.comision.monto, 0, 'venta del dueño: sin comisión aunque tenga regla');
+
+  const rep = await s.duena.get('/reportes/comisiones');
+  assert.ok(!rep.some((r) => r.vendedor === 'Karol'), 'no aparece en el reporte de comisiones');
+  const mes = new Date().toISOString().slice(0, 7);
+  assert.equal((await s.duena.call('GET', `/liquidaciones/${mes}/${karol.id}`)).status, 400);
+  assert.equal((await s.duena.call('POST', `/liquidaciones/${mes}/${karol.id}/accion`, { accion: 'revisar' })).status, 400);
+
+  // Quitar y volver a poner la marca queda en el historial
+  await s.duena.put(`/vendedores/${karol.id}`, { es_dueno: false });
+  await s.duena.put(`/vendedores/${karol.id}`, { es_dueno: true });
+  const hist = await s.duena.get('/auditoria?area=comisiones');
+  assert.ok(hist.some((h) => h.field === 'vendedor Karol' && /"dueno_sin_comision":true/.test(h.old_value) && /"dueno_sin_comision":false/.test(h.new_value)));
 });

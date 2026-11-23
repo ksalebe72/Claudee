@@ -4,13 +4,14 @@ import { writeFileSync, mkdirSync } from 'node:fs';
 import { resolve, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { all, get, run, insert, update, getSetting, setSetting, transaction } from './db.js';
+import { diasInactivo, validarDiasInactivo } from './clientes-recencia.js';
 import { fire, registerHandler, TRIGGERS, ACTIONS } from './automations.js';
 import { PROCESOS, precioPrenda } from '../shared/pricing.js';
 import { computeJob, productSnapshot, computeClientStatus, assertMarginApproved, reglaAutomatica, today as hoy } from './finance.js';
 import { currentPricing, pricingVersion, audit, listRules } from './config.js';
 import { ROLES, requireRole } from './auth.js';
 import { filtroContactos, filtroJobs, soloPropios, esLogistica, sinFinanzas, tareaPermitida } from './scope.js';
-import { analizar as analizarDeco, importar as importarDeco, historialCliente, asignarVendedorPorEmpresa, reglasVendedor, comisionesDeco, completarVendedoresDesdeClientes } from './importar-deco.js';
+import { analizar as analizarDeco, importar as importarDeco, historialCliente, asignarVendedorPorEmpresa, previaVendedorPorEmpresa, borrarReglaVendedor, reglasVendedor, comisionesDeco, completarVendedoresDesdeClientes } from './importar-deco.js';
 import { getBrand, setBrandColors, saveLogo, removeLogo } from './brand.js';
 import { iaConfigurada , nombreAsistente } from './ia.js';
 import { sendMessage } from './messaging.js';
@@ -176,7 +177,7 @@ api.get('/meta', wrap((req) => ({
   settings: {
     business_name: getSetting('business_name', 'Mi Taller'),
     deposit_pct: getSetting('deposit_pct', 0.5),
-    dias_cliente_inactivo: getSetting('dias_cliente_inactivo', 90),
+    dias_cliente_inactivo: diasInactivo(),
   },
   asistente: { nombre: nombreAsistente() },
   brand: getBrand(),
@@ -188,18 +189,19 @@ api.get('/meta', wrap((req) => ({
 
 api.put('/settings', wrap((req) => {
   requireRole(req, 'duena');
-  for (const k of ['business_name', 'deposit_pct']) if (k in req.body) { audit(req.user, 'ajustes', k, getSetting(k), req.body[k]); setSetting(k, req.body[k]); }
-  if ('dias_cliente_inactivo' in req.body) {
-    const n = Math.round(Number(req.body.dias_cliente_inactivo));
-    if (!Number.isFinite(n) || n < 15 || n > 730) throw fail(400, 'Los días sin comprar deben estar entre 15 y 730.');
-    audit(req.user, 'ajustes', 'días sin comprar para alertar', getSetting('dias_cliente_inactivo', 90), n);
-    setSetting('dias_cliente_inactivo', n);
-  }
+  // Primero se valida todo; si algo está mal no se guarda nada (antes quedaba medio formulario guardado)
+  const cambios = [];
+  for (const k of ['business_name', 'deposit_pct']) if (k in req.body) cambios.push([k, k, getSetting(k), req.body[k]]);
+  if ('dias_cliente_inactivo' in req.body) cambios.push(['dias_cliente_inactivo', 'días sin comprar para alertar', diasInactivo(), validarDiasInactivo(req.body.dias_cliente_inactivo)]);
   if ('asistente_nombre' in req.body) {
     const nombre = String(req.body.asistente_nombre || '').trim().slice(0, 40);
     if (nombre.length < 2) throw fail(400, 'El nombre del asistente debe tener al menos 2 letras.');
-    audit(req.user, 'ajustes', 'nombre del asistente', nombreAsistente(), nombre);
-    setSetting('asistente_nombre', nombre);
+    cambios.push(['asistente_nombre', 'nombre del asistente', nombreAsistente(), nombre]);
+  }
+  for (const [clave, etiqueta, antes, ahora] of cambios) {
+    if (JSON.stringify(antes) === JSON.stringify(ahora)) continue; // sin cambio: no se registra
+    audit(req.user, 'ajustes', etiqueta, antes, ahora);
+    setSetting(clave, ahora);
   }
   if ('brand_primary' in req.body || 'brand_sidebar' in req.body) {
     const antes = getBrand();
@@ -300,15 +302,17 @@ api.put('/contacts/:id', wrap((req) => {
   const campos = soloPropios(req.user) ? CONTACT_FIELDS : [...CONTACT_FIELDS, 'salesperson_id'];
   const datos = { ...req.body };
   if ('idioma' in datos) datos.idioma = datos.idioma === 'en' ? 'en' : 'es';
+  let antes = null;
   if ('salesperson_id' in datos) {
     datos.salesperson_id = datos.salesperson_id ? Number(datos.salesperson_id) : null;
-    const antes = contactById(req.params.id);
-    if (!soloPropios(req.user) && antes && antes.salesperson_id !== datos.salesperson_id) {
-      audit(req.user, 'clientes', `vendedor del cliente ${antes.name}`, antes.salesperson_id, datos.salesperson_id, String(antes.id));
-      run('UPDATE historial_ordenes SET salesperson_id = ? WHERE contact_id = ?', datos.salesperson_id, antes.id); // sus ventas de Deco pasan al nuevo vendedor
-    }
+    antes = contactById(req.params.id);
+    if (!soloPropios(req.user) && antes && antes.salesperson_id !== datos.salesperson_id) audit(req.user, 'clientes', `vendedor del cliente ${antes.name}`, antes.salesperson_id, datos.salesperson_id, String(antes.id));
   }
-  update('contacts', req.params.id, datos, campos);
+  transaction(() => {
+    update('contacts', req.params.id, datos, campos);
+    // Las compras viejas de Deco se quedan con quien las vendió; solo se llenan las que no tenían vendedor
+    if (antes) completarVendedoresDesdeClientes(antes.id);
+  });
   return contactById(req.params.id);
 }));
 api.delete('/contacts/:id', wrap((req) => { run('DELETE FROM contacts WHERE id = ?', req.params.id); return { ok: true }; }));
@@ -323,8 +327,11 @@ api.post('/importar/deco/analizar', awrapImp(async (req) => { requireRole(req, '
 api.post('/importar/deco/confirmar', awrapImp(async (req) => { requireRole(req, 'duena'); const r = await importarDeco(req.body.archivo, req.body.nombre, { salesperson_id: req.body.salesperson_id }, req.user); completarVendedoresDesdeClientes(); return r; }));
 api.get('/importar/deco/reglas', wrap((req) => {
   requireRole(req, 'duena');
-  return reglasVendedor().map((r) => ({ ...r, vendedor: get('SELECT name FROM salespeople WHERE id = ?', r.salesperson_id)?.name || '—' }));
+  const nombres = Object.fromEntries(all('SELECT id, name FROM salespeople').map((v) => [v.id, v.name]));
+  return reglasVendedor().map((r) => ({ ...r, vendedor: nombres[r.salesperson_id] || '—' }));
 }));
+api.delete('/importar/deco/reglas/:texto', wrap((req) => { requireRole(req, 'duena'); return borrarReglaVendedor(req.params.texto, req.user); }));
+api.post('/importar/deco/asignar-vendedor/previa', wrap((req) => { requireRole(req, 'duena'); return previaVendedorPorEmpresa(req.body); }));
 api.post('/importar/deco/asignar-vendedor', wrap((req) => { requireRole(req, 'duena'); return asignarVendedorPorEmpresa(req.body, req.user); }));
 api.get('/reportes/comisiones-deco', wrap((req) => {
   requireRole(req, 'duena', 'finanzas', 'gerencia', 'coordinacion');
@@ -454,7 +461,10 @@ api.get('/jobs/:id', wrap((req) => (esLogistica(req.user) ? sinFinanzas(loadJob(
 // El cliente sin vendedor queda asignado al vendedor de su primera orden
 function asignarClienteAlVendedor(jobId) {
   const j = get('SELECT contact_id, salesperson_id FROM jobs WHERE id = ?', jobId);
-  if (j?.contact_id && j.salesperson_id) run('UPDATE contacts SET salesperson_id = ? WHERE id = ? AND salesperson_id IS NULL', j.salesperson_id, j.contact_id);
+  if (j?.contact_id && j.salesperson_id) {
+    run('UPDATE contacts SET salesperson_id = ? WHERE id = ? AND salesperson_id IS NULL', j.salesperson_id, j.contact_id);
+    completarVendedoresDesdeClientes(j.contact_id);
+  }
 }
 
 api.post('/jobs', wrap((req) => {
