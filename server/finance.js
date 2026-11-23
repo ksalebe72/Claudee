@@ -59,7 +59,9 @@ export function paymentStatus(job, total) {
 export function computeClientStatus(contactId, excludeJobId) {
   if (!contactId) return 'nuevo';
   const otras = all("SELECT * FROM jobs WHERE contact_id = ? AND kind = 'order' AND id != ?", contactId, excludeJobId || 0);
-  return otras.some((j) => paymentStatus(j, j.total).completo) ? 'existente' : 'nuevo';
+  if (otras.some((j) => paymentStatus(j, j.total).completo)) return 'existente';
+  // Compras anteriores traídas de DecoNetwork también lo hacen cliente existente
+  return get('SELECT id FROM historial_ordenes WHERE contact_id = ? LIMIT 1', contactId) ? 'existente' : 'nuevo';
 }
 
 /** Ajusta la regla de comisión al tipo de cliente (p. ej. Isabel nuevo/existente). */

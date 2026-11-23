@@ -10,6 +10,7 @@ import { computeJob, productSnapshot, computeClientStatus, assertMarginApproved,
 import { currentPricing, pricingVersion, audit, listRules } from './config.js';
 import { ROLES, requireRole } from './auth.js';
 import { filtroContactos, filtroJobs, soloPropios, esLogistica, sinFinanzas, tareaPermitida } from './scope.js';
+import { analizar as analizarDeco, importar as importarDeco, historialCliente } from './importar-deco.js';
 import { getBrand, setBrandColors, saveLogo, removeLogo } from './brand.js';
 import { iaConfigurada , nombreAsistente } from './ia.js';
 import { sendMessage } from './messaging.js';
@@ -268,6 +269,7 @@ api.get('/contacts/:id', wrap((req) => {
   c.jobs = all('SELECT * FROM jobs WHERE contact_id = ? ORDER BY id DESC', c.id);
   c.tasks = all('SELECT * FROM tasks WHERE contact_id = ? ORDER BY done, due_date', c.id);
   c.activities = all('SELECT * FROM activities WHERE contact_id = ? ORDER BY id DESC', c.id);
+  c.historial = historialCliente(c.id, { conMontos: !esLogistica(req.user) }); // compras traídas de DecoNetwork
   return c;
 }));
 
@@ -301,6 +303,11 @@ api.put('/contacts/:id', wrap((req) => {
 }));
 api.delete('/contacts/:id', wrap((req) => { run('DELETE FROM contacts WHERE id = ?', req.params.id); return { ok: true }; }));
 
+// Importar clientes e historial de DecoNetwork (solo el dueño). Primero «analizar» (vista previa), luego «confirmar».
+const awrapImp = (fn) => async (req, res) => { try { res.json(await fn(req)); } catch (e) { res.status(e.status || 500).json({ error: e.status ? e.message : 'No se pudo leer el archivo. ¿Es la exportación de DecoNetwork?' }); } };
+api.post('/importar/deco/analizar', awrapImp(async (req) => { requireRole(req, 'duena'); return analizarDeco(req.body.archivo, req.body.nombre); }));
+api.post('/importar/deco/confirmar', awrapImp(async (req) => { requireRole(req, 'duena'); return importarDeco(req.body.archivo, req.body.nombre, { salesperson_id: req.body.salesperson_id }, req.user); }));
+
 // ¿Este cliente ya bordó antes? (para saber si cobrar el digitalizado del logo)
 api.get('/contacts/:id/bordado-previo', wrap((req) => {
   const excluir = Number(req.query.excluir) || 0;
@@ -308,7 +315,9 @@ api.get('/contacts/:id/bordado-previo', wrap((req) => {
     JOIN job_items i ON i.job_id = j.id WHERE j.contact_id = ? AND j.id != ? AND j.kind = 'order'`, Number(req.params.id), excluir);
   const ordenes = [...new Set(filas.filter((f) => (f.decorations || []).some((d) => d.process === 'bordado') || (f.line_type === 'diseno' && /digitaliz/i.test(f.description || '')))
     .map((f) => f.order_number || f.number))];
-  return { yaBordo: ordenes.length > 0, ordenes };
+  const deco = all("SELECT DISTINCT o.numero FROM historial_ordenes o JOIN historial_lineas l ON l.orden_id = o.id WHERE o.contact_id = ? AND (l.decoracion LIKE '%EMB%' OR lower(l.producto) LIKE '%embroider%' OR lower(l.producto) LIKE '%digitiz%')", Number(req.params.id)).map((r) => `Deco #${r.numero}`);
+  const todas = [...ordenes, ...deco];
+  return { yaBordo: todas.length > 0, ordenes: todas };
 }));
 
 api.post('/contacts/:id/activities', wrap((req) => {

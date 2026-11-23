@@ -719,3 +719,5 @@ code { font-size: .92em; font-weight: var(--fw-medium); }
 .aviso-digitalizado { display: flex; gap: 12px; align-items: center; justify-content: space-between; flex-wrap: wrap; background: var(--tono-durazno-bg); border: 1px solid var(--tono-durazno-borde); border-radius: 10px; padding: 10px 14px; margin: 0 0 12px; font-size: var(--fs-sm); }
 .aviso-digitalizado.ya { background: var(--surface-2); border-color: var(--border); }
 .lema-asistente { margin: 2px 0 0; font-family: var(--font-display); font-weight: var(--fw-semibold); font-size: var(--fs-sm); color: var(--tb-morado); }
+.pasos-import { margin: 0 0 12px; padding-left: 18px; line-height: 1.6; } .small-kpi { font-size: var(--fs-md) !important; }
+.clic { cursor: pointer; } .clic:hover td { background: var(--surface-2); } .lista-hist { margin: 4px 0; padding-left: 18px; display: grid; gap: 6px; }

@@ -79,6 +79,10 @@ export function tablero(user, meses = 6) {
 
   const filas = all(`SELECT j.id, j.kind, j.status, substr(j.created_at,1,7) AS mes, j.fin FROM jobs j
     WHERE substr(j.created_at,1,10) >= ? AND ${fj.sql}`, desde, ...fj.params);
+  // Ventas históricas traídas de DecoNetwork (montos tal como vinieron; sin costos ni comisiones)
+  const fc = filtroContactos(user, 'c');
+  const historicas = sinMontos ? [] : all(`SELECT substr(o.fecha,1,7) AS mes, o.ventas FROM historial_ordenes o LEFT JOIN contacts c ON c.id = o.contact_id
+    WHERE substr(o.fecha,1,10) >= ? AND ${soloPropios(user) ? fc.sql : '1=1'}`, desde, ...(soloPropios(user) ? fc.params : []));
   const valida = (j) => j.kind === 'order' || !['rechazada'].includes(j.status);
   const completa = (j) => j.fin && j.fin.contribucion != null && j.fin.semaforo !== 'incompleta';
 
@@ -89,7 +93,9 @@ export function tablero(user, meses = 6) {
       const ventas = r2(js.reduce((a, j) => a + (j.fin?.ingresoSinImpuesto || 0), 0));
       const ventasComp = comp.reduce((a, j) => a + (j.fin.ingresoSinImpuesto || 0), 0);
       const utilidad = r2(comp.reduce((a, j) => a + (j.fin.gananciaBruta || 0), 0));
-      return { mes, n: js.length, ventas, utilidad: verFinanzas ? utilidad : null, margenPct: verFinanzas && ventasComp ? r2((utilidad / ventasComp) * 100) : null, incompletas: js.length - comp.length };
+      const hist = kind === 'order' ? historicas.filter((h) => h.mes === mes) : [];
+      const ventasHist = r2(hist.reduce((a, h) => a + (h.ventas || 0), 0));
+      return { mes, n: js.length + hist.length, historicas: hist.length, ventas: r2(ventas + ventasHist), utilidad: verFinanzas ? utilidad : null, margenPct: verFinanzas && ventasComp ? r2((utilidad / ventasComp) * 100) : null, incompletas: js.length - comp.length };
     });
   }
 
@@ -101,8 +107,8 @@ export function tablero(user, meses = 6) {
     WHERE substr(p.paid_at,1,10) >= ? AND ${fj.sql}`, desde, ...fj.params).v;
 
   const kpis = sinMontos ? null : {
-    ventas: r2(ordenes.reduce((a, j) => a + (j.fin?.ingresoSinImpuesto || 0), 0)),
-    ordenes: ordenes.length,
+    ventas: r2(ordenes.reduce((a, j) => a + (j.fin?.ingresoSinImpuesto || 0), 0) + historicas.reduce((a, h) => a + (h.ventas || 0), 0)),
+    ordenes: ordenes.length + historicas.length, historicas: historicas.length,
     cotizacionesAbiertas: filas.filter((j) => j.kind === 'quote' && ['borrador', 'enviada'].includes(j.status)).length,
     cobros: r2(cobros),
     utilidad: verFinanzas ? r2(comp.reduce((a, j) => a + (j.fin.gananciaBruta || 0), 0)) : null,

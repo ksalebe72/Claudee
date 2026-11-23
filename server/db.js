@@ -171,8 +171,27 @@ CREATE TABLE IF NOT EXISTS commission_entries (
 `);
 addColumn('salespeople', 'default_rule_id', 'INTEGER'); // regla de comisión automática del vendedor
 
+// Historial de compras traído de otros sistemas (DecoNetwork): se guarda aparte de las órdenes de producción,
+// con los montos tal como vinieron. No genera comisiones ni cobranza; sirve para la ficha del cliente,
+// «cliente existente», el tablero de ventas y la IA.
+db.exec(`
+CREATE TABLE IF NOT EXISTS historial_ordenes (
+  id INTEGER PRIMARY KEY AUTOINCREMENT, contact_id INTEGER REFERENCES contacts(id) ON DELETE CASCADE,
+  origen TEXT NOT NULL DEFAULT 'DecoNetwork', numero TEXT NOT NULL, fecha TEXT, tienda TEXT, po TEXT, trabajo TEXT,
+  ventas REAL, envio REAL, impuesto REAL, total REAL, unidades INTEGER, importado_por TEXT,
+  created_at TEXT DEFAULT (datetime('now')), UNIQUE(origen, numero)
+);
+CREATE TABLE IF NOT EXISTS historial_lineas (
+  id INTEGER PRIMARY KEY AUTOINCREMENT, orden_id INTEGER REFERENCES historial_ordenes(id) ON DELETE CASCADE,
+  producto TEXT, codigo TEXT, color TEXT, tallas TEXT, cantidad REAL, precio_unitario REAL, descuento REAL,
+  total REAL, impuesto REAL, decoracion TEXT, proveedor TEXT, costo_proveedor REAL
+);
+CREATE INDEX IF NOT EXISTS idx_historial_contacto ON historial_ordenes(contact_id);
+`);
+addColumn('contacts', 'deco_customer_id', 'TEXT'); // Customer ID de DecoNetwork (para no duplicar al importar)
+
 // ---------- helpers ----------
-const JSON_COLS = new Set(['tags', 'colors', 'sizes', 'decorations', 'tiers', 'condition', 'params', 'size_costs', 'extra_costs', 'override', 'margin_approval', 'fin', 'calc', 'config', 'snapshot']);
+const JSON_COLS = new Set(['tallas', 'tags', 'colors', 'sizes', 'decorations', 'tiers', 'condition', 'params', 'size_costs', 'extra_costs', 'override', 'margin_approval', 'fin', 'calc', 'config', 'snapshot']);
 
 export function parseRow(row) {
   if (!row) return row;

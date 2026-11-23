@@ -190,7 +190,7 @@ Sé honesto: si algo depende del equipo, la tinta o el proveedor, dilo y da rang
 const SISTEMA_NEGOCIO = `${PERSONA_DON_PIXEL}
 
 Aquí trabajas como el analista interno del equipo. Te preguntan de dos cosas:
-1) Los datos de Color Plus, que vienen en <datos> (órdenes, cotizaciones, tareas, comisiones y tarifas vigentes). En <datos>.quienPregunta está quién pregunta y qué alcance tiene.
+1) Los datos de Color Plus, que vienen en <datos> (órdenes, cotizaciones, tareas, comisiones, tarifas vigentes y el historial de compras traído de DecoNetwork, el sistema anterior). En <datos>.quienPregunta está quién pregunta y qué alcance tiene.
 2) Dudas del oficio (procesos, telas, arte, producción, ventas): respóndelas con tu experiencia.
 Reglas:
 - Para cifras, clientes, órdenes y precios de Color Plus usa solo <datos>. Si algo no está, dilo claramente; no inventes cifras.
@@ -265,7 +265,12 @@ function fotoDelNegocio(user) {
   const alcance = logistica ? 'Logística: solo órdenes, entregas y tareas; no tiene acceso a montos, costos, márgenes ni comisiones.'
     : soloPropios(user) ? `Vendedor: solo ve SUS clientes y órdenes y su propia comisión. No tiene datos de otros vendedores ni del total del negocio.`
       : gestion ? 'Acceso completo.' : 'Coordinación de ventas: todas las órdenes y cotizaciones; no ve liquidaciones de comisiones.';
-  const datos = { hoy: today(), negocio: getSetting('business_name', 'Color Plus LLC'), quienPregunta: { nombre: user?.name, rol: user?.role, alcance }, ordenes, tareasPendientes: tareas };
+  // Compras traídas de DecoNetwork, resumidas por cliente (respeta el alcance: el vendedor solo sus clientes)
+  const fcH = filtroContactos(user, 'c');
+  const historialDeco = all(`SELECT c.name, c.company, COUNT(o.id) AS ordenes, MAX(o.fecha) AS ultima, ROUND(SUM(o.ventas),2) AS ventas, ROUND(SUM(o.total),2) AS total
+    FROM historial_ordenes o JOIN contacts c ON c.id = o.contact_id WHERE ${fcH.sql} GROUP BY c.id ORDER BY ventas DESC LIMIT 150`, ...fcH.params)
+    .map((h) => ({ cliente: h.company ? `${h.name} (${h.company})` : h.name, ordenes: h.ordenes, ultimaCompra: h.ultima?.slice(0, 10), ...(logistica ? {} : { ventasSinImpuesto: h.ventas, totalFacturado: h.total }) }));
+  const datos = { hoy: today(), negocio: getSetting('business_name', 'Color Plus LLC'), quienPregunta: { nombre: user?.name, rol: user?.role, alcance }, ordenes, tareasPendientes: tareas, historialDecoNetwork: historialDeco };
   if (!logistica) Object.assign(datos, { margen: currentPricing().config.margen, cotizacionesAbiertas: cotizaciones, liquidacionesDeComisiones: liquidaciones, tarifasVigentes: tarifasParaDonPixel(gestion) });
   return datos;
 }
@@ -456,8 +461,12 @@ function resumenClientes(user) {
     const ordenes = js.filter((j) => j.kind === 'order');
     const productos = [...new Set(all(`SELECT i.description, i.decorations FROM job_items i JOIN jobs j ON j.id = i.job_id WHERE j.contact_id = ? AND ${fj.sql} LIMIT 40`, c.id, ...fj.params)
       .flatMap((i) => [i.description, ...(i.decorations || []).map((d) => d.process)]).filter(Boolean))].slice(0, 8);
+    const hist = all('SELECT fecha, ventas FROM historial_ordenes WHERE contact_id = ? ORDER BY fecha DESC', c.id);
+    const prodHist = [...new Set(all('SELECT l.producto, l.decoracion FROM historial_lineas l JOIN historial_ordenes o ON o.id = l.orden_id WHERE o.contact_id = ? LIMIT 60', c.id)
+      .map((l) => [l.producto, l.decoracion].filter(Boolean).join(' · ')))].slice(0, 6);
+    const historialDeco = hist.length ? { ordenes: hist.length, ultima: hist[0].fecha?.slice(0, 10), ...(conMontos ? { totalVendido: Math.round(hist.reduce((a, h) => a + (h.ventas || 0), 0)) } : {}), productos: prodHist } : null;
     return {
-      cliente: c.company ? `${c.name} (${c.company})` : c.name, etiquetas: c.tags || [], origen: c.source || null,
+      cliente: c.company ? `${c.name} (${c.company})` : c.name, etiquetas: c.tags || [], origen: c.source || null, historialDeco,
       ordenes: ordenes.length, ultimaOrden: ordenes[0]?.fecha || null, ...(conMontos ? { totalComprado: Math.round(ordenes.reduce((a, j) => a + (j.total || 0), 0)) } : {}),
       productosYProcesos: productos,
       cotizacionesAbiertas: js.filter((j) => j.kind === 'quote' && ['borrador', 'enviada'].includes(j.status)).map((j) => ({ numero: j.number, titulo: j.title, desde: j.fecha, ...(conMontos ? { total: j.total } : {}) })),

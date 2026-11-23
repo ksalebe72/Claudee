@@ -89,6 +89,7 @@ export default function ContactDetail() {
             </ul>
           </section>
 
+          {c.historial?.length > 0 && <HistorialDeco historial={c.historial} />}
           <section className="card">
             <h3>Tareas</h3>
             <form className="row gap" onSubmit={addTask}>
@@ -137,5 +138,44 @@ export default function ContactDetail() {
       {edit && <ContactForm contact={c} onClose={() => setEdit(false)} onSaved={() => { setEdit(false); reload(); }} />}
       {toast}
     </>
+  );
+}
+
+/** Compras anteriores traídas de DecoNetwork (tal como vinieron; sin costos). */
+function HistorialDeco({ historial }) {
+  const [abierta, setAbierta] = useState(null);
+  const conMontos = historial.some((o) => o.total != null);
+  const total = historial.reduce((a, o) => a + (o.ventas || 0), 0);
+  const ultima = historial[0]?.fecha;
+  return (
+    <section className="card">
+      <div className="card-head"><h3>Compras anteriores · DecoNetwork</h3><span className="badge tone-violet">{historial.length} orden(es)</span></div>
+      <p className="muted small">Última compra: {fmtDate(ultima)}{conMontos ? <> · Vendido sin impuesto: <strong>{money(total)}</strong></> : null}</p>
+      <table className="table mini-table">
+        <thead><tr><th>Orden Deco</th><th>Fecha</th><th>Trabajo</th><th className="num">Piezas</th>{conMontos && <th className="num">Total</th>}</tr></thead>
+        <tbody>
+          {historial.slice(0, 50).map((o) => (
+            <React.Fragment key={o.id}>
+              <tr className="clic" onClick={() => setAbierta(abierta === o.id ? null : o.id)}>
+                <td>#{o.numero}{o.tienda && o.tienda !== 'Color Plus' ? <span className="muted small"> · {o.tienda}</span> : null}</td>
+                <td>{fmtDate(o.fecha)}</td><td className="small">{o.trabajo || '—'}</td><td className="num">{o.unidades}</td>
+                {conMontos && <td className="num">{money(o.total)}</td>}
+              </tr>
+              {abierta === o.id && (
+                <tr><td colSpan={conMontos ? 5 : 4}>
+                  <ul className="lista-hist">{o.lineas.map((l, i) => (
+                    <li key={i}><strong>{l.cantidad} × {l.producto}</strong>{l.color ? ` · ${l.color}` : ''}
+                      {l.tallas && Object.keys(l.tallas).length ? <span className="muted small"> · {Object.entries(l.tallas).map(([t, n]) => `${t}:${n}`).join(' ')}</span> : null}
+                      {l.decoracion ? <div className="muted small">{l.decoracion}</div> : null}
+                      {conMontos && l.total != null ? <span className="num"> {money(l.total)}</span> : null}</li>
+                  ))}</ul>
+                </td></tr>
+              )}
+            </React.Fragment>
+          ))}
+        </tbody>
+      </table>
+      {historial.length > 50 && <p className="muted small">Mostrando las 50 más recientes de {historial.length}.</p>}
+    </section>
   );
 }

@@ -4,7 +4,7 @@ import { fmtDateTime, money, today, useLoad } from '../utils.js';
 import { Field, PageHeader, useMeta, useToast } from '../components/ui.jsx';
 import { LOCATIONS } from '../components/JobLines.jsx';
 
-const TABS = { tarifas: 'Tarifas', comisiones: 'Vendedores y comisiones', usuarios: 'Usuarios', historial: 'Historial de cambios', general: 'General' };
+const TABS = { tarifas: 'Tarifas', comisiones: 'Vendedores y comisiones', usuarios: 'Usuarios', historial: 'Historial de cambios', importar: 'Importar de DecoNetwork', general: 'General' };
 
 export default function Settings() {
   const meta = useMeta();
@@ -23,6 +23,7 @@ export default function Settings() {
       {tab === 'comisiones' && <Comisiones editable={esDuena} notify={notify} />}
       {tab === 'usuarios' && esDuena && <Usuarios notify={notify} />}
       {tab === 'historial' && esDuena && <Historial />}
+      {tab === 'importar' && esDuena && <ImportarDeco notify={notify} />}
       {tab === 'general' && esDuena && <General notify={notify} />}
       {toast}
     </>
@@ -472,5 +473,85 @@ function Respaldos({ notify }) {
         {lista && !lista.length && <li className="muted">Todavía no hay respaldos.</li>}
       </ul>
     </section>
+  );
+}
+
+// ---------- Importar de DecoNetwork ----------
+const leerArchivoComoDataUrl = (file) => new Promise((ok, ko) => { const r = new FileReader(); r.onload = () => ok(r.result); r.onerror = ko; r.readAsDataURL(file); });
+
+function ImportarDeco({ notify }) {
+  const [vend] = useLoad(() => api.get('/vendedores'));
+  const [archivo, setArchivo] = useState(null);
+  const [vista, setVista] = useState(null);
+  const [vendedor, setVendedor] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [hecho, setHecho] = useState(null);
+
+  async function elegir(e) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setVista(null); setHecho(null); setBusy(true);
+    try {
+      const datos = { archivo: await leerArchivoComoDataUrl(file), nombre: file.name };
+      setArchivo(datos);
+      setVista(await api.post('/importar/deco/analizar', datos));
+    } catch (err) { notify(err.message, true); setArchivo(null); }
+    setBusy(false);
+    e.target.value = '';
+  }
+  async function confirmar() {
+    if (!confirm(`¿Importar ${vista.clientesNuevos} cliente(s) nuevo(s) y ${vista.ordenesNuevas} orden(es) al historial?`)) return;
+    setBusy(true);
+    try { setHecho(await api.post('/importar/deco/confirmar', { ...archivo, salesperson_id: vendedor ? Number(vendedor) : null })); setVista(null); setArchivo(null); notify('Importación lista'); } catch (err) { notify(err.message, true); }
+    setBusy(false);
+  }
+  return (
+    <div className="settings-grid">
+      <section className="card wide">
+        <h3>Importar clientes y compras de DecoNetwork</h3>
+        <ol className="pasos-import">
+          <li>En DecoNetwork exporta el reporte de órdenes (el detalle por línea). Sirve el Excel con la hoja «Datos originales Deco» o el CSV de Deco.</li>
+          <li>Súbelo aquí: primero verás una <strong>vista previa</strong>; no se guarda nada hasta que confirmes.</li>
+          <li>Se crea <strong>un cliente por cada cliente de Deco</strong> (sin duplicar los que ya existen) y sus compras quedan como <strong>historial</strong> en su ficha.</li>
+        </ol>
+        <label className="btn primary">{busy && !vista ? 'Leyendo…' : '📄 Elegir archivo (.xlsx o .csv)'}<input type="file" accept=".xlsx,.csv" hidden onChange={elegir} disabled={busy} /></label>
+        <p className="muted small">El historial no crea órdenes de producción, cobros ni comisiones: guarda las compras tal como vinieron de Deco. Puedes volver a subir el mismo archivo: las órdenes ya importadas se saltan.</p>
+      </section>
+
+      {vista && (
+        <section className="card wide">
+          <h3>Vista previa · {archivo?.nombre}</h3>
+          <div className="kpis">
+            <div className="kpi"><span className="kpi-label">Clientes</span><span className="kpi-value">{vista.clientes}</span><span className="kpi-sub">{vista.clientesNuevos} nuevos · {vista.clientesExistentes} ya existen{vista.clientesUnidos ? ` · ${vista.clientesUnidos} unidos (mismo email/empresa)` : ''}</span></div>
+            <div className="kpi"><span className="kpi-label">Órdenes</span><span className="kpi-value">{vista.ordenes}</span><span className="kpi-sub">{vista.ordenesNuevas} nuevas · {vista.ordenesYaImportadas} ya importadas</span></div>
+            <div className="kpi"><span className="kpi-label">Ventas sin impuesto</span><span className="kpi-value">{money(vista.ventas)}</span><span className="kpi-sub">Total facturado {money(vista.total)}</span></div>
+            <div className="kpi"><span className="kpi-label">Periodo</span><span className="kpi-value small-kpi">{vista.desde} → {vista.hasta}</span><span className="kpi-sub">{vista.lineas} líneas · tiendas: {vista.tiendas.join(', ')}</span></div>
+          </div>
+          <h4>Muestra de clientes</h4>
+          <table className="table mini-table">
+            <thead><tr><th>Cliente</th><th>Empresa</th><th>Email</th><th className="num">Órdenes</th><th /></tr></thead>
+            <tbody>{vista.muestra.map((c, i) => <tr key={i}><td>{c.nombre}</td><td>{c.empresa}</td><td className="small">{c.email}</td><td className="num">{c.ordenes}</td><td>{c.existe ? <span className="badge tone-gray">ya existe</span> : <span className="badge tone-green">nuevo</span>}</td></tr>)}</tbody>
+          </table>
+          <div className="row gap wrap" style={{ marginTop: 12 }}>
+            <label className="inline">Asignar los clientes nuevos al vendedor
+              <select value={vendedor} onChange={(e) => setVendedor(e.target.value)}>
+                <option value="">— Sin asignar (los asignas después) —</option>
+                {(vend || []).filter((v) => v.active).map((v) => <option key={v.id} value={v.id}>{v.name}</option>)}
+              </select>
+            </label>
+            <button className="btn primary" disabled={busy} onClick={confirmar}>{busy ? 'Importando…' : '✓ Importar'}</button>
+            <button className="btn" disabled={busy} onClick={() => { setVista(null); setArchivo(null); }}>Cancelar</button>
+          </div>
+        </section>
+      )}
+
+      {hecho && (
+        <section className="card wide">
+          <h3>✓ Importación lista</h3>
+          <p>{hecho.clientesCreados} cliente(s) creados · {hecho.clientesActualizados} actualizados (solo se llenaron datos vacíos) · {hecho.ordenesImportadas} orden(es) al historial · {hecho.ordenesOmitidas} ya estaban.</p>
+          <p className="muted small">Revisa en Contactos: cada cliente nuevo tiene la etiqueta «DecoNetwork». Asígnales vendedor e idioma desde su ficha. Queda en el Historial de cambios.</p>
+        </section>
+      )}
+    </div>
   );
 }

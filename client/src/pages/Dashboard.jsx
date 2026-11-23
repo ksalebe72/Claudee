@@ -66,6 +66,7 @@ export default function Dashboard() {
         <div className="aviso-base">
           <strong>Base:</strong> órdenes creadas en el periodo · importes sin impuesto
           {k.incompletas > 0 && <> · Las órdenes con costos incompletos se excluyen de márgenes: <strong>{k.incompletas} omitida(s)</strong>.</>}
+          {k.historicas > 0 && <> · Incluye <strong>{k.historicas}</strong> orden(es) importadas de DecoNetwork (solo en ventas).</>}
           {user.role === 'ventas' && <> · Solo tus clientes.</>}
         </div>
       )}
