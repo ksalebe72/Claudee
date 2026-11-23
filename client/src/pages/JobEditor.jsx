@@ -115,7 +115,7 @@ export default function JobEditor() {
       title: job.title || 'Cotización', contact_id: job.contact_id || null, opportunity_id: job.opportunity_id || null,
       due_date: job.due_date || null, priority: job.priority, assignee: job.assignee, notes: job.notes,
       discount: job.discount, shipping_charged: job.shipping_charged, shipping_cost: job.shipping_cost, extra_costs: job.extra_costs,
-      tax_exempt: job.tax_exempt, salesperson_id: job.salesperson_id || null, commission_rule_id: job.commission_rule_id || null,
+      tax_exempt: job.tax_exempt, salesperson_id: job.salesperson_id || null, commission_rule_id: job.commission_rule_id || null, idioma: job.idioma || null,
       ...(job.client_status_manual ? { client_status: job.client_status } : id ? { client_status: '' } : {}),
       items: job.items.filter((it) => it.product_id || it.description).map(({ calc: _c, ...it }) => it),
     };
@@ -283,6 +283,18 @@ export default function JobEditor() {
 
           <section className="card">
             <Field label="Notas (visibles para el cliente y producción)"><textarea rows={3} disabled={logistica} value={job.notes || ''} onChange={(e) => set({ notes: e.target.value })} /></Field>
+            {!logistica && (() => {
+              const delCliente = (contacts || []).find((c) => c.id === Number(job.contact_id))?.idioma || 'es';
+              return (
+                <Field label="Idioma de la factura, cotización y proofs para el cliente">
+                  <select value={job.idioma || ''} onChange={(e) => set({ idioma: e.target.value || null })}>
+                    <option value="">Según el cliente ({delCliente === 'en' ? 'English' : 'Español'})</option>
+                    <option value="es">Español</option>
+                    <option value="en">English</option>
+                  </select>
+                </Field>
+              );
+            })()}
           </section>
         </div>
 

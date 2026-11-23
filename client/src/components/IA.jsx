@@ -167,7 +167,7 @@ export function CotizarIAModal({ onClose, notify }) {
 // ---------- Redactar un mensaje ----------
 export function RedactarIAModal({ job, onClose, notify, onSaved }) {
   const [tipos, setTipos] = useState(null);
-  const [f, setF] = useState({ tipo: job.kind === 'order' ? (job.status === 'aprobacion' ? 'aprobar_arte' : job.status === 'listo' ? 'orden_lista' : 'libre') : job.status === 'enviada' ? 'seguimiento_cotizacion' : 'enviar_cotizacion', idioma: 'es', instrucciones: '' });
+  const [f, setF] = useState({ tipo: job.kind === 'order' ? (job.status === 'aprobacion' ? 'aprobar_arte' : job.status === 'listo' ? 'orden_lista' : 'libre') : job.status === 'enviada' ? 'seguimiento_cotizacion' : 'enviar_cotizacion', idioma: job.idioma || job.contact?.idioma || 'es', instrucciones: '' });
   const [res, setRes] = useState(null);
   const [busy, setBusy] = useState(false);
   useEffect(() => { api.get('/ia/estado').then((e) => setTipos(e.tiposMensaje)).catch(() => {}); }, []);

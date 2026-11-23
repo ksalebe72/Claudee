@@ -709,3 +709,10 @@ td.num, th.num { font-feature-settings: "tnum" 1; }
 .table td { font-size: var(--fs-base); }
 .mono, kbd, code { font-family: var(--font-ui); font-variant-numeric: tabular-nums; }
 code { font-size: .92em; font-weight: var(--fw-medium); }
+/* Portal del cliente: botón de imprimir y factura limpia al imprimir o guardar PDF */
+.portal-herramientas { display: flex; justify-content: flex-end; margin-bottom: 8px; }
+@media print {
+  .no-imprimir { display: none !important; }
+  .portal { padding: 0 !important; background: #fff !important; }
+  .portal-card { box-shadow: none !important; border: none !important; max-width: none !important; margin: 0 !important; }
+}

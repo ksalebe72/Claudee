@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react';
+import { textos, procesoCliente, ubicacionCliente, fechaCliente } from '../../../../shared/idiomas.js';
 import { api, fileToDataUrl } from '../../api.js';
 import { fmtDate } from '../../utils.js';
 import {
@@ -275,6 +276,9 @@ function wrapText(ctx, text, x, y, maxW, lh) {
 }
 
 async function buildSheet({ design, job, item, methodName, business, brand, version, svgs }) {
+  // Textos en el idioma del cliente (el de la orden o el del cliente)
+  const idioma = job.idioma || job.contact?.idioma || 'es';
+  const t = textos(idioma);
   const g = GARMENTS[design.garment];
   const views = Object.keys(g.views).filter((v) => design.layers.some((l) => areaOf(design, l.location).view === v));
   const imgs = await Promise.all(views.map((v) => svgToImage(svgs[v])));
@@ -299,10 +303,10 @@ async function buildSheet({ design, job, item, methodName, business, brand, vers
   }
   ctx.textAlign = 'left';
   ctx.fillStyle = '#1c2033'; ctx.font = 'bold 34px Arial'; ctx.fillText(business, textoX, 62);
-  if (design.photo?.style) { ctx.font = '20px Arial'; ctx.fillStyle = '#6b7189'; ctx.fillText(`Prenda: SanMar ${design.photo.style} · ${design.photo.color}`, textoX, 94); }
-  ctx.textAlign = 'right'; ctx.fillStyle = principal; ctx.font = 'bold 34px Arial'; ctx.fillText('PRUEBA DE ARTE', W - PAD, 56);
+  if (design.photo?.style) { ctx.font = '20px Arial'; ctx.fillStyle = '#6b7189'; ctx.fillText(`${t.prenda}: SanMar ${design.photo.style} · ${design.photo.color}`, textoX, 94); }
+  ctx.textAlign = 'right'; ctx.fillStyle = principal; ctx.font = 'bold 34px Arial'; ctx.fillText(t.pruebaDeArte, W - PAD, 56);
   ctx.font = '22px Arial'; ctx.fillStyle = '#6b7189';
-  ctx.fillText(`${job.order_number || job.number} · Versión ${version} · ${fmtDate(new Date().toISOString().slice(0, 10))}`, W - PAD, 92);
+  ctx.fillText(`${job.order_number || job.number} · ${t.version} ${version} · ${fechaCliente(new Date().toISOString().slice(0, 10), idioma)}`, W - PAD, 92);
   const colores = brand?.gradient?.length ? brand.gradient : [principal, principal];
   const grad = ctx.createLinearGradient(0, 0, W, 0);
   colores.forEach((col, i) => grad.addColorStop(i / (colores.length - 1), col));
@@ -320,7 +324,7 @@ async function buildSheet({ design, job, item, methodName, business, brand, vers
     const x = PAD - 10 + i * slot + (slot - w) / 2;
     ctx.drawImage(imgs[i], x, top, w, h);
     ctx.fillStyle = '#4b5068'; ctx.font = 'bold 24px Arial'; ctx.textAlign = 'center';
-    ctx.fillText(g.views[v].label.toUpperCase(), PAD - 10 + i * slot + slot / 2, top + viewH - 4);
+    ctx.fillText((t.vista[v] || g.views[v].label).toUpperCase(), PAD - 10 + i * slot + slot / 2, top + viewH - 4);
   });
 
   // panel de datos
@@ -335,12 +339,12 @@ async function buildSheet({ design, job, item, methodName, business, brand, vers
     });
     y += 16;
   };
-  block('CLIENTE', [[job.contact?.name || '—', true], ...(job.contact?.company ? [[job.contact.company]] : [])]);
-  block('TRABAJO', [[job.title || '—']]);
-  block('PRENDA', [[item?.description || item?.product_name || g.name, true], [`Color: ${design.colorName || '—'}`]]);
+  block(t.cliente, [[job.contact?.name || '—', true], ...(job.contact?.company ? [[job.contact.company]] : [])]);
+  block(t.trabajo, [[job.title || '—']]);
+  block(t.prendaT, [[item?.description || item?.product_name || g.name, true], [`${t.color}: ${design.colorName || '—'}`]]);
   if (item) {
     const sizes = Object.entries(item.sizes || {}).filter(([, n]) => n).map(([s, n]) => `${s}: ${n}`).join('   ');
-    block('CANTIDADES', [[sizes || `${item.qty} pzs`], [`Total: ${item.qty} piezas`, true]]);
+    block(t.cantidades, [[sizes || `${item.qty} ${t.pzs}`], [`${t.total}: ${item.qty} ${t.piezas}`, true]]);
   }
   const decoLines = [];
   for (const [loc, p] of Object.entries(design.placements)) {
@@ -348,16 +352,16 @@ async function buildSheet({ design, job, item, methodName, business, brand, vers
     if (!ls.length) continue;
     const u = unionBox(ls);
     const a = areaOf(design, loc);
-    decoLines.push([`${loc}`, true]);
-    decoLines.push([`${methodName(p.method) || 'Decoración'} · ${inches(u.w, a).toFixed(1)}" × ${inches(u.h, a).toFixed(1)}"`]);
-    if (p.inks) decoLines.push([`Colores: ${p.inks}`]);
+    decoLines.push([`${ubicacionCliente(loc, idioma)}`, true]);
+    decoLines.push([`${p.method ? procesoCliente(p.method, idioma) : t.decoracionGen} · ${inches(u.w, a).toFixed(1)}" × ${inches(u.h, a).toFixed(1)}"`]);
+    if (p.inks) decoLines.push([`${t.colores}: ${p.inks}`]);
   }
-  block('DECORACIÓN', decoLines);
-  if (design.note) block('NOTAS', [[design.note]]);
+  block(t.decoracion, decoLines);
+  if (design.note) block(t.notas, [[design.note]]);
 
   // pie
   ctx.fillStyle = '#6b7189'; ctx.font = '17px Arial';
-  wrapText(ctx, 'Revise ortografía, colores, tamaño y ubicación. Los colores en pantalla pueden variar del producto final y las medidas son aproximadas. Al aprobar esta prueba usted autoriza la producción; cambios posteriores pueden generar costos adicionales.', PAD, H - 50, W - PAD * 2, 24);
+  wrapText(ctx, t.avisoProof, PAD, H - 50, W - PAD * 2, 24);
 
   return c.toDataURL('image/png');
 }

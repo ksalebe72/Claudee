@@ -24,7 +24,7 @@ export default function Contacts() {
           <tbody>
             {list?.map((c) => (
               <tr key={c.id}>
-                <td><Link to={`/contactos/${c.id}`}><strong>{c.name}</strong></Link></td>
+                <td><Link to={`/contactos/${c.id}`}><strong>{c.name}</strong></Link>{c.idioma === 'en' && <span className="badge tone-blue" title="Documentos en inglés" style={{ marginLeft: 6 }}>EN</span>}</td>
                 <td>{c.company}</td>
                 <td>{c.phone}</td>
                 <td>{c.email}</td>
@@ -91,6 +91,12 @@ export function ContactForm({ contact, onClose, onSaved }) {
             </select>
           </Field>
         )}
+        <Field label="Idioma del cliente" hint="Sus facturas, cotizaciones y proofs le llegan en este idioma">
+          <select value={f.idioma || 'es'} onChange={(e) => setF({ ...f, idioma: e.target.value })}>
+            <option value="es">Español</option>
+            <option value="en">English</option>
+          </select>
+        </Field>
         <label className="inline"><input type="checkbox" checked={!!f.tax_exempt} onChange={(e) => setF({ ...f, tax_exempt: e.target.checked ? 1 : 0 })} /> Exento de impuesto (Maryland)</label>
         <Field label="Notas"><textarea rows={2} value={f.notes || ''} onChange={set('notes')} /></Field>
         {!contact && (

@@ -264,12 +264,13 @@ api.get('/contacts/:id', wrap((req) => {
   return c;
 }));
 
-const CONTACT_FIELDS = ['name', 'company', 'email', 'phone', 'tags', 'source', 'address', 'notes', 'tax_exempt'];
+const CONTACT_FIELDS = ['name', 'company', 'email', 'phone', 'tags', 'source', 'address', 'notes', 'tax_exempt', 'idioma'];
 api.post('/contacts', wrap((req) => {
   if (!req.body.name) throw fail(400, 'El nombre es obligatorio');
   const data = Object.fromEntries(CONTACT_FIELDS.filter((k) => k in req.body).map((k) => [k, req.body[k]]));
   // El cliente queda asignado al vendedor: el vendedor siempre a sí mismo; los demás pueden elegir
   data.salesperson_id = soloPropios(req.user) ? req.user.salesperson_id ?? null : req.body.salesperson_id || null;
+  data.idioma = data.idioma === 'en' ? 'en' : 'es';
   const id = insert('contacts', data);
   const contact = contactById(id);
   if (req.body.opportunity) {
@@ -282,6 +283,7 @@ api.post('/contacts', wrap((req) => {
 api.put('/contacts/:id', wrap((req) => {
   const campos = soloPropios(req.user) ? CONTACT_FIELDS : [...CONTACT_FIELDS, 'salesperson_id'];
   const datos = { ...req.body };
+  if ('idioma' in datos) datos.idioma = datos.idioma === 'en' ? 'en' : 'es';
   if ('salesperson_id' in datos) {
     datos.salesperson_id = datos.salesperson_id ? Number(datos.salesperson_id) : null;
     const antes = contactById(req.params.id);
@@ -419,6 +421,7 @@ api.post('/jobs', wrap((req) => {
       discount: Number(b.discount) || 0, token: token(),
       pricing_version_id: currentPricing().id,
       tax_exempt: b.tax_exempt !== undefined ? (b.tax_exempt ? 1 : 0) : contact?.tax_exempt ? 1 : 0,
+      idioma: ['es', 'en'].includes(b.idioma) ? b.idioma : null, // vacío = el del cliente
       shipping_charged: numOrNull(b.shipping_charged) || 0, shipping_cost: numOrNull(b.shipping_cost),
       extra_costs: b.extra_costs || [],
       // Si llega el vendedor sin regla, se usa la regla automática de su perfil
@@ -433,7 +436,7 @@ api.post('/jobs', wrap((req) => {
 }));
 
 const JOB_FIELDS = ['contact_id', 'opportunity_id', 'title', 'due_date', 'priority', 'assignee', 'notes', 'discount',
-  'shipping_charged', 'shipping_cost', 'extra_costs', 'tax_exempt', 'salesperson_id', 'commission_rule_id', 'client_status', 'client_status_manual', 'invoice_date'];
+  'shipping_charged', 'shipping_cost', 'extra_costs', 'tax_exempt', 'salesperson_id', 'commission_rule_id', 'client_status', 'client_status_manual', 'invoice_date', 'idioma'];
 api.put('/jobs/:id', wrap((req) => {
   const id = Number(req.params.id);
   const antes = get('SELECT * FROM jobs WHERE id = ?', id);
@@ -443,6 +446,7 @@ api.put('/jobs/:id', wrap((req) => {
   for (const k of ['discount', 'shipping_charged']) if (k in b) b[k] = numOrNull(b[k]) || 0;
   if ('shipping_cost' in b) b.shipping_cost = numOrNull(b.shipping_cost);
   if ('tax_exempt' in b) b.tax_exempt = b.tax_exempt ? 1 : 0;
+  if ('idioma' in b) b.idioma = ['es', 'en'].includes(b.idioma) ? b.idioma : null; // vacío = el del cliente
   if ('invoice_date' in b) {
     requireRole(req, 'finanzas', 'duena'); // la fecha de factura afecta comisiones
     if (b.invoice_date && !/^\d{4}-\d{2}-\d{2}$/.test(b.invoice_date)) throw fail(400, 'Fecha de factura inválida');
@@ -633,12 +637,14 @@ function portalJob(tok) {
   const j = get('SELECT id FROM jobs WHERE token = ?', tok);
   if (!j) throw fail(404, 'Enlace inválido');
   const job = loadJob(j.id);
-  const { email, phone, name, company } = job.contact || {};
+  const { email, phone, name, company, address } = job.contact || {};
+  // Idioma de los documentos del cliente: el de la orden, o el del cliente, o español
+  const idioma = job.idioma || job.contact?.idioma || 'es';
   // Solo datos de venta: nunca costos, márgenes ni comisiones.
   const items = job.items.map((it) => ({
     id: it.id, description: it.description, color: it.color, sizes: it.sizes, qty: it.qty, unit_price: it.unit_price, total: it.total,
     line_discount: it.line_discount || 0,
-    decorations: (it.decorations || []).map((d) => ({ location: d.location, width: d.width, height: d.height, method_name: PROCESOS[d.process] || PROCESOS[d.method] || d.process || d.method })),
+    decorations: (it.decorations || []).map((d) => ({ location: d.location, width: d.width, height: d.height, process: d.process || d.method, method_name: PROCESOS[d.process] || PROCESOS[d.method] || d.process || d.method })),
   }));
   const proofs = job.proofs.map(({ id, version, file_url, note, status, customer_comment, created_at }) => ({ id, version, file_url, note, status, customer_comment, created_at }));
   const f = job.finanzas;
@@ -646,7 +652,8 @@ function portalJob(tok) {
     id: job.id, kind: job.kind, number: job.number, order_number: job.order_number, title: job.title, status: job.status,
     due_date: job.due_date, notes: job.notes, subtotal: f.ventaProductos, discount: f.descuentoGlobal + f.creditos, shipping: f.envioCobrado,
     tax: f.impuesto, total: f.total, paid: job.paid, balance: job.balance, items, proofs,
-    contact: { name, company, email, phone }, business_name: getSetting('business_name', 'Color Plus LLC'), brand: getBrand(),
+    idioma, invoice_date: job.invoice_date, created_at: job.created_at,
+    contact: { name, company, email, phone, address }, business_name: getSetting('business_name', 'Color Plus LLC'), brand: getBrand(),
     deposit_pct: getSetting('deposit_pct', 0.5),
   };
 }

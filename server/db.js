@@ -112,6 +112,7 @@ for (const [c, d] of Object.entries({
   tax_exempt: 'INTEGER DEFAULT 0', salesperson_id: 'INTEGER', commission_rule_id: 'INTEGER', client_status: 'TEXT',
   client_status_manual: 'INTEGER DEFAULT 0', invoice_date: 'TEXT', costs_confirmed_at: 'TEXT', costs_confirmed_by: 'TEXT',
   margin_approval: 'TEXT', fin: 'TEXT',
+  idioma: 'TEXT', // idioma de los documentos de esta orden; vacío = el del cliente
 })) addColumn('jobs', c, d);
 for (const [c, d] of Object.entries({
   line_type: "TEXT DEFAULT 'prenda'", unit_cost: 'REAL', size_costs: "TEXT DEFAULT '{}'", price_mode: "TEXT DEFAULT 'auto'",
@@ -124,6 +125,7 @@ for (const [c, d] of Object.entries({
 })) addColumn('products', c, d);
 addColumn('contacts', 'tax_exempt', 'INTEGER DEFAULT 0');
 addColumn('contacts', 'salesperson_id', 'INTEGER'); // vendedor dueño del cliente
+addColumn('contacts', 'idioma', "TEXT DEFAULT 'es'"); // idioma de facturas y proofs del cliente (es/en)
 
 db.exec(`
 CREATE TABLE IF NOT EXISTS users (
