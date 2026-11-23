@@ -107,6 +107,8 @@ function validar(cfg) {
   if (p.escalonado.filter((t) => t.menorQue === null).length !== 1) errs.push('El modo escalonado necesita exactamente un tramo final (sin límite)');
   for (const f of cfg.bordado.filas) if (!isNumOrNull(f.costo) || !isNumOrNull(f.precio) || !(f.cantidadDesde >= 1) || !isNumOrNull(f.puntadasHasta)) errs.push('Revisa la tabla de bordado');
   if (!(cfg.dtf.costoPieCuadrado >= 0) || !(cfg.dtf.costoAplicacion >= 0)) errs.push('Revisa los costos de DTF');
+  const dg = cfg.bordado?.digitalizado || {};
+  if (!isNumOrNull(dg.costo ?? null) || !isNumOrNull(dg.precio ?? null)) errs.push('Revisa el costo y precio del digitalizado');
   if (!['prenda', 'ubicacion'].includes(cfg.dtf.aplicacionPor)) errs.push('La aplicación DTF debe ser por prenda o por ubicación');
   if (!['hoja', 'area'].includes(cfg.dtf.costoModo)) errs.push('El costo DTF debe ser por hoja o por área');
   if (cfg.dtf.costoModo === 'hoja') {

@@ -49,3 +49,19 @@ test('el portal sale en el idioma del cliente; la orden puede cambiarlo', async 
   const q2 = await s.duena.post('/jobs', { title: 'Camisas', contact_id: es.id, idioma: 'en', items: [] });
   assert.equal((await portal(q2)).idioma, 'en', 'se puede elegir al crear');
 });
+
+test('digitalizado: la app sabe si el cliente ya bordó antes (para no cobrarlo dos veces)', async () => {
+  const c = await s.duena.post('/contacts', { name: 'Cliente Bordado' });
+  const nuevo = await s.duena.get(`/contacts/${c.id}/bordado-previo`);
+  assert.equal(nuevo.yaBordo, false, 'primera vez');
+  const q = await s.duena.post('/jobs', { title: 'Polos', contact_id: c.id, items: [{ product_id: prod.id, sizes: { M: 10 }, decorations: [{ process: 'bordado', location: 'Pecho izquierdo' }] }] });
+  const aprob = q.finanzas?.aprobacion;
+  if (aprob?.requerida && !aprob.ok) await s.duena.post(`/jobs/${q.id}/aprobar-margen`, {});
+  await s.duena.post(`/jobs/${q.id}/convert`);
+  const despues = await s.duena.get(`/contacts/${c.id}/bordado-previo`);
+  assert.equal(despues.yaBordo, true);
+  assert.equal(despues.ordenes.length, 1);
+  assert.equal((await s.duena.get(`/contacts/${c.id}/bordado-previo?excluir=${q.id}`)).yaBordo, false, 'la orden actual no cuenta');
+  const t = await s.duena.get('/tarifas');
+  assert.deepEqual(t.config.bordado.digitalizado, { costo: 25, precio: 50 });
+});

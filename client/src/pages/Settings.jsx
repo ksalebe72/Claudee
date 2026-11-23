@@ -111,7 +111,13 @@ function Tarifas({ editable, notify }) {
           { k: 'costo', l: 'COSTO $' },
           { k: 'precio', l: 'PRECIO $' },
         ], () => ({ puntadasHasta: 5000, cantidadDesde: 1, costo: null, precio: null }))}
-        <p className="muted small">Sin rangos todavía: una sola fila. Para rangos de puntadas agrega filas con «Puntadas hasta» (5,000 / 10,000 / 15,000) y deja una fila vacía para «más». Digitalizado/setup se cobra con una línea «Diseño/Digitalizado» en la cotización.</p>
+        <p className="muted small">Sin rangos todavía: una sola fila. Para rangos de puntadas agrega filas con «Puntadas hasta» (5,000 / 10,000 / 15,000) y deja una fila vacía para «más».</p>
+        <h4>Digitalizado del logo (se cobra la primera vez que se borda cada logo)</h4>
+        <div className="row gap wrap">
+          <label className="inline">Costo $ <NumIn disabled={dis} value={c.bordado.digitalizado?.costo} onChange={(v) => upd((n) => { n.bordado.digitalizado = { ...(n.bordado.digitalizado || {}), costo: v }; })} /></label>
+          <label className="inline">Precio $ <NumIn disabled={dis} value={c.bordado.digitalizado?.precio} onChange={(v) => upd((n) => { n.bordado.digitalizado = { ...(n.bordado.digitalizado || {}), precio: v }; })} /></label>
+        </div>
+        <p className="muted small">En la orden aparece como línea «Digitalizado» (no comisionable). La app avisa cuando un cliente borda por primera vez.</p>
       </section>
 
       <section className="card">

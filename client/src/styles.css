@@ -716,3 +716,5 @@ code { font-size: .92em; font-weight: var(--fw-medium); }
   .portal { padding: 0 !important; background: #fff !important; }
   .portal-card { box-shadow: none !important; border: none !important; max-width: none !important; margin: 0 !important; }
 }
+.aviso-digitalizado { display: flex; gap: 12px; align-items: center; justify-content: space-between; flex-wrap: wrap; background: var(--tono-durazno-bg); border: 1px solid var(--tono-durazno-borde); border-radius: 10px; padding: 10px 14px; margin: 0 0 12px; font-size: var(--fs-sm); }
+.aviso-digitalizado.ya { background: var(--surface-2); border-color: var(--border); }

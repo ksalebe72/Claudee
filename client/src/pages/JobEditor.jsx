@@ -5,7 +5,7 @@ import { money, fmtDate, fmtDateTime, label, today, useLoad } from '../utils.js'
 import { Badge, Field, PageHeader, useMeta, useToast } from '../components/ui.jsx';
 import { calcularLinea, calcularRentabilidad } from '../../../shared/pricing.js';
 import ProofDesigner from '../components/designer/ProofDesigner.jsx';
-import { LineEditor, emptyPrenda, emptyDiseno } from '../components/JobLines.jsx';
+import { LineEditor, emptyPrenda, emptyDiseno, lineaDigitalizado, esDigitalizado } from '../components/JobLines.jsx';
 import { RentabilidadCard, VendedorCard, EnvioCostosCard, CostosRealesCard, CreditosCard } from '../components/FinancePanels.jsx';
 import { RedactarIAModal } from '../components/IA.jsx';
 
@@ -69,6 +69,14 @@ export default function JobEditor() {
     const regla = reglas.find((r) => r.id === perfil && r.active);
     if (regla) setJob((j) => ({ ...j, commission_rule_id: regla.id }));
   }, [id, job?.salesperson_id, vendedores, reglas]);
+
+  // Digitalizado: ¿el cliente ya bordó antes con nosotros? (si no, es la primera vez y se cobra)
+  const [bordadoPrevio, setBordadoPrevio] = useState(null);
+  const llevaBordado = !!job?.items?.some((it) => (it.decorations || []).some((d) => d.process === 'bordado'));
+  useEffect(() => {
+    if (!job?.contact_id || !llevaBordado) { setBordadoPrevio(null); return; }
+    api.get(`/contacts/${job.contact_id}/bordado-previo?excluir=${id || 0}`).then(setBordadoPrevio).catch(() => setBordadoPrevio(null));
+  }, [job?.contact_id, llevaBordado, id]);
 
   // Viene de «🎨 Proof» en una orden nueva: al guardarse, se abre el decorador
   useEffect(() => {
@@ -267,10 +275,18 @@ export default function JobEditor() {
               onRemove={() => set({ items: job.items.filter((_, i) => i !== idx) })}
               onDuplicate={() => set({ items: [...job.items.slice(0, idx + 1), structuredClone(it), ...job.items.slice(idx + 1)] })} />
           ))}
+          {editable && llevaBordado && !job.items.some(esDigitalizado) && (
+            <div className={`aviso-digitalizado ${bordadoPrevio?.yaBordo ? 'ya' : ''}`}>
+              {bordadoPrevio?.yaBordo
+                ? <span>🧵 Este cliente ya bordó con nosotros ({bordadoPrevio.ordenes.slice(0, 3).join(', ')}). Si es el mismo logo, no se cobra digitalizado; si es un logo nuevo, agrégalo.</span>
+                : <span>🧵 <strong>Primera vez bordando para este cliente:</strong> hay que digitalizar el logo ({money(cfg.bordado?.digitalizado?.precio)} por logo).</span>}
+              <button className="btn" onClick={() => set({ items: [...job.items, lineaDigitalizado(cfg)] })}>+ Agregar digitalizado</button>
+            </div>
+          )}
           {editable && (
             <div className="row gap wrap">
               <button className="btn add-line grow" onClick={() => set({ items: [...job.items, emptyPrenda()] })}>+ Prenda</button>
-              <button className="btn add-line" onClick={() => set({ items: [...job.items, emptyDiseno()] })}>+ Diseño / Digitalizado</button>
+              <button className="btn add-line" onClick={() => set({ items: [...job.items, lineaDigitalizado(cfg)] })} title="Trae el costo y precio del digitalizado de la matriz; cámbialo si es otro diseño">+ Diseño / Digitalizado</button>
               {products.some((p) => p.kind === 'servicio') && <button className="btn add-line" onClick={() => {
                 const p = products.find((x) => x.kind === 'servicio');
                 set({ items: [...job.items, { line_type: 'servicio', product_id: p.id, description: p.name, qty: 1, unit_price: p.price ?? '', unit_cost: p.base_cost ?? '', commissionable: p.commissionable !== 0, decorations: [] }] });

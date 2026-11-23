@@ -21,6 +21,8 @@ export const DEFAULT_PRICING = {
   bordado: {
     // puntadasHasta null = cualquier cantidad de puntadas; cantidadDesde = desde N piezas.
     filas: [{ puntadasHasta: null, cantidadDesde: 1, costo: 4.5, precio: 7.5 }], // costo $4.50 · precio al cliente $7.50 (dueño)
+    // Digitalizado del logo para bordar: se cobra una vez, la primera vez que se borda ese logo (dueño: cuesta $25, se vende en $50)
+    digitalizado: { costo: 25, precio: 50 },
   },
   dtf: {
     // Costo del material: 'hoja' = hojas de 12×12 (se cuentan las hojas que necesita la línea completa) · 'area' = por pie² del diseño

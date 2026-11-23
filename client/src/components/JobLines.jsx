@@ -7,6 +7,12 @@ const DEFAULT_SIZES = ['XS', 'S', 'M', 'L', 'XL', '2XL', '3XL'];
 
 export const emptyPrenda = () => ({ line_type: 'prenda', product_id: '', description: '', color: '', sizes: {}, qty: 0, unit_cost: '', size_costs: {}, price_mode: 'auto', manual_price: '', line_discount: '', decorations: [] });
 export const emptyDiseno = () => ({ line_type: 'diseno', description: 'Diseño/Digitalizado', qty: 1, unit_price: '', unit_cost: '', commissionable: false, decorations: [] });
+/** Línea de digitalizado con el costo y precio de la matriz (se cobra la primera vez que se borda un logo). */
+export const lineaDigitalizado = (cfg, logos = 1) => ({
+  ...emptyDiseno(), description: 'Digitalizado de logo para bordado (primera vez)', qty: logos,
+  unit_price: cfg?.bordado?.digitalizado?.precio ?? '', unit_cost: cfg?.bordado?.digitalizado?.costo ?? '',
+});
+export const esDigitalizado = (it) => (it.line_type || 'prenda') === 'diseno' && /digitaliz/i.test(it.description || '');
 
 /** Copia en la línea los datos del producto (costo, tallas, excepción de markup), igual que el servidor. */
 export function snapshotFromProduct(p, prev = {}) {

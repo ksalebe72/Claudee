@@ -156,3 +156,11 @@ test('Comisión 25% sobre venta neta: no incluye envío ni impuesto', () => {
 });
 
 function round(n) { return Math.round(n * 100) / 100; }
+
+test('Digitalizado: costo $25 y precio $50 en la matriz; la línea no comisiona', () => {
+  assert.deepEqual(cfg.bordado.digitalizado, { costo: 25, precio: 50 });
+  const l = calcularLinea({ line_type: 'diseno', description: 'Digitalizado de logo para bordado (primera vez)', qty: 1, unit_price: 50, unit_cost: 25 }, cfg);
+  assert.equal(l.venta, 50);
+  assert.equal(l.costo, 25);
+  assert.equal(l.comisionable, false);
+});

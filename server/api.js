@@ -294,6 +294,16 @@ api.put('/contacts/:id', wrap((req) => {
 }));
 api.delete('/contacts/:id', wrap((req) => { run('DELETE FROM contacts WHERE id = ?', req.params.id); return { ok: true }; }));
 
+// ¿Este cliente ya bordó antes? (para saber si cobrar el digitalizado del logo)
+api.get('/contacts/:id/bordado-previo', wrap((req) => {
+  const excluir = Number(req.query.excluir) || 0;
+  const filas = all(`SELECT j.id, j.kind, j.number, j.order_number, i.line_type, i.description, i.decorations FROM jobs j
+    JOIN job_items i ON i.job_id = j.id WHERE j.contact_id = ? AND j.id != ? AND j.kind = 'order'`, Number(req.params.id), excluir);
+  const ordenes = [...new Set(filas.filter((f) => (f.decorations || []).some((d) => d.process === 'bordado') || (f.line_type === 'diseno' && /digitaliz/i.test(f.description || '')))
+    .map((f) => f.order_number || f.number))];
+  return { yaBordo: ordenes.length > 0, ordenes };
+}));
+
 api.post('/contacts/:id/activities', wrap((req) => {
   const c = contactById(req.params.id);
   if (!c) throw fail(404, 'Contacto no encontrado');
