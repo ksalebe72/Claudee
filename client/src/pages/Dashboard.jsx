@@ -131,9 +131,9 @@ export default function Dashboard() {
         <div className="stack">
           {(
             <section className="card tarjeta-asistente">
-              <div className="row gap"><span className="asistente-avatar"><DonPixel size={44} /></span><div><h3 className="titulo-seccion">Don Pixel</h3><p className="muted small">Maestro del oficio · tu asistente</p></div></div>
-              <div className="asistente-burbuja">{saludoDonPixel(nombre)} Pregúntame por tus órdenes y clientes, o por el oficio: DTF, bordado, serigrafía, telas, archivos… También te ayudo a contestar emails y te doy ideas de venta.</div>
-              <Link className="btn btn-morado" to="/asistente"><span className="btn-ico">{I.enviar}</span> Hablar con Don Pixel</Link>
+              <div className="row gap"><span className="asistente-avatar"><DonPixel size={44} /></span><div><h3 className="titulo-seccion">Don Pixel</h3><p className="muted small">El mejor del oficio · barranquillero</p></div></div>
+              <div className="asistente-burbuja">{saludoDonPixel(nombre)} Pregúntame por tus órdenes y clientes, o lo que quieras del oficio: DTF, bordado, serigrafía, telas, archivos… También te ayudo con los emails y te tiro ideas de venta, pa' que veas.</div>
+              <Link className="btn btn-morado" to="/asistente"><span className="btn-ico">{I.enviar}</span> Échale, habla con Don Pixel</Link>
             </section>
           )}
           <section className="card">

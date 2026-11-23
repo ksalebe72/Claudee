@@ -10,15 +10,16 @@ export default function DonPixel({ size = 32, titulo = 'Don Pixel', className = 
 /** Saludo según la hora (Maryland). */
 export function saludoDonPixel(nombre) {
   const h = Number(new Date().toLocaleString('en-US', { timeZone: 'America/New_York', hour: 'numeric', hour12: false }));
-  const parte = h < 12 ? '¡Buenos días' : h < 19 ? '¡Buenas tardes' : '¡Buenas noches';
-  return `${parte}${nombre ? `, ${nombre}` : ''}!`;
+  const parte = h < 12 ? '¡Ey, ajá! Buenos días' : h < 19 ? '¡Ajá! Buenas tardes' : '¡Ey! Buenas noches';
+  return `${parte}${nombre ? `, ${nombre}` : ', mi llave'}. ¿Qué más pues?`;
 }
 
 /** Frases mientras Don Pixel piensa. */
 export const FRASES_PENSANDO = [
-  'Don Pixel está revisando las órdenes…',
-  'Calentando la plancha…',
-  'Contando puntadas…',
-  'Separando colores…',
-  'Buscando en el taller…',
+  'Eche, déjame revisar esas órdenes…',
+  'Calentando la plancha, ajá…',
+  'Contando puntadas, tranquilo que eso sale…',
+  'Separando colores, mi llave…',
+  'Buscando en el taller, aguanta un momentico…',
+  '¡Ombe! Ya casi lo tengo…',
 ];

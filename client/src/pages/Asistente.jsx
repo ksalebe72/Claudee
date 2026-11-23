@@ -82,7 +82,7 @@ export default function Asistente() {
       <div className="assistant" style={{ display: modo === 'preguntar' ? undefined : 'none' }}>
         {chat.length === 0 && (
           <div className="suggestions">
-            <p className="don-pixel-saludo">{saludoDonPixel(String(meta.user.name || '').split(' ')[0])} Soy <strong>Don Pixel</strong>, el experto del oficio de Color Plus. Pregúntame por tus órdenes y clientes, o cualquier duda del oficio.</p>
+            <p className="don-pixel-saludo">{saludoDonPixel(String(meta.user.name || '').split(' ')[0])} Soy <strong>Don Pixel</strong>, barranquillero y el mejor del oficio. Pregúntame por tus órdenes y clientes, o cualquier duda de DTF, bordado, serigrafía o lo que sea, que eso sale.</p>
             {sugerencias.map((s) => <button key={s} className="chip" onClick={() => preguntar(s)}>{s}</button>)}
           </div>
         )}
@@ -97,7 +97,7 @@ export default function Asistente() {
           <div ref={fin} />
         </div>
         <form className="ask" onSubmit={(e) => { e.preventDefault(); preguntar(); }}>
-          <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Pregúntale a Don Pixel…" disabled={busy} autoFocus />
+          <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Échale, pregúntale a Don Pixel…" disabled={busy} autoFocus />
           <button className="btn primary" disabled={busy || !q.trim()}>Preguntar</button>
         </form>
         <p className="muted small">Las respuestas usan los datos de ColorPlus OS al momento de preguntar (últimos ~13 meses). Don Pixel puede equivocarse: verifica las cifras importantes en Reportes.</p>

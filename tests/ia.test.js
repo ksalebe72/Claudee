@@ -167,3 +167,16 @@ test('Don Pixel es experto del oficio y conoce las tarifas; los costos solo los 
   assert.match(p.raw, /bordadoPrecioPorLogo/);
   assert.doesNotMatch(p.raw, /\\"costos\\"/, 'el vendedor no recibe costos de la matriz');
 });
+
+test('Don Pixel es barranquillero y bromista con el equipo, pero los emails al cliente van profesionales', async () => {
+  let antes = mock.peticiones.length;
+  await s.duena.post('/ia/preguntar', { pregunta: '¿Qué es el DTF?' });
+  let raw = mock.peticiones[antes].raw;
+  assert.match(raw, /barranquillero/);
+  assert.match(raw, /mejor del mundo/);
+  assert.match(raw, /Nada de groserías/);
+  antes = mock.peticiones.length;
+  await s.duena.post('/ia/responder-email', { email: 'Hi, can you quote 30 polos with our logo?' });
+  raw = mock.peticiones[antes].raw;
+  assert.match(raw, /sin jerga costeña, sin chistes/);
+});
