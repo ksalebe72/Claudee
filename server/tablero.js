@@ -109,6 +109,7 @@ export function tablero(user, meses = 6) {
   const kpis = sinMontos ? null : {
     ventas: r2(ordenes.reduce((a, j) => a + (j.fin?.ingresoSinImpuesto || 0), 0) + historicas.reduce((a, h) => a + (h.ventas || 0), 0)),
     ordenes: ordenes.length + historicas.length, historicas: historicas.length,
+    historicasTotal: sinMontos ? 0 : get(`SELECT COUNT(*) AS n FROM historial_ordenes o LEFT JOIN contacts c ON c.id = o.contact_id WHERE ${soloPropios(user) ? fc.sql : '1=1'}`, ...(soloPropios(user) ? fc.params : [])).n,
     cotizacionesAbiertas: filas.filter((j) => j.kind === 'quote' && ['borrador', 'enviada'].includes(j.status)).length,
     cobros: r2(cobros),
     utilidad: verFinanzas ? r2(comp.reduce((a, j) => a + (j.fin.gananciaBruta || 0), 0)) : null,

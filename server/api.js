@@ -305,6 +305,10 @@ api.delete('/contacts/:id', wrap((req) => { run('DELETE FROM contacts WHERE id =
 
 // Importar clientes e historial de DecoNetwork (solo el dueño). Primero «analizar» (vista previa), luego «confirmar».
 const awrapImp = (fn) => async (req, res) => { try { res.json(await fn(req)); } catch (e) { res.status(e.status || 500).json({ error: e.status ? e.message : 'No se pudo leer el archivo. ¿Es la exportación de DecoNetwork?' }); } };
+api.get('/importar/deco/resumen', wrap((req) => {
+  requireRole(req, 'duena');
+  return get("SELECT COUNT(*) AS ordenes, COUNT(DISTINCT contact_id) AS clientes, MIN(substr(fecha,1,10)) AS desde, MAX(substr(fecha,1,10)) AS hasta, ROUND(SUM(ventas),2) AS ventas, ROUND(SUM(total),2) AS total FROM historial_ordenes WHERE origen = 'DecoNetwork'");
+}));
 api.post('/importar/deco/analizar', awrapImp(async (req) => { requireRole(req, 'duena'); return analizarDeco(req.body.archivo, req.body.nombre); }));
 api.post('/importar/deco/confirmar', awrapImp(async (req) => { requireRole(req, 'duena'); return importarDeco(req.body.archivo, req.body.nombre, { salesperson_id: req.body.salesperson_id }, req.user); }));
 

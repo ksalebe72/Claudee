@@ -481,6 +481,7 @@ const leerArchivoComoDataUrl = (file) => new Promise((ok, ko) => { const r = new
 
 function ImportarDeco({ notify }) {
   const [vend] = useLoad(() => api.get('/vendedores'));
+  const [guardado, recargarGuardado] = useLoad(() => api.get('/importar/deco/resumen'));
   const [archivo, setArchivo] = useState(null);
   const [vista, setVista] = useState(null);
   const [vendedor, setVendedor] = useState('');
@@ -502,7 +503,7 @@ function ImportarDeco({ notify }) {
   async function confirmar() {
     if (!confirm(`¿Importar ${vista.clientesNuevos} cliente(s) nuevo(s) y ${vista.ordenesNuevas} orden(es) al historial?`)) return;
     setBusy(true);
-    try { setHecho(await api.post('/importar/deco/confirmar', { ...archivo, salesperson_id: vendedor ? Number(vendedor) : null })); setVista(null); setArchivo(null); notify('Importación lista'); } catch (err) { notify(err.message, true); }
+    try { setHecho(await api.post('/importar/deco/confirmar', { ...archivo, salesperson_id: vendedor ? Number(vendedor) : null })); setVista(null); setArchivo(null); recargarGuardado(); notify('Importación lista'); } catch (err) { notify(err.message, true); }
     setBusy(false);
   }
   return (
@@ -515,6 +516,7 @@ function ImportarDeco({ notify }) {
           <li>Se crea <strong>un cliente por cada cliente de Deco</strong> (sin duplicar los que ya existen) y sus compras quedan como <strong>historial</strong> en su ficha.</li>
         </ol>
         <label className="btn primary">{busy && !vista ? 'Leyendo…' : '📄 Elegir archivo (.xlsx o .csv)'}<input type="file" accept=".xlsx,.csv" hidden onChange={elegir} disabled={busy} /></label>
+        {guardado?.ordenes > 0 && <p className="ok small">Ya guardado en la app: <strong>{guardado.ordenes}</strong> órdenes de <strong>{guardado.clientes}</strong> clientes · {guardado.desde} → {guardado.hasta} · ventas sin impuesto {money(guardado.ventas)} · total {money(guardado.total)}.</p>}
         <p className="muted small">El historial no crea órdenes de producción, cobros ni comisiones: guarda las compras tal como vinieron de Deco. Puedes volver a subir el mismo archivo: las órdenes ya importadas se saltan.</p>
       </section>
 

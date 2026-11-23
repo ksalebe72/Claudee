@@ -108,6 +108,9 @@ test('el historial cuenta: cliente existente, bordado previo, tablero y permisos
 
   const t = await s.duena.get('/tablero?meses=12');
   assert.equal(t.kpis.historicas, 4);
+  assert.equal(t.kpis.historicasTotal, 4);
+  const res = await s.duena.get('/importar/deco/resumen');
+  assert.equal(res.ordenes, 4);
   assert.ok(t.kpis.ventas >= 565);
   assert.ok(t.serie.ordenes.some((m) => m.historicas > 0));
 
