@@ -1,9 +1,15 @@
-// Avatar de Don Pixel (imagen elegida por el dueño, en client/public/brand).
+// Avatar del asistente (imagen elegida por el dueño, en client/public/brand). El nombre se cambia en Ajustes → General.
 import React from 'react';
+import { useMeta } from './ui.jsx';
 
-/** Don Pixel. `size` en píxeles de pantalla. */
-export default function DonPixel({ size = 32, titulo = 'Don Pixel', className = '' }) {
-  const src = size <= 64 ? '/brand/don-pixel-128.webp' : '/brand/don-pixel-512.webp';
+/** Nombre del asistente según Ajustes. */
+export const useNombreAsistente = () => useMeta()?.asistente?.nombre || 'Don Vergas';
+
+/** Avatar del asistente. `size` en píxeles de pantalla. */
+export default function DonPixel({ size = 32, titulo, className = '' }) {
+  const nombre = useNombreAsistente();
+  titulo = titulo || nombre;
+  const src = size <= 64 ? '/brand/asistente-v2-128.webp' : '/brand/asistente-v2-512.webp';
   return <img className={`don-pixel ${className}`} src={src} width={size} height={size} alt={titulo} title={titulo} loading="lazy" decoding="async" />;
 }
 

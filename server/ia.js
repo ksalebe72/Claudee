@@ -171,6 +171,10 @@ function validarBorrador(out, user = null) {
 
 // ============ 2. Preguntarle al negocio ============
 // Identidad de Don Pixel: se comparte en todo lo que hace (preguntas, emails, ideas).
+/** Nombre del asistente (Ajustes → General). Los textos usan «Don Pixel» como marcador y se cambia al llamar a la IA. */
+export const nombreAsistente = () => getSetting('asistente_nombre', 'Don Vergas');
+const conNombre = (texto) => String(texto).replaceAll('Don Pixel', nombreAsistente());
+
 export const PERSONA_DON_PIXEL = `Eres Don Pixel, el maestro del oficio de Color Plus LLC (Gaithersburg, Maryland): una empresa B2B de branding que decora ropa y productos promocionales.
 Tu personalidad: un barranquillero de pura cepa (de Curramba la bella, en el Caribe colombiano), carnavalero, de unos 40 años, el mejor del mundo en este oficio: más de 20 años entre planchas, pulpos de serigrafía, máquinas de bordar e impresoras DTF, y al día con la tecnología. Eres bromista, alegre y mamador de gallo, pero cuando se trata del trabajo eres preciso, serio con los números y das la respuesta correcta sin rodeos.
 Cómo hablas: como barranquillero, cálido, rápido y con chispa. Usas con naturalidad expresiones de Barranquilla como «¡Ajá!», «¡Ey, ajá!», «¿qué más pues?», «eche», «erda», «mi llave», «mi vale», «mi hermano», «¡ombe!», «bacano», «qué nota», «a la orden», «pa' que veas», «tranquilo que eso sale», «esa vaina», y de vez en cuando un guiño al Carnaval («¡quien lo vive es quien lo goza!»). Echas un chiste o una comparación del oficio de vez en cuando (no en cada frase), y nunca a costa de nadie. Nada de groserías ni de palabras vulgares. Tratas de tú al equipo. Si te escriben en inglés, respondes en inglés con buena onda. El humor nunca tapa la información: primero el dato correcto, luego la gracia.
@@ -279,7 +283,7 @@ export async function preguntarAlNegocio(pregunta, historial, user) {
       ...BASE,
       max_tokens: 8000,
       output_config: { effort: 'medium' },
-      system: SISTEMA_NEGOCIO,
+      system: conNombre(SISTEMA_NEGOCIO),
       messages: [
         { role: 'user', content: [{ type: 'text', text: `<datos>\n${datos}\n</datos>`, cache_control: { type: 'ephemeral' } }] },
         { role: 'assistant', content: 'Tengo los datos. ¿Qué quieres saber?' },
@@ -408,7 +412,7 @@ export async function responderEmail({ email, contact_id, instrucciones, idioma 
       ...BASE,
       max_tokens: 4000,
       output_config: { effort: 'low', format: betaZodOutputFormat(RespuestaEmail) },
-      system: SISTEMA_EMAIL,
+      system: conNombre(SISTEMA_EMAIL),
       messages: [{
         role: 'user',
         content: `Idioma de la respuesta: ${idioma === 'en' ? 'inglés' : idioma === 'es' ? 'español' : 'el mismo del cliente'}\n\nDatos (JSON):\n${JSON.stringify(datos)}\n\n<email_cliente>\n${texto}\n</email_cliente>\n\n<instrucciones>\n${limpiar(instrucciones, 2000)}\n</instrucciones>`,
@@ -471,7 +475,7 @@ export async function ideasDeVenta({ enfoque, extra }, user) {
       ...BASE,
       max_tokens: 6000,
       output_config: { effort: 'medium' },
-      system: SISTEMA_IDEAS,
+      system: conNombre(SISTEMA_IDEAS),
       messages: [{ role: 'user', content: `<datos>\n${JSON.stringify(datos)}\n</datos>\n\nEnfoque: ${foco}\n${extra ? `Detalle de la persona: ${limpiar(extra, 1000)}` : ''}` }],
     });
     registrarUso('ideas', user, r);
@@ -486,7 +490,7 @@ export async function probarConexion(user) {
     const r = await cliente().beta.messages.create({
       ...BASE,
       max_tokens: 200,
-      system: `${PERSONA_DON_PIXEL}\n\nEsto es una prueba de conexión.`,
+      system: conNombre(`${PERSONA_DON_PIXEL}\n\nEsto es una prueba de conexión.`),
       messages: [{ role: 'user', content: 'Saluda al equipo en una sola frase corta, en español.' }],
     });
     registrarUso('prueba', user, r);

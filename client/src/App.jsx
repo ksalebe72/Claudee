@@ -26,7 +26,7 @@ import Asistente from './pages/Asistente.jsx';
 const GESTION = ['duena', 'finanzas', 'gerencia', 'coordinacion'];
 const SIN_LOGISTICA = ['duena', 'finanzas', 'gerencia', 'coordinacion', 'ventas'];
 const NAV = [
-  { group: 'General', items: [{ to: '/', label: 'Tablero', icon: '◧', end: true }, { to: '/asistente', label: 'Don Pixel', icon: <DonPixel size={18} /> }] },
+  { group: 'General', items: [{ to: '/', label: 'Tablero', icon: '◧', end: true }, { to: '/asistente', label: 'Asistente', asistente: true, icon: <DonPixel size={18} /> }] },
   { group: 'Ventas y CRM', items: [
     { to: '/contactos', label: 'Contactos', icon: '☺' },
     { to: '/pipeline', label: 'Pipeline', icon: '⇶', roles: SIN_LOGISTICA },
@@ -91,7 +91,7 @@ export default function App() {
               <div className="nav-group">{g.group}</div>
               {g.items.filter((i) => !i.roles || i.roles.includes(user.role)).map((i) => (
                 <NavLink key={i.to} to={i.to} end={i.end} className="nav-link">
-                  <span className="nav-icon">{i.icon}</span>{i.label}
+                  <span className="nav-icon">{i.icon}</span>{i.asistente ? meta.asistente?.nombre || i.label : i.label}
                 </NavLink>
               ))}
             </nav>

@@ -141,7 +141,7 @@ test('Don Pixel responde emails: borrador sin costos, el email va aislado y resp
 test('probar conexión: el dueño confirma que la clave funciona; otros no pueden', async () => {
   const r = await s.duena.post('/ia/probar');
   assert.equal(r.ok, true);
-  assert.match(r.respuesta, /Don Pixel/);
+  assert.match(r.respuesta, /Don Vergas/, 'se presenta con el nombre de Ajustes');
   assert.equal((await ventas.call('POST', '/ia/probar')).status, 403);
   assert.equal((await sinClave.duena.call('POST', '/ia/probar')).status, 503);
   mock.setModo('auth');
@@ -179,4 +179,19 @@ test('Don Pixel es barranquillero y bromista con el equipo, pero los emails al c
   await s.duena.post('/ia/responder-email', { email: 'Hi, can you quote 30 polos with our logo?' });
   raw = mock.peticiones[antes].raw;
   assert.match(raw, /sin jerga costeña, sin chistes/);
+});
+
+test('el nombre del asistente se cambia en Ajustes (solo el dueño) y la IA lo usa', async () => {
+  assert.equal((await s.duena.get('/meta')).asistente.nombre, 'Don Vergas');
+  assert.equal((await ventas.call('PUT', '/settings', { asistente_nombre: 'Otro' })).status, 403);
+  assert.equal((await s.duena.call('PUT', '/settings', { asistente_nombre: 'x' })).status, 400);
+  await s.duena.put('/settings', { asistente_nombre: 'Don Pixel' });
+  assert.equal((await s.duena.get('/meta')).asistente.nombre, 'Don Pixel');
+  const antes = mock.peticiones.length;
+  await s.duena.post('/ia/preguntar', { pregunta: '¿Cómo te llamas?' });
+  assert.match(mock.peticiones[antes].raw, /Eres Don Pixel,/);
+  await s.duena.put('/settings', { asistente_nombre: 'Don Vergas' });
+  const antes2 = mock.peticiones.length;
+  await s.duena.post('/ia/preguntar', { pregunta: '¿Cómo te llamas?' });
+  assert.match(mock.peticiones[antes2].raw, /Eres Don Vergas,/);
 });

@@ -339,10 +339,10 @@ function Historial() {
 function General({ notify }) {
   const meta = useMeta();
   const s = meta.settings;
-  const [f, setF] = useState({ business_name: s.business_name, deposit_pct: s.deposit_pct * 100 });
+  const [f, setF] = useState({ business_name: s.business_name, deposit_pct: s.deposit_pct * 100, asistente_nombre: meta.asistente?.nombre || '' });
   async function save(e) {
     e.preventDefault();
-    try { await api.put('/settings', { business_name: f.business_name, deposit_pct: Number(f.deposit_pct) / 100 }); await meta.reloadMeta(); notify('Guardado'); } catch (err) { notify(err.message, true); }
+    try { await api.put('/settings', { business_name: f.business_name, deposit_pct: Number(f.deposit_pct) / 100, asistente_nombre: f.asistente_nombre }); await meta.reloadMeta(); notify('Guardado'); } catch (err) { notify(err.message, true); }
   }
   return (
     <div className="settings-grid">
@@ -352,6 +352,7 @@ function General({ notify }) {
       <form className="card form" onSubmit={save}>
         <h3>Negocio</h3>
         <Field label="Nombre del negocio"><input value={f.business_name} onChange={(e) => setF({ ...f, business_name: e.target.value })} /></Field>
+        <Field label="Nombre del asistente de IA" hint="Así aparece en el menú, el tablero y el chat, y así se presenta la IA. Los clientes no lo ven."><input value={f.asistente_nombre} maxLength={40} onChange={(e) => setF({ ...f, asistente_nombre: e.target.value })} /></Field>
         <Field label="Anticipo sugerido (%)"><input type="number" value={f.deposit_pct} onChange={(e) => setF({ ...f, deposit_pct: e.target.value })} /></Field>
         <div className="row end"><button className="btn primary">Guardar</button></div>
         <p className="muted small">Mensajes al cliente: el sistema no envía correos ni SMS. Las automatizaciones de envío vienen apagadas.</p>
@@ -428,15 +429,15 @@ function EstadoIA() {
     setPrueba({ cargando: true });
     try { setPrueba(await api.post('/ia/probar')); } catch (err) { setPrueba({ error: err.message }); }
   }
-  const NOMBRES = { prueba: 'Prueba de conexión', cotizar: 'Cotizar desde mensaje', preguntar: 'Don Pixel (preguntas)', redactar: 'Redactar mensajes', email: 'Don Pixel (responder emails)', ideas: 'Don Pixel (ideas de venta)' };
+  const NOMBRES = { prueba: 'Prueba de conexión', cotizar: 'Cotizar desde mensaje', preguntar: 'Asistente (preguntas)', redactar: 'Redactar mensajes', email: 'Asistente (responder emails)', ideas: 'Asistente (ideas de venta)' };
   return (
     <section className="card">
       <h3>✨ Inteligencia artificial</h3>
-      {e.configurada ? <p className="ok">Clave cargada · modelo <code>{e.modelo}</code></p> : <p className="warn-txt">Don Pixel no está conectado: falta <code>ANTHROPIC_API_KEY</code> en Render → Environment.</p>}
+      {e.configurada ? <p className="ok">Clave cargada · modelo <code>{e.modelo}</code></p> : <p className="warn-txt">{meta.asistente?.nombre || 'El asistente'} no está conectado: falta <code>ANTHROPIC_API_KEY</code> en Render → Environment.</p>}
       {e.configurada && meta.user.role === 'duena' && (
         <div className="row gap wrap">
           <button className="btn" onClick={probar} disabled={prueba?.cargando}>{prueba?.cargando ? 'Probando…' : '🔌 Probar conexión'}</button>
-          {prueba?.ok && <span className="ok small">✓ Conectado. Don Pixel dice: «{prueba.respuesta}»</span>}
+          {prueba?.ok && <span className="ok small">✓ Conectado. {meta.asistente?.nombre || 'El asistente'} dice: «{prueba.respuesta}»</span>}
           {prueba?.error && <span className="danger small">✗ {prueba.error}</span>}
         </div>
       )}

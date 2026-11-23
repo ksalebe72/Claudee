@@ -2,7 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { api } from '../api.js';
 import { PageHeader, useMeta, useToast } from '../components/ui.jsx';
 import { Markdown } from '../components/IA.jsx';
-import DonPixel, { saludoDonPixel, FRASES_PENSANDO } from '../components/DonPixel.jsx';
+import DonPixel, { saludoDonPixel, FRASES_PENSANDO, useNombreAsistente } from '../components/DonPixel.jsx';
 
 const OFICIO = ['¿Qué diferencia hay entre DTF y serigrafía?', '¿Cuándo conviene bordado y cuándo DTF?', '¿Qué archivo necesito para bordar un logo?'];
 
@@ -24,6 +24,7 @@ const SUGERENCIAS_ROL = {
 
 export default function Asistente() {
   const meta = useMeta();
+  const asistente = useNombreAsistente();
   const sugerencias = [...(SUGERENCIAS_ROL[meta.user.role] || SUGERENCIAS).slice(0, 4), ...OFICIO];
   const [frase, setFrase] = useState(0);
   const [modo, setModo] = useState('preguntar');
@@ -61,15 +62,15 @@ export default function Asistente() {
   if (!meta.integrations?.ia) {
     return (
       <>
-        <PageHeader title="Don Pixel" />
-        <div className="card narrow"><p>Don Pixel todavía no está conectado: falta la clave de la IA (<code>ANTHROPIC_API_KEY</code>) en Render → Environment. Cuando la pongas, Render reinicia la app y Don Pixel queda listo.</p></div>
+        <PageHeader title={asistente} />
+        <div className="card narrow"><p>{asistente} todavía no está conectado: falta la clave de la IA (<code>ANTHROPIC_API_KEY</code>) en Render → Environment. Cuando la pongas, Render reinicia la app y {asistente} queda listo.</p></div>
       </>
     );
   }
 
   return (
     <>
-      <PageHeader title={<span className="pixel-titulo"><DonPixel size={40} /> Don Pixel</span>} subtitle="El maestro del oficio de Color Plus: pregúntale por el negocio o por el oficio (DTF, bordado, serigrafía, telas, archivos), y pídele ayuda con emails e ideas de venta. Solo lee los datos; no envía ni cambia nada." >
+      <PageHeader title={<span className="pixel-titulo"><DonPixel size={40} /> {asistente}</span>} subtitle="El maestro del oficio de Color Plus: pregúntale por el negocio o por el oficio (DTF, bordado, serigrafía, telas, archivos), y pídele ayuda con emails e ideas de venta. Solo lee los datos; no envía ni cambia nada." >
         {modo === 'preguntar' && chat.length > 0 && <button className="btn" onClick={() => setChat([])}>Nueva conversación</button>}
       </PageHeader>
       <div className="tabs pixel-tabs">
@@ -82,7 +83,7 @@ export default function Asistente() {
       <div className="assistant" style={{ display: modo === 'preguntar' ? undefined : 'none' }}>
         {chat.length === 0 && (
           <div className="suggestions">
-            <p className="don-pixel-saludo">{saludoDonPixel(String(meta.user.name || '').split(' ')[0])} Soy <strong>Don Pixel</strong>, barranquillero y el mejor del oficio. Pregúntame por tus órdenes y clientes, o cualquier duda de DTF, bordado, serigrafía o lo que sea, que eso sale.</p>
+            <p className="don-pixel-saludo">{saludoDonPixel(String(meta.user.name || '').split(' ')[0])} Soy <strong>{asistente}</strong>, barranquillero y el mejor del oficio. Pregúntame por tus órdenes y clientes, o cualquier duda de DTF, bordado, serigrafía o lo que sea, que eso sale.</p>
             {sugerencias.map((s) => <button key={s} className="chip" onClick={() => preguntar(s)}>{s}</button>)}
           </div>
         )}
@@ -97,10 +98,10 @@ export default function Asistente() {
           <div ref={fin} />
         </div>
         <form className="ask" onSubmit={(e) => { e.preventDefault(); preguntar(); }}>
-          <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Échale, pregúntale a Don Pixel…" disabled={busy} autoFocus />
+          <input value={q} onChange={(e) => setQ(e.target.value)} placeholder={`Échale, pregúntale a ${asistente}…`} disabled={busy} autoFocus />
           <button className="btn primary" disabled={busy || !q.trim()}>Preguntar</button>
         </form>
-        <p className="muted small">Las respuestas usan los datos de ColorPlus OS al momento de preguntar (últimos ~13 meses). Don Pixel puede equivocarse: verifica las cifras importantes en Reportes.</p>
+        <p className="muted small">Las respuestas usan los datos de ColorPlus OS al momento de preguntar (últimos ~13 meses). {asistente} puede equivocarse: verifica las cifras importantes en Reportes.</p>
       </div>
       {toast}
     </>
@@ -109,6 +110,7 @@ export default function Asistente() {
 
 /** Pegas el correo del cliente y Don Pixel escribe un borrador de respuesta (no se envía). */
 function ResponderEmail({ notify }) {
+  const asistente = useNombreAsistente();
   const [contactos] = useLoadSafe(() => api.get('/contacts'));
   const [f, setF] = useState({ email: '', contact_id: '', idioma: 'auto', instrucciones: '' });
   const [res, setRes] = useState(null);
@@ -121,13 +123,13 @@ function ResponderEmail({ notify }) {
   }
   const copiar = async () => { try { await navigator.clipboard.writeText(`${res.asunto}\n\n${res.respuesta}`); notify('Copiado. Pégalo en tu correo y envíalo tú.'); } catch { notify('No se pudo copiar; selecciónalo a mano.', true); } };
   async function guardarNota() {
-    try { await api.post(`/contacts/${f.contact_id}/activities`, { type: 'nota', direction: 'interno', body: `Borrador de respuesta (Don Pixel, no enviado) · ${res.asunto}\n\n${res.respuesta}` }); notify('Guardado como nota en el cliente.'); } catch (err) { notify(err.message, true); }
+    try { await api.post(`/contacts/${f.contact_id}/activities`, { type: 'nota', direction: 'interno', body: `Borrador de respuesta (${asistente}, no enviado) · ${res.asunto}\n\n${res.respuesta}` }); notify('Guardado como nota en el cliente.'); } catch (err) { notify(err.message, true); }
   }
   return (
     <div className="pixel-grid">
       <form className="card form" onSubmit={escribir}>
         <h3>Correo del cliente</h3>
-        <label className="field"><span>Cliente (opcional, para que Don Pixel vea sus órdenes)</span>
+        <label className="field"><span>Cliente (opcional, para que {asistente} vea sus órdenes)</span>
           <select value={f.contact_id} onChange={(e) => setF({ ...f, contact_id: e.target.value })}>
             <option value="">— Sin elegir —</option>
             {(contactos || []).map((c) => <option key={c.id} value={c.id}>{c.name}{c.company ? ` · ${c.company}` : ''}</option>)}
@@ -140,12 +142,12 @@ function ResponderEmail({ notify }) {
           <label className="field"><span>Responder en</span>
             <select value={f.idioma} onChange={(e) => setF({ ...f, idioma: e.target.value })}><option value="auto">El idioma del cliente</option><option value="es">Español</option><option value="en">Inglés</option></select>
           </label>
-          <label className="field grow"><span>Indicaciones para Don Pixel (opcional)</span>
+          <label className="field grow"><span>Indicaciones para {asistente} (opcional)</span>
             <input value={f.instrucciones} onChange={(e) => setF({ ...f, instrucciones: e.target.value })} placeholder="Ej.: dile que le mandamos la cotización mañana" />
           </label>
         </div>
-        <button className="btn btn-morado" disabled={busy || f.email.trim().length < 10}>{busy ? 'Don Pixel está escribiendo…' : '✉️ Escribir respuesta'}</button>
-        <p className="muted small">Es un borrador: Don Pixel no envía nada. No inventa precios ni fechas; si faltan datos, te los marca para confirmar.</p>
+        <button className="btn btn-morado" disabled={busy || f.email.trim().length < 10}>{busy ? `${asistente} está escribiendo…` : '✉️ Escribir respuesta'}</button>
+        <p className="muted small">Es un borrador: {asistente} no envía nada. No inventa precios ni fechas; si faltan datos, te los marca para confirmar.</p>
       </form>
       <div className="card">
         <h3>Borrador de respuesta</h3>
@@ -170,6 +172,7 @@ function ResponderEmail({ notify }) {
 
 /** Ideas de venta basadas en los clientes y trabajos que la persona puede ver. */
 function IdeasVenta({ notify }) {
+  const asistente = useNombreAsistente();
   const [enfoques] = useLoadSafe(() => api.get('/ia/enfoques-ideas'));
   const [enfoque, setEnfoque] = useState('general');
   const [extra, setExtra] = useState('');
@@ -190,14 +193,14 @@ function IdeasVenta({ notify }) {
             <label key={k} className={`enfoque ${enfoque === k ? 'on' : ''}`}><input type="radio" name="enfoque" checked={enfoque === k} onChange={() => setEnfoque(k)} />{v}</label>
           ))}
         </div>
-        <label className="field"><span>Algo más que deba saber Don Pixel (opcional)</span>
+        <label className="field"><span>Algo más que deba saber {asistente} (opcional)</span>
           <input value={extra} onChange={(e) => setExtra(e.target.value)} placeholder="Ej.: quiero enfocarme en iglesias y gimnasios" />
         </label>
-        <button className="btn btn-morado" disabled={busy}>{busy ? 'Don Pixel está pensando…' : '💡 Darme ideas'}</button>
+        <button className="btn btn-morado" disabled={busy}>{busy ? `${asistente} está pensando…` : '💡 Darme ideas'}</button>
         <p className="muted small">Usa solo tus clientes y trabajos (los que puedes ver en la app). No promete precios ni descuentos.</p>
       </form>
       <div className="card">
-        <h3>Ideas de Don Pixel</h3>
+        <h3>Ideas de {asistente}</h3>
         {!ideas ? <p className="muted">Elige un enfoque y pulsa «Darme ideas».</p> : <Markdown text={ideas} />}
       </div>
     </div>

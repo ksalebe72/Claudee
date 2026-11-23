@@ -5,7 +5,7 @@ import { api } from '../api.js';
 import { money, fmtDate, fmtDateTime, label, useLoad } from '../utils.js';
 import { Empty, useMeta } from '../components/ui.jsx';
 import { BarrasMensuales, TablaMensual, DonaContribucion } from '../components/Graficas.jsx';
-import DonPixel, { saludoDonPixel } from '../components/DonPixel.jsx';
+import DonPixel, { saludoDonPixel, useNombreAsistente } from '../components/DonPixel.jsx';
 
 const PERIODOS = { 1: 'Este mes', 3: 'Últimos 3 meses', 6: 'Últimos 6 meses', 12: 'Últimos 12 meses' };
 const GESTION = ['duena', 'finanzas', 'gerencia', 'coordinacion'];
@@ -29,6 +29,7 @@ const ICONO_AVISO = { margenes: I.doc, atrasadas: I.reloj, seguimientos: I.lista
 export default function Dashboard() {
   const meta = useMeta();
   const user = meta.user;
+  const asistente = useNombreAsistente();
   const [meses, setMeses] = useState(() => { try { return Number(localStorage.getItem('tablero-meses')) || 6; } catch { return 6; } });
   const [vista, setVista] = useState('ordenes');
   const [tabla, setTabla] = useState(false);
@@ -131,9 +132,9 @@ export default function Dashboard() {
         <div className="stack">
           {(
             <section className="card tarjeta-asistente">
-              <div className="row gap"><span className="asistente-avatar"><DonPixel size={44} /></span><div><h3 className="titulo-seccion">Don Pixel</h3><p className="muted small">El mejor del oficio · barranquillero</p></div></div>
+              <div className="row gap"><span className="asistente-avatar"><DonPixel size={44} /></span><div><h3 className="titulo-seccion">{asistente}</h3><p className="muted small">El mejor del oficio · barranquillero</p></div></div>
               <div className="asistente-burbuja">{saludoDonPixel(nombre)} Pregúntame por tus órdenes y clientes, o lo que quieras del oficio: DTF, bordado, serigrafía, telas, archivos… También te ayudo con los emails y te tiro ideas de venta, pa' que veas.</div>
-              <Link className="btn btn-morado" to="/asistente"><span className="btn-ico">{I.enviar}</span> Échale, habla con Don Pixel</Link>
+              <Link className="btn btn-morado" to="/asistente"><span className="btn-ico">{I.enviar}</span> Échale, habla con {asistente}</Link>
             </section>
           )}
           <section className="card">

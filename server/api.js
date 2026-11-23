@@ -11,7 +11,7 @@ import { currentPricing, pricingVersion, audit, listRules } from './config.js';
 import { ROLES, requireRole } from './auth.js';
 import { filtroContactos, filtroJobs, soloPropios, esLogistica, sinFinanzas, tareaPermitida } from './scope.js';
 import { getBrand, setBrandColors, saveLogo, removeLogo } from './brand.js';
-import { iaConfigurada } from './ia.js';
+import { iaConfigurada , nombreAsistente } from './ia.js';
 import { sendMessage } from './messaging.js';
 import { sanmar, sanmarConfigured, cacheImage, getStyleAreas, setStyleAreas, clearSanmarCache } from './sanmar.js';
 
@@ -176,6 +176,7 @@ api.get('/meta', wrap((req) => ({
     business_name: getSetting('business_name', 'Mi Taller'),
     deposit_pct: getSetting('deposit_pct', 0.5),
   },
+  asistente: { nombre: nombreAsistente() },
   brand: getBrand(),
   procesos: PROCESOS,
   roles: ROLES,
@@ -186,6 +187,12 @@ api.get('/meta', wrap((req) => ({
 api.put('/settings', wrap((req) => {
   requireRole(req, 'duena');
   for (const k of ['business_name', 'deposit_pct']) if (k in req.body) { audit(req.user, 'ajustes', k, getSetting(k), req.body[k]); setSetting(k, req.body[k]); }
+  if ('asistente_nombre' in req.body) {
+    const nombre = String(req.body.asistente_nombre || '').trim().slice(0, 40);
+    if (nombre.length < 2) throw fail(400, 'El nombre del asistente debe tener al menos 2 letras.');
+    audit(req.user, 'ajustes', 'nombre del asistente', nombreAsistente(), nombre);
+    setSetting('asistente_nombre', nombre);
+  }
   if ('brand_primary' in req.body || 'brand_sidebar' in req.body) {
     const antes = getBrand();
     setBrandColors({ primary: req.body.brand_primary, sidebar: req.body.brand_sidebar });
