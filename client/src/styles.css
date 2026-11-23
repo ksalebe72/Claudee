@@ -625,3 +625,9 @@ input[type=color] { min-width: 40px; height: 32px; padding: 2px; }
 .msg.assistant .msg-avatar { margin-top: 2px; background: var(--tono-lila-bg); border-radius: 6px; padding: 2px; box-sizing: content-box; }
 .msg.assistant > :not(.msg-avatar) { min-width: 0; }
 .msg-cuerpo { flex: 1; min-width: 0; }
+/* Avatar de Don Pixel (imagen) */
+.don-pixel { image-rendering: auto; border-radius: 22%; object-fit: cover; display: inline-block; vertical-align: middle; background: #0a1630; }
+.msg.assistant .msg-avatar { padding: 0; background: none; }
+.asistente-avatar { background: none; width: auto; height: auto; }
+.asistente-avatar .don-pixel { box-shadow: 0 4px 14px rgba(30, 140, 255, .35); }
+.pixel-titulo .don-pixel { box-shadow: 0 4px 14px rgba(30, 140, 255, .35); }

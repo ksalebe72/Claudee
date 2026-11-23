@@ -1,49 +1,10 @@
-// Avatar de Don Pixel en pixel art (16×16) con los colores de Color Plus.
+// Avatar de Don Pixel (imagen elegida por el dueño, en client/public/brand).
 import React from 'react';
-
-const PALETA = {
-  P: '#613bbb', // gorra morada
-  p: '#4b2c96', // sombra de la gorra
-  C: '#1ec5da', // franja cian
-  O: '#f8822b', // botón naranja
-  S: '#f2c39f', // piel
-  D: '#d99c75', // sombra de piel
-  K: '#1c1340', // ojos
-  W: '#ffffff', // brillo de ojos
-  M: '#dfe2ea', // bigote canoso
-  m: '#aab0c0', // sombra del bigote
-  R: '#c0583c', // boca
-  N: '#1c1340', // camisa
-  A: '#f8822b', // delantal
-  a: '#d96a17', // tirante del delantal
-};
-
-const DIBUJO = [
-  '......OO........',
-  '....PPPPPPP.....',
-  '...PPPPPPPPP....',
-  '..PPPPPPPPPPP...',
-  '..CCCCCCCCCCC...',
-  '..pppppppppppPPP',
-  '...SSSSSSSSS....',
-  '...SKWSSSKWS....',
-  '...SKKSSSKKS....',
-  '..DSSSSDSSSSD...',
-  '...SMMMMMMMS....',
-  '...MmMSRSMmM....',
-  '....SSSSSSS.....',
-  '......SSS.......',
-  '..NNaAAAAAaNN...',
-  '.NNNaAAAAAaNNN..',
-];
 
 /** Don Pixel. `size` en píxeles de pantalla. */
 export default function DonPixel({ size = 32, titulo = 'Don Pixel', className = '' }) {
-  return (
-    <svg className={`don-pixel ${className}`} width={size} height={size} viewBox="0 0 16 16" shapeRendering="crispEdges" role="img" aria-label={titulo}>
-      {DIBUJO.flatMap((fila, y) => [...fila].map((c, x) => (PALETA[c] ? <rect key={`${x}-${y}`} x={x} y={y} width="1" height="1" fill={PALETA[c]} /> : null)))}
-    </svg>
-  );
+  const src = size <= 64 ? '/brand/don-pixel-128.webp' : '/brand/don-pixel-512.webp';
+  return <img className={`don-pixel ${className}`} src={src} width={size} height={size} alt={titulo} title={titulo} loading="lazy" decoding="async" />;
 }
 
 /** Saludo según la hora (Maryland). */

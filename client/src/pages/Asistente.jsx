@@ -82,7 +82,7 @@ export default function Asistente() {
       <div className="assistant" style={{ display: modo === 'preguntar' ? undefined : 'none' }}>
         {chat.length === 0 && (
           <div className="suggestions">
-            <p className="don-pixel-saludo">{saludoDonPixel(String(meta.user.name || '').split(' ')[0])} Soy <strong>Don Pixel</strong>, años entre planchas, pantallas y máquinas de bordar. Pregúntame por tus órdenes y clientes, o cualquier duda del oficio.</p>
+            <p className="don-pixel-saludo">{saludoDonPixel(String(meta.user.name || '').split(' ')[0])} Soy <strong>Don Pixel</strong>, el experto del oficio de Color Plus. Pregúntame por tus órdenes y clientes, o cualquier duda del oficio.</p>
             {sugerencias.map((s) => <button key={s} className="chip" onClick={() => preguntar(s)}>{s}</button>)}
           </div>
         )}
