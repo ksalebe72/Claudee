@@ -164,3 +164,14 @@ test('Digitalizado: costo $25 y precio $50 en la matriz; la línea no comisiona'
   assert.equal(l.costo, 25);
   assert.equal(l.comisionable, false);
 });
+
+test('Comisión sobre ganancia: un costo real de una categoría no cotizada también se resta (caso OT-2003)', () => {
+  // Orden cotizada solo con DTF; luego llega una factura real de bordado que no estaba cotizada
+  const l = calcularLinea({ description: 'Tee', qty: 10, unit_cost: 4, decorations: [{ process: 'dtf', location: 'Frente', width: 4, height: 4 }] }, cfg);
+  assert.ok(!('bordado' in l.costosPorCategoria));
+  const regla = { nombre: 'Bryan · Utilidad 40%', base: 'ganancia_producto', tasa: 0.4 };
+  const r = calcularRentabilidad({ lineas: [l], reales: { bordado: 30 }, regla, margen: cfg.margen });
+  assert.equal(r.comision.base, r.gananciaProducto, 'la base es la ganancia de producto con el costo real incluido');
+  assert.equal(r.comision.monto, round(r.gananciaProducto * 0.4));
+  assert.ok(r.contribucion >= r.comision.monto, 'sin envío ni líneas sin comisión, a Color Plus le queda más que al vendedor');
+});

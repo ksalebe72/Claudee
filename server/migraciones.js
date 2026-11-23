@@ -3,6 +3,8 @@
 import { get, insert, run, getSetting, setSetting, transaction } from './db.js';
 import { ensurePricing, ensureCommissionSetup, aplicarCambioComisionBryan, aplicarCambioWrapsBryan, fijarReglaAutomaticaBryan, asignarClientesExistentes, audit } from './config.js';
 import { asignarVendedorPorEmpresa, completarVendedoresDesdeClientes } from './importar-deco.js';
+import { computeJob } from './finance.js';
+import { all } from './db.js';
 
 function unaVez(clave, fn) {
   if (getSetting(clave)) return;
@@ -32,6 +34,9 @@ export function aplicarMigraciones() {
     run('UPDATE salespeople SET es_dueno = 1 WHERE id = ?', karol.id);
     audit(null, 'comisiones', 'vendedor Karol', { dueno_sin_comision: false }, { dueno_sin_comision: true }, String(karol.id));
   });
+  // Corrección de la comisión sobre ganancia (costo real de una categoría no cotizada, caso OT-2003):
+  // recalcula el resumen guardado de cada orden y cotización. Las liquidaciones cerradas no se tocan; si cambia algo ya liquidado, se ajusta en la próxima.
+  unaVez('recalculo_costos_sin_linea', () => { for (const { id } of all('SELECT id FROM jobs')) computeJob(id); });
   // Órdenes de Deco sin vendedor toman el de su cliente (las que ya tienen vendedor no se tocan)
   completarVendedoresDesdeClientes();
 }

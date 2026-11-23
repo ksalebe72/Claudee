@@ -372,6 +372,11 @@ export function calcularRentabilidad(o) {
       repartir(r, base).forEach((v, k) => { costoLinea[idx[k]] += v; });
     }
   }
+  // Costo real de una categoría que ninguna línea tenía cotizada (p. ej. bordado en una orden cotizada solo con DTF):
+  // también es costo del producto, así que se reparte entre las líneas según su venta. Antes se perdía y la comisión
+  // sobre ganancia se calculaba como si ese costo no existiera.
+  const sinLinea = sum(categorias.filter((c) => num(reales[c]) != null && !lineas.some((l) => c in l.costosPorCategoria)).map((c) => num(reales[c])));
+  if (sinLinea) repartir(sinLinea, lineas.map((l) => l.venta ?? 0)).forEach((v, i) => { costoLinea[i] += v; });
 
   const costoProducto = sumOrNull([efectivo.prendas, efectivo.bordado, efectivo.dtf, efectivo.heat_transfer, efectivo.servicios, efectivo.otros]);
   const costoProductoCotizado = sumOrNull([cotizado.prendas, cotizado.bordado, cotizado.dtf, cotizado.heat_transfer, cotizado.servicios, cotizado.otros]);
