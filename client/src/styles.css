@@ -725,3 +725,35 @@ code { font-size: .92em; font-weight: var(--fw-medium); }
 /* Tablas anchas dentro de tarjetas: se deslizan solas en el celular */
 .tabla-desliza { overflow-x: auto; max-width: 100%; }
 .tarjeta-inactivos { margin-top: 16px; min-width: 0; }
+
+/* ===== Teléfono (≤ 800px): una sola barra arriba, menú con fondo, pestañas y tablas que se deslizan ===== */
+.menu-fondo { display: none; }
+@media (max-width: 800px) {
+  .content { padding: 0 12px 40px; }
+  /* Barra superior: menú, buscador, avisos y usuario en una sola fila que se queda arriba al bajar */
+  .topbar-fila { position: sticky; top: 0; z-index: 30; background: var(--bg, #fff); margin: 0 -12px 14px; padding: 8px 12px; gap: 8px; }
+  .menu-btn { position: static; flex: none; width: 40px; height: 40px; padding: 0; display: grid; place-items: center; }
+  .menu-fondo { display: block; position: fixed; inset: 0; background: rgba(15, 12, 41, .45); z-index: 39; }
+  .sidebar { height: 100dvh; box-shadow: 0 0 24px rgba(0,0,0,.25); }
+  /* Que el iPhone no haga zoom al tocar un campo */
+  input, select, textarea { font-size: 16px; }
+  /* Encabezados de página: los botones bajan de línea y ocupan el ancho */
+  .page-header { align-items: stretch; }
+  .page-header > div { min-width: 0; }
+  .page-header .row { flex-wrap: wrap; width: 100%; }
+  .page-header .row > .inline { flex: 1 1 150px; }
+  .page-header .row > .inline input { flex: 1; min-width: 0; }
+  .page-header .row > .search { flex: 1 1 100%; }
+  /* Pestañas en una sola fila que se desliza con el dedo */
+  .tabs { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; -webkit-overflow-scrolling: touch; }
+  .tabs::-webkit-scrollbar { display: none; }
+  .tabs button { white-space: nowrap; flex: none; }
+  /* Tablas: se deslizan de lado en vez de aplastarse o salirse de la pantalla */
+  .table { display: block; overflow-x: auto; -webkit-overflow-scrolling: touch; }
+  .table td { white-space: nowrap; }
+  .table td.small, .table td.wrap { white-space: normal; min-width: 180px; }
+  .table td:first-child { max-width: 170px; overflow: hidden; text-overflow: ellipsis; }
+  .card.no-pad .table { display: table; }
+  .card { min-width: 0; }
+  .row.gap.wrap, .row.wrap { flex-wrap: wrap; }
+}

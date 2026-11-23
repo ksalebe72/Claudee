@@ -78,6 +78,7 @@ export default function App() {
   return (
     <MetaContext.Provider value={{ ...meta, user, reloadMeta }}>
       <div className="layout">
+        {menuOpen && <div className="menu-fondo" onClick={() => setMenuOpen(false)} aria-hidden="true" />}
         <aside className={`sidebar ${menuOpen ? 'open' : ''}`} onClick={() => setMenuOpen(false)}>
           <div className="brand">
             <BrandMark brand={meta.brand} />
