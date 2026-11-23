@@ -189,6 +189,7 @@ CREATE TABLE IF NOT EXISTS historial_lineas (
 CREATE INDEX IF NOT EXISTS idx_historial_contacto ON historial_ordenes(contact_id);
 `);
 addColumn('contacts', 'deco_customer_id', 'TEXT'); // Customer ID de DecoNetwork (para no duplicar al importar)
+addColumn('historial_ordenes', 'salesperson_id', 'INTEGER'); // quién vendió esa orden de Deco (para el reporte de comisiones históricas)
 
 // ---------- helpers ----------
 const JSON_COLS = new Set(['tallas', 'tags', 'colors', 'sizes', 'decorations', 'tiers', 'condition', 'params', 'size_costs', 'extra_costs', 'override', 'margin_approval', 'fin', 'calc', 'config', 'snapshot']);

@@ -479,6 +479,44 @@ function Respaldos({ notify }) {
 // ---------- Importar de DecoNetwork ----------
 const leerArchivoComoDataUrl = (file) => new Promise((ok, ko) => { const r = new FileReader(); r.onload = () => ok(r.result); r.onerror = ko; r.readAsDataURL(file); });
 
+function VendedorPorEmpresa({ vend, notify }) {
+  const [reglas, recargar] = useLoad(() => api.get('/importar/deco/reglas'));
+  const [texto, setTexto] = useState('');
+  const [sp, setSp] = useState('');
+  const [busy, setBusy] = useState(false);
+  async function asignar() {
+    setBusy(true);
+    try {
+      const r = await api.post('/importar/deco/asignar-vendedor', { texto, salesperson_id: Number(sp), guardarRegla: true });
+      notify(`${r.vendedor}: ${r.clientes} cliente(s) y ${r.ordenesDeco} orden(es) de Deco asignadas`);
+      setTexto(''); recargar();
+    } catch (e) { notify(e.message, true); }
+    setBusy(false);
+  }
+  return (
+    <section className="card wide">
+      <h3>Vendedor por empresa</h3>
+      <p className="muted small">Asigna todos los clientes cuya empresa contenga un texto (p. ej. «guapo») a un vendedor, junto con sus compras de Deco. La regla se guarda y se aplica a los clientes que se importen después.</p>
+      {reglas?.length > 0 && (
+        <table className="table mini-table">
+          <thead><tr><th>Empresa contiene</th><th>Vendedor</th></tr></thead>
+          <tbody>{reglas.map((r) => <tr key={r.texto}><td>«{r.texto}»</td><td>{r.vendedor}</td></tr>)}</tbody>
+        </table>
+      )}
+      <div className="row gap wrap" style={{ marginTop: 12 }}>
+        <label className="inline">Empresa contiene <input value={texto} onChange={(e) => setTexto(e.target.value)} placeholder="guapo" /></label>
+        <label className="inline">Vendedor
+          <select value={sp} onChange={(e) => setSp(e.target.value)}>
+            <option value="">— Elegir —</option>
+            {(vend || []).filter((v) => v.active).map((v) => <option key={v.id} value={v.id}>{v.name}</option>)}
+          </select>
+        </label>
+        <button className="btn primary" disabled={busy || texto.trim().length < 2 || !sp} onClick={asignar}>Asignar</button>
+      </div>
+    </section>
+  );
+}
+
 function ImportarDeco({ notify }) {
   const [vend] = useLoad(() => api.get('/vendedores'));
   const [guardado, recargarGuardado] = useLoad(() => api.get('/importar/deco/resumen'));
@@ -519,6 +557,8 @@ function ImportarDeco({ notify }) {
         {guardado?.ordenes > 0 && <p className="ok small">Ya guardado en la app: <strong>{guardado.ordenes}</strong> órdenes de <strong>{guardado.clientes}</strong> clientes · {guardado.desde} → {guardado.hasta} · ventas sin impuesto {money(guardado.ventas)} · total {money(guardado.total)}.</p>}
         <p className="muted small">El historial no crea órdenes de producción, cobros ni comisiones: guarda las compras tal como vinieron de Deco. Puedes volver a subir el mismo archivo: las órdenes ya importadas se saltan.</p>
       </section>
+
+      <VendedorPorEmpresa vend={vend} notify={notify} />
 
       {vista && (
         <section className="card wide">

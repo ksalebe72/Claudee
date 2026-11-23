@@ -148,3 +148,39 @@ test('si una importación anterior unió dos restaurantes, volver a subir el arc
   const fichaB = await s.duena.get(`/contacts/${beth}`);
   assert.deepEqual(fichaB.historial.map((o) => o.numero), ['2001'], 'Bethesda queda solo con lo suyo');
 });
+
+test('vendedor por empresa: los Guapo\'s son de Karol, con sus órdenes de Deco, y el reporte histórico es solo informativo', async () => {
+  const vend = await s.duena.get('/vendedores');
+  const karol = vend.find((v) => v.name === 'Karol');
+  assert.ok(karol, 'Karol se crea al arrancar');
+  const reglas = await s.duena.get('/importar/deco/reglas');
+  assert.deepEqual(reglas.map((r) => [r.texto, r.vendedor]), [['guapo', 'Karol']]);
+  const contactos = await s.duena.get('/contacts');
+  const guapos = contactos.filter((c) => /guapo/i.test(c.company || ''));
+  assert.equal(guapos.length, 2);
+  assert.ok(guapos.every((c) => c.salesperson_id === karol.id), 'los Guapo\'s importados quedan con Karol');
+
+  const rep = await s.duena.get('/reportes/comisiones-deco?desde=2026-01-01&hasta=2026-12-31');
+  assert.equal(rep.informativo, true);
+  const deKarol = rep.filas.filter((f) => f.vendedor === 'Karol');
+  assert.equal(deKarol.reduce((a, f) => a + f.ordenes, 0), 2);
+  assert.equal(deKarol.reduce((a, f) => a + f.comision, 0), 0, 'Karol no tiene regla: nada se inventa');
+  assert.ok(deKarol.every((f) => f.pendientes > 0 && f.reglas.includes('sin regla')));
+
+  // Asignar Acme a Bryan: sus órdenes de Deco pasan a Bryan y usan la regla que tenía en esa fecha (25% de la venta,
+  // antes del cambio a 40% de la utilidad)
+  const bryan = vend.find((v) => v.name === 'Bryan');
+  const r = await s.duena.post('/importar/deco/asignar-vendedor', { texto: 'acme', salesperson_id: bryan.id });
+  assert.equal(r.clientes, 1);
+  assert.equal(r.ordenesDeco, 3);
+  const rep2 = await s.duena.get('/reportes/comisiones-deco');
+  const deBryan = rep2.filas.filter((f) => f.vendedor === 'Bryan');
+  assert.equal(deBryan.reduce((a, f) => a + f.ordenes, 0), 3);
+  assert.equal(Math.round(deBryan.reduce((a, f) => a + f.comision, 0) * 100) / 100, Math.round((240 + 25 + 120 + 60) * 0.25 * 100) / 100);
+  assert.ok(deBryan.every((f) => f.reglas.includes('Bryan · Ventas 25%')));
+
+  // No entra a liquidaciones, y un vendedor no ve este reporte
+  const v = await s.userWithRole('ventas', bryan.id);
+  assert.equal((await v.call('GET', '/reportes/comisiones-deco')).status, 403);
+  assert.equal((await v.call('POST', '/importar/deco/asignar-vendedor', { texto: 'acme', salesperson_id: karol.id })).status, 403);
+});

@@ -10,7 +10,7 @@ import { computeJob, productSnapshot, computeClientStatus, assertMarginApproved,
 import { currentPricing, pricingVersion, audit, listRules } from './config.js';
 import { ROLES, requireRole } from './auth.js';
 import { filtroContactos, filtroJobs, soloPropios, esLogistica, sinFinanzas, tareaPermitida } from './scope.js';
-import { analizar as analizarDeco, importar as importarDeco, historialCliente } from './importar-deco.js';
+import { analizar as analizarDeco, importar as importarDeco, historialCliente, asignarVendedorPorEmpresa, reglasVendedor, comisionesDeco, completarVendedoresDesdeClientes } from './importar-deco.js';
 import { getBrand, setBrandColors, saveLogo, removeLogo } from './brand.js';
 import { iaConfigurada , nombreAsistente } from './ia.js';
 import { sendMessage } from './messaging.js';
@@ -296,7 +296,10 @@ api.put('/contacts/:id', wrap((req) => {
   if ('salesperson_id' in datos) {
     datos.salesperson_id = datos.salesperson_id ? Number(datos.salesperson_id) : null;
     const antes = contactById(req.params.id);
-    if (!soloPropios(req.user) && antes && antes.salesperson_id !== datos.salesperson_id) audit(req.user, 'clientes', `vendedor del cliente ${antes.name}`, antes.salesperson_id, datos.salesperson_id, String(antes.id));
+    if (!soloPropios(req.user) && antes && antes.salesperson_id !== datos.salesperson_id) {
+      audit(req.user, 'clientes', `vendedor del cliente ${antes.name}`, antes.salesperson_id, datos.salesperson_id, String(antes.id));
+      run('UPDATE historial_ordenes SET salesperson_id = ? WHERE contact_id = ?', datos.salesperson_id, antes.id); // sus ventas de Deco pasan al nuevo vendedor
+    }
   }
   update('contacts', req.params.id, datos, campos);
   return contactById(req.params.id);
@@ -310,7 +313,16 @@ api.get('/importar/deco/resumen', wrap((req) => {
   return get("SELECT COUNT(*) AS ordenes, COUNT(DISTINCT contact_id) AS clientes, MIN(substr(fecha,1,10)) AS desde, MAX(substr(fecha,1,10)) AS hasta, ROUND(SUM(ventas),2) AS ventas, ROUND(SUM(total),2) AS total FROM historial_ordenes WHERE origen = 'DecoNetwork'");
 }));
 api.post('/importar/deco/analizar', awrapImp(async (req) => { requireRole(req, 'duena'); return analizarDeco(req.body.archivo, req.body.nombre); }));
-api.post('/importar/deco/confirmar', awrapImp(async (req) => { requireRole(req, 'duena'); return importarDeco(req.body.archivo, req.body.nombre, { salesperson_id: req.body.salesperson_id }, req.user); }));
+api.post('/importar/deco/confirmar', awrapImp(async (req) => { requireRole(req, 'duena'); const r = await importarDeco(req.body.archivo, req.body.nombre, { salesperson_id: req.body.salesperson_id }, req.user); completarVendedoresDesdeClientes(); return r; }));
+api.get('/importar/deco/reglas', wrap((req) => {
+  requireRole(req, 'duena');
+  return reglasVendedor().map((r) => ({ ...r, vendedor: get('SELECT name FROM salespeople WHERE id = ?', r.salesperson_id)?.name || '—' }));
+}));
+api.post('/importar/deco/asignar-vendedor', wrap((req) => { requireRole(req, 'duena'); return asignarVendedorPorEmpresa(req.body, req.user); }));
+api.get('/reportes/comisiones-deco', wrap((req) => {
+  requireRole(req, 'duena', 'finanzas', 'gerencia', 'coordinacion');
+  return comisionesDeco({ desde: req.query.desde, hasta: req.query.hasta });
+}));
 
 // ¿Este cliente ya bordó antes? (para saber si cobrar el digitalizado del logo)
 api.get('/contacts/:id/bordado-previo', wrap((req) => {

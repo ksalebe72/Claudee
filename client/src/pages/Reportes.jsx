@@ -6,7 +6,7 @@ import { Empty, PageHeader } from '../components/ui.jsx';
 import { Semaforo } from '../components/FinancePanels.jsx';
 import { PROCESOS } from '../../../shared/pricing.js';
 
-const TABS = { orden: 'Por orden', cliente: 'Por cliente', proceso: 'Por proceso', vendedor: 'Por vendedor', bajo: 'Bajo el mínimo', comisiones: 'Comisiones' };
+const TABS = { orden: 'Por orden', cliente: 'Por cliente', proceso: 'Por proceso', vendedor: 'Por vendedor', bajo: 'Bajo el mínimo', comisiones: 'Comisiones', deco: 'Comisiones DecoNetwork (histórico)' };
 const NOMBRE_PROCESO = { ...PROCESOS, prendas: 'Prendas', servicios: 'Servicios / Diseño' };
 const inicioAnio = `${new Date().getFullYear()}-01-01`;
 const hoy = new Date().toISOString().slice(0, 10);
@@ -16,7 +16,7 @@ export default function Reportes() {
   const [desde, setDesde] = useState(inicioAnio);
   const [hasta, setHasta] = useState(hoy);
   const q = `desde=${desde}&hasta=${hasta}`;
-  const url = tab === 'bajo' ? `/reportes/bajo-margen?${q}` : tab === 'comisiones' ? `/reportes/comisiones?${q}` : `/reportes/rentabilidad?agrupar=${tab}&${q}`;
+  const url = tab === 'bajo' ? `/reportes/bajo-margen?${q}` : tab === 'comisiones' ? `/reportes/comisiones?${q}` : tab === 'deco' ? `/reportes/comisiones-deco?${q}` : `/reportes/rentabilidad?agrupar=${tab}&${q}`;
   const [data] = useLoad(() => api.get(url), [url]);
 
   return (
@@ -28,6 +28,7 @@ export default function Reportes() {
       <div className="tabs big">{Object.entries(TABS).map(([k, v]) => <button key={k} className={tab === k ? 'active' : ''} onClick={() => setTab(k)}>{v}</button>)}</div>
       {!data && <div className="loading">Cargando…</div>}
       {data && tab === 'comisiones' && <TablaComisiones filas={data} />}
+      {data && tab === 'deco' && <TablaComisionesDeco data={data} />}
       {data && (tab === 'orden' || tab === 'bajo') && <TablaOrdenes filas={data.filas} minimo={data.minimo} />}
       {data && ['cliente', 'proceso', 'vendedor'].includes(tab) && <TablaGrupos filas={data.filas} proceso={tab === 'proceso'} />}
     </>
@@ -80,6 +81,33 @@ function TablaGrupos({ filas, proceso }) {
       </table>
       <p className="muted small pad">Costo y ganancia suman solo lo completo; la venta incluye todo. {proceso ? 'Por proceso, la ganancia no descuenta comisión.' : ''}</p>
     </div>
+  );
+}
+
+function TablaComisionesDeco({ data }) {
+  const { filas, nota } = data;
+  const tot = (k) => filas.reduce((a, f) => a + (f[k] || 0), 0);
+  return (
+    <>
+      <p className="aviso-base">ℹ️ {nota} Las reglas sobre utilidad quedan «pendientes» porque Deco no trae costos.</p>
+      {!filas.length ? <Empty>No hay ventas de DecoNetwork en estas fechas.</Empty> : (
+        <div className="card no-pad">
+          <table className="table">
+            <thead><tr><th>Vendedor</th><th>Mes</th><th className="num">Órdenes</th><th className="num">Ventas s/imp.</th><th className="num">Comisión estimada</th><th className="num">Pendientes</th><th>Regla aplicada</th></tr></thead>
+            <tbody>
+              {filas.map((f) => (
+                <tr key={`${f.salesperson_id}-${f.mes}`}>
+                  <td>{f.vendedor}</td><td>{f.mes}</td><td className="num">{f.ordenes}</td><td className="num">{money(f.ventas)}</td>
+                  <td className="num">{money(f.comision)}</td><td className="num">{f.pendientes ? <span className="warn-txt">{f.pendientes}</span> : '—'}</td>
+                  <td className="small">{f.reglas.join(' · ') || '—'}</td>
+                </tr>
+              ))}
+              <tr className="total-row"><td colSpan={2}>Total</td><td className="num">{tot('ordenes')}</td><td className="num">{money(tot('ventas'))}</td><td className="num">{money(tot('comision'))}</td><td className="num">{tot('pendientes') || '—'}</td><td /></tr>
+            </tbody>
+          </table>
+        </div>
+      )}
+    </>
   );
 }
 
