@@ -317,7 +317,7 @@ function reglaHistorica(spId, fecha, tipoCliente) {
  * Base: ventas sin impuesto ni envío. Si la regla de esa fecha es sobre utilidad, queda «pendiente» (Deco no trae costos).
  */
 export function comisionesDeco({ desde, hasta } = {}) {
-  const ordenes = all(`SELECT o.*, s.name AS vendedor FROM historial_ordenes o LEFT JOIN salespeople s ON s.id = o.salesperson_id
+  const ordenes = all(`SELECT o.*, s.name AS vendedor, s.es_dueno FROM historial_ordenes o LEFT JOIN salespeople s ON s.id = o.salesperson_id
     WHERE (? IS NULL OR substr(o.fecha,1,10) >= ?) AND (? IS NULL OR substr(o.fecha,1,10) <= ?) ORDER BY o.fecha`, desde || null, desde || null, hasta || null, hasta || null);
   // Primera compra de cada cliente en Deco → cliente nuevo; las siguientes → existente
   const primera = new Map(all('SELECT contact_id, MIN(fecha) AS f FROM historial_ordenes GROUP BY contact_id').map((r) => [r.contact_id, r.f]));
@@ -329,6 +329,7 @@ export function comisionesDeco({ desde, hasta } = {}) {
     const g = grupos.get(clave);
     g.ordenes++; g.ventas = r2(g.ventas + (o.ventas || 0));
     if (!o.salesperson_id) continue;
+    if (o.es_dueno) { g.reglas.add('Dueño · sin comisión'); continue; }
     const tipo = primera.get(o.contact_id) === o.fecha ? 'nuevo' : 'existente';
     const regla = reglaHistorica(o.salesperson_id, (o.fecha || '').slice(0, 10), tipo);
     if (!regla) { g.pendientes++; g.reglas.add('sin regla'); continue; }
@@ -351,5 +352,17 @@ export function prepararKarolGuapos() {
   asignarVendedorPorEmpresa({ texto: 'guapo', salesperson_id: karol.id }, null);
   completarVendedoresDesdeClientes();
   setSetting('karol_guapos', true);
+  return true;
+}
+
+/** «I'm Karol the owner»: Karol es el dueño → sus ventas (Guapo's) son de la casa y no generan comisión. */
+export function marcarKarolDueno() {
+  if (getSetting('karol_es_dueno')) return false;
+  const karol = get("SELECT * FROM salespeople WHERE lower(name) = 'karol'");
+  if (karol) {
+    run('UPDATE salespeople SET es_dueno = 1 WHERE id = ?', karol.id);
+    audit(null, 'comisiones', 'vendedor Karol', { es_dueno: false }, { es_dueno: true, nota: 'Karol es el dueño: sin comisión' }, String(karol.id));
+  }
+  setSetting('karol_es_dueno', true);
   return true;
 }

@@ -164,8 +164,11 @@ test('vendedor por empresa: los Guapo\'s son de Karol, con sus órdenes de Deco,
   assert.equal(rep.informativo, true);
   const deKarol = rep.filas.filter((f) => f.vendedor === 'Karol');
   assert.equal(deKarol.reduce((a, f) => a + f.ordenes, 0), 2);
-  assert.equal(deKarol.reduce((a, f) => a + f.comision, 0), 0, 'Karol no tiene regla: nada se inventa');
-  assert.ok(deKarol.every((f) => f.pendientes > 0 && f.reglas.includes('sin regla')));
+  assert.equal(karol.es_dueno, 1, 'Karol es el dueño');
+  assert.equal(deKarol.reduce((a, f) => a + f.comision, 0), 0, 'el dueño no cobra comisión');
+  assert.ok(deKarol.every((f) => f.pendientes === 0 && f.reglas.includes('Dueño · sin comisión')), 'cuentas de la casa: nada queda pendiente');
+  const liq = await s.duena.get('/liquidaciones');
+  assert.ok(!liq.vendedores.some((x) => x.vendedor?.name === 'Karol' || x.nombre === 'Karol' || x.name === 'Karol'), 'el dueño no aparece en liquidaciones');
 
   // Asignar Acme a Bryan: sus órdenes de Deco pasan a Bryan y usan la regla que tenía en esa fecha (25% de la venta,
   // antes del cambio a 40% de la utilidad)

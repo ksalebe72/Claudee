@@ -169,6 +169,7 @@ CREATE TABLE IF NOT EXISTS commission_entries (
   created_at TEXT DEFAULT (datetime('now'))
 );
 `);
+addColumn('salespeople', 'es_dueno', 'INTEGER DEFAULT 0'); // el dueño vende pero no cobra comisión (cuentas de la casa)
 addColumn('salespeople', 'default_rule_id', 'INTEGER'); // regla de comisión automática del vendedor
 
 // Historial de compras traído de otros sistemas (DecoNetwork): se guarda aparte de las órdenes de producción,

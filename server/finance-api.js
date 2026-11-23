@@ -56,7 +56,7 @@ r.put('/vendedores/:id', wrap((req) => {
   requireRole(req, 'duena');
   const s = get('SELECT * FROM salespeople WHERE id = ?', req.params.id);
   if (!s) throw fail(404, 'No encontrado');
-  const datos = { name: req.body.name ?? s.name, active: req.body.active === undefined ? s.active : req.body.active ? 1 : 0, default_rule_id: s.default_rule_id ?? null };
+  const datos = { name: req.body.name ?? s.name, active: req.body.active === undefined ? s.active : req.body.active ? 1 : 0, default_rule_id: s.default_rule_id ?? null, es_dueno: req.body.es_dueno === undefined ? (s.es_dueno || 0) : req.body.es_dueno ? 1 : 0 };
   if ('default_rule_id' in req.body) {
     const rid = req.body.default_rule_id ? Number(req.body.default_rule_id) : null;
     const regla = rid && get('SELECT * FROM commission_rules WHERE id = ?', rid);
@@ -176,7 +176,7 @@ const PERIODO = /^\d{4}-\d{2}$/;
 r.get('/liquidaciones', wrap((req) => {
   requireRole(req, ...GESTION);
   const periodo = PERIODO.test(req.query.periodo || '') ? req.query.periodo : today().slice(0, 7);
-  return { periodo, vendedores: all('SELECT * FROM salespeople WHERE active = 1 ORDER BY name').map((s) => liquidationView(periodo, s.id)) };
+  return { periodo, vendedores: all('SELECT * FROM salespeople WHERE active = 1 AND COALESCE(es_dueno,0) = 0 ORDER BY name').map((s) => liquidationView(periodo, s.id)) };
 }));
 r.get('/liquidaciones/historial', wrap((req) => {
   requireRole(req, ...GESTION);

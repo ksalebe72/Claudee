@@ -10,7 +10,7 @@ import { programarRespaldos } from './backup.js';
 import { authRouter, usersRouter, requireAuth } from './auth.js';
 import { scopeMiddleware } from './scope.js';
 import { tableroApi } from './tablero.js';
-import { prepararKarolGuapos } from './importar-deco.js';
+import { prepararKarolGuapos, marcarKarolDueno } from './importar-deco.js';
 import { ensurePricing, ensureCommissionSetup, aplicarCambioComisionBryan, aplicarCambioWrapsBryan, fijarReglaAutomaticaBryan, asignarClientesExistentes } from './config.js';
 import { seedIfEmpty } from './seed.js';
 
@@ -27,6 +27,7 @@ ensureCommissionSetup();
 if (process.env.CAMBIO_BRYAN_DISABLED !== '1') { aplicarCambioComisionBryan(); aplicarCambioWrapsBryan(); fijarReglaAutomaticaBryan(); }
 asignarClientesExistentes();
 prepararKarolGuapos(); // pedido del dueño: los Guapo's son de Karol
+marcarKarolDueno(); // Karol es el dueño: cuentas de la casa, sin comisión
 programarRespaldos();
 
 // Toda la API exige sesión, salvo el inicio de sesión y el portal público del cliente.
