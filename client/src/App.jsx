@@ -4,6 +4,7 @@ import { api } from './api.js';
 import { MetaContext } from './components/ui.jsx';
 import Login from './pages/Login.jsx';
 import TopBar from './components/TopBar.jsx';
+import DonPixel from './components/DonPixel.jsx';
 import { applyBrand, BrandMark } from './brand.jsx';
 import Dashboard from './pages/Dashboard.jsx';
 import Contacts from './pages/Contacts.jsx';
@@ -25,7 +26,7 @@ import Asistente from './pages/Asistente.jsx';
 const GESTION = ['duena', 'finanzas', 'gerencia', 'coordinacion'];
 const SIN_LOGISTICA = ['duena', 'finanzas', 'gerencia', 'coordinacion', 'ventas'];
 const NAV = [
-  { group: 'General', items: [{ to: '/', label: 'Tablero', icon: '◧', end: true }, { to: '/asistente', label: 'Don Pixel', icon: '✨' }] },
+  { group: 'General', items: [{ to: '/', label: 'Tablero', icon: '◧', end: true }, { to: '/asistente', label: 'Don Pixel', icon: <DonPixel size={18} /> }] },
   { group: 'Ventas y CRM', items: [
     { to: '/contactos', label: 'Contactos', icon: '☺' },
     { to: '/pipeline', label: 'Pipeline', icon: '⇶', roles: SIN_LOGISTICA },

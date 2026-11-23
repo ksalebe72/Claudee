@@ -616,3 +616,12 @@ input[type=color] { min-width: 40px; height: 32px; padding: 2px; }
 .enfoque { display: flex; gap: 8px; align-items: center; border: 1px solid var(--border); border-radius: 8px; padding: 8px 10px; cursor: pointer; font-size: 14px; }
 .enfoque.on { border-color: var(--tb-morado); background: var(--tono-lila-bg); }
 @media (max-width: 900px) { .pixel-grid { grid-template-columns: 1fr; } }
+/* Don Pixel */
+.don-pixel { image-rendering: pixelated; flex-shrink: 0; }
+.nav-icon .don-pixel { vertical-align: -3px; }
+.pixel-titulo { display: inline-flex; align-items: center; gap: 10px; }
+.asistente-avatar { width: 52px; height: 52px; border-radius: 12px; background: var(--tono-lila-bg); display: grid; place-items: center; }
+.msg.assistant { display: flex; flex-direction: row; gap: 10px; align-items: flex-start; }
+.msg.assistant .msg-avatar { margin-top: 2px; background: var(--tono-lila-bg); border-radius: 6px; padding: 2px; box-sizing: content-box; }
+.msg.assistant > :not(.msg-avatar) { min-width: 0; }
+.msg-cuerpo { flex: 1; min-width: 0; }

@@ -151,3 +151,19 @@ test('probar conexión: el dueño confirma que la clave funciona; otros no puede
     assert.match(mal.body.error, /Render → Environment/);
   } finally { mock.setModo('normal'); }
 });
+
+test('Don Pixel es experto del oficio y conoce las tarifas; los costos solo los recibe gestión', async () => {
+  let antes = mock.peticiones.length;
+  await s.duena.post('/ia/preguntar', { pregunta: '¿Qué diferencia hay entre DTF y serigrafía?' });
+  let p = mock.peticiones[antes];
+  assert.match(p.raw, /maestro del oficio/);
+  assert.match(p.raw, /serigraf/i);
+  assert.match(p.raw, /tarifasVigentes/);
+  assert.match(p.raw, /\\"costos\\"/, 'el dueño recibe costos');
+  const bryan = await s.userWithRole('ventas', (await s.duena.get('/vendedores')).find((v) => v.name === 'Bryan').id);
+  antes = mock.peticiones.length;
+  await bryan.post('/ia/preguntar', { pregunta: '¿Cuánto cobramos un bordado?' });
+  p = mock.peticiones[antes];
+  assert.match(p.raw, /bordadoPrecioPorLogo/);
+  assert.doesNotMatch(p.raw, /\\"costos\\"/, 'el vendedor no recibe costos de la matriz');
+});

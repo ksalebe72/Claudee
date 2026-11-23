@@ -2,6 +2,9 @@ import React, { useEffect, useRef, useState } from 'react';
 import { api } from '../api.js';
 import { PageHeader, useMeta, useToast } from '../components/ui.jsx';
 import { Markdown } from '../components/IA.jsx';
+import DonPixel, { saludoDonPixel, FRASES_PENSANDO } from '../components/DonPixel.jsx';
+
+const OFICIO = ['¿Qué diferencia hay entre DTF y serigrafía?', '¿Cuándo conviene bordado y cuándo DTF?', '¿Qué archivo necesito para bordar un logo?'];
 
 const SUGERENCIAS = [
   '¿Qué órdenes están por debajo del 30% de contribución y por qué?',
@@ -21,7 +24,8 @@ const SUGERENCIAS_ROL = {
 
 export default function Asistente() {
   const meta = useMeta();
-  const sugerencias = SUGERENCIAS_ROL[meta.user.role] || SUGERENCIAS;
+  const sugerencias = [...(SUGERENCIAS_ROL[meta.user.role] || SUGERENCIAS).slice(0, 4), ...OFICIO];
+  const [frase, setFrase] = useState(0);
   const [modo, setModo] = useState('preguntar');
   const [chat, setChat] = useState([]);
   const [q, setQ] = useState('');
@@ -29,6 +33,12 @@ export default function Asistente() {
   const [toast, notify] = useToast();
   const fin = useRef(null);
   useEffect(() => { fin.current?.scrollIntoView({ behavior: 'smooth' }); }, [chat, busy]);
+  useEffect(() => {
+    if (!busy) return undefined;
+    setFrase(Math.floor(Math.random() * FRASES_PENSANDO.length));
+    const t = setInterval(() => setFrase((f) => f + 1), 2500);
+    return () => clearInterval(t);
+  }, [busy]);
 
   async function preguntar(texto) {
     const pregunta = (texto ?? q).trim();
@@ -59,7 +69,7 @@ export default function Asistente() {
 
   return (
     <>
-      <PageHeader title="✨ Don Pixel" subtitle="Tu asistente: pregúntale por el negocio, pídele ayuda para contestar emails o ideas de venta. Solo lee los datos; no envía ni cambia nada." >
+      <PageHeader title={<span className="pixel-titulo"><DonPixel size={40} /> Don Pixel</span>} subtitle="El maestro del oficio de Color Plus: pregúntale por el negocio o por el oficio (DTF, bordado, serigrafía, telas, archivos), y pídele ayuda con emails e ideas de venta. Solo lee los datos; no envía ni cambia nada." >
         {modo === 'preguntar' && chat.length > 0 && <button className="btn" onClick={() => setChat([])}>Nueva conversación</button>}
       </PageHeader>
       <div className="tabs pixel-tabs">
@@ -72,17 +82,18 @@ export default function Asistente() {
       <div className="assistant" style={{ display: modo === 'preguntar' ? undefined : 'none' }}>
         {chat.length === 0 && (
           <div className="suggestions">
-            <p className="don-pixel-saludo">¡Hola, soy <strong>Don Pixel</strong>! Conozco las cotizaciones, órdenes, cobros y comisiones de Color Plus. ¿Qué quieres saber?</p>
+            <p className="don-pixel-saludo">{saludoDonPixel(String(meta.user.name || '').split(' ')[0])} Soy <strong>Don Pixel</strong>, años entre planchas, pantallas y máquinas de bordar. Pregúntame por tus órdenes y clientes, o cualquier duda del oficio.</p>
             {sugerencias.map((s) => <button key={s} className="chip" onClick={() => preguntar(s)}>{s}</button>)}
           </div>
         )}
         <div className="chat">
           {chat.map((m, i) => (
             <div key={i} className={`msg ${m.role}`}>
-              {m.role === 'assistant' ? <Markdown text={m.content} /> : m.content}
+              {m.role === 'assistant' && <DonPixel size={26} className="msg-avatar" />}
+              {m.role === 'assistant' ? <div className="msg-cuerpo"><Markdown text={m.content} /></div> : m.content}
             </div>
           ))}
-          {busy && <div className="msg assistant typing">Don Pixel está revisando los datos…</div>}
+          {busy && <div className="msg assistant typing"><DonPixel size={26} className="msg-avatar" />{FRASES_PENSANDO[frase % FRASES_PENSANDO.length]}</div>}
           <div ref={fin} />
         </div>
         <form className="ask" onSubmit={(e) => { e.preventDefault(); preguntar(); }}>

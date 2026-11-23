@@ -5,6 +5,7 @@ import { api } from '../api.js';
 import { money, fmtDate, fmtDateTime, label, useLoad } from '../utils.js';
 import { Empty, useMeta } from '../components/ui.jsx';
 import { BarrasMensuales, TablaMensual, DonaContribucion } from '../components/Graficas.jsx';
+import DonPixel, { saludoDonPixel } from '../components/DonPixel.jsx';
 
 const PERIODOS = { 1: 'Este mes', 3: 'Últimos 3 meses', 6: 'Últimos 6 meses', 12: 'Últimos 12 meses' };
 const GESTION = ['duena', 'finanzas', 'gerencia', 'coordinacion'];
@@ -130,8 +131,8 @@ export default function Dashboard() {
         <div className="stack">
           {(
             <section className="card tarjeta-asistente">
-              <div className="row gap"><span className="asistente-icono">{I.chispa}</span><div><h3 className="titulo-seccion">Don Pixel</h3><p className="muted small">Tu asistente interno · solo lectura</p></div></div>
-              <div className="asistente-burbuja"><span className="asistente-robot">{I.robot}</span>¡Hola! Soy Don Pixel. Pregúntame sobre clientes, cotizaciones, órdenes, márgenes o comisiones. Solo consulto; no creo ni modifico nada.</div>
+              <div className="row gap"><span className="asistente-avatar"><DonPixel size={44} /></span><div><h3 className="titulo-seccion">Don Pixel</h3><p className="muted small">Maestro del oficio · tu asistente</p></div></div>
+              <div className="asistente-burbuja">{saludoDonPixel(nombre)} Pregúntame por tus órdenes y clientes, o por el oficio: DTF, bordado, serigrafía, telas, archivos… También te ayudo a contestar emails y te doy ideas de venta.</div>
               <Link className="btn btn-morado" to="/asistente"><span className="btn-ico">{I.enviar}</span> Hablar con Don Pixel</Link>
             </section>
           )}
