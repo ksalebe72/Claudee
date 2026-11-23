@@ -340,10 +340,10 @@ function Historial() {
 function General({ notify }) {
   const meta = useMeta();
   const s = meta.settings;
-  const [f, setF] = useState({ business_name: s.business_name, deposit_pct: s.deposit_pct * 100, asistente_nombre: meta.asistente?.nombre || '' });
+  const [f, setF] = useState({ business_name: s.business_name, deposit_pct: s.deposit_pct * 100, asistente_nombre: meta.asistente?.nombre || '', dias_cliente_inactivo: s.dias_cliente_inactivo ?? 90 });
   async function save(e) {
     e.preventDefault();
-    try { await api.put('/settings', { business_name: f.business_name, deposit_pct: Number(f.deposit_pct) / 100, asistente_nombre: f.asistente_nombre }); await meta.reloadMeta(); notify('Guardado'); } catch (err) { notify(err.message, true); }
+    try { await api.put('/settings', { business_name: f.business_name, deposit_pct: Number(f.deposit_pct) / 100, asistente_nombre: f.asistente_nombre, dias_cliente_inactivo: Number(f.dias_cliente_inactivo) }); await meta.reloadMeta(); notify('Guardado'); } catch (err) { notify(err.message, true); }
   }
   return (
     <div className="settings-grid">
@@ -353,6 +353,7 @@ function General({ notify }) {
       <form className="card form" onSubmit={save}>
         <h3>Negocio</h3>
         <Field label="Nombre del negocio"><input value={f.business_name} onChange={(e) => setF({ ...f, business_name: e.target.value })} /></Field>
+        <Field label="Alerta de clientes sin comprar (días)" hint="El tablero avisa de los clientes que llevan más de estos días sin comprar (cuenta las compras de la app y de DecoNetwork)."><input type="number" min="15" max="730" value={f.dias_cliente_inactivo} onChange={(e) => setF({ ...f, dias_cliente_inactivo: e.target.value })} /></Field>
         <Field label="Nombre del asistente de IA" hint="Así aparece en el menú, el tablero y el chat, y así se presenta la IA. Los clientes no lo ven."><input value={f.asistente_nombre} maxLength={40} onChange={(e) => setF({ ...f, asistente_nombre: e.target.value })} /></Field>
         <Field label="Anticipo sugerido (%)"><input type="number" value={f.deposit_pct} onChange={(e) => setF({ ...f, deposit_pct: e.target.value })} /></Field>
         <div className="row end"><button className="btn primary">Guardar</button></div>

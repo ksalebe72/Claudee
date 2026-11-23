@@ -187,3 +187,32 @@ test('vendedor por empresa: los Guapo\'s son de Karol, con sus órdenes de Deco,
   assert.equal((await v.call('GET', '/reportes/comisiones-deco')).status, 403);
   assert.equal((await v.call('POST', '/importar/deco/asignar-vendedor', { texto: 'acme', salesperson_id: karol.id })).status, 403);
 });
+
+test('alerta de clientes sin comprar: cuenta las compras de Deco, respeta los días de Ajustes y el alcance de cada rol', async () => {
+  const hoy = new Date().toLocaleDateString('en-CA', { timeZone: 'America/New_York' });
+  const dias = (f) => Math.round((Date.parse(`${hoy}T00:00:00Z`) - Date.parse(`${f}T00:00:00Z`)) / 86400000);
+  // Últimas compras del archivo de prueba: Acme 2026-10-10, Bethesda 2026-11-05, Herndon 2026-11-06
+  const ultimas = { 'Acme Gym': '2026-10-10', "Guapo's of Bethesda": '2026-11-05', "Guapo's Charcoal & Taqueria Herndon": '2026-11-06' };
+  await s.duena.put('/settings', { dias_cliente_inactivo: 15 });
+  const esperados = Object.entries(ultimas).filter(([, f]) => dias(f) > 15).map(([c]) => c).sort();
+  const r = await s.duena.get('/clientes-inactivos');
+  assert.equal(r.dias, 15);
+  assert.deepEqual(r.lista.map((c) => c.cliente).sort(), esperados);
+  const t = await s.duena.get('/tablero');
+  assert.equal(t.avisos.find((a) => a.clave === 'inactivos').n, esperados.length);
+  assert.equal(t.inactivos.total, esperados.length);
+
+  await s.duena.put('/settings', { dias_cliente_inactivo: 730 });
+  assert.equal((await s.duena.get('/clientes-inactivos')).lista.length, 0);
+  assert.equal((await s.duena.call('PUT', '/settings', { dias_cliente_inactivo: 3 })).status, 400);
+
+  // Logística no ve montos ni la tarjeta; un vendedor solo sus clientes
+  await s.duena.put('/settings', { dias_cliente_inactivo: 15 });
+  const logi = await s.userWithRole('logistica');
+  assert.equal((await logi.get('/tablero')).inactivos, null);
+  assert.equal((await logi.call('GET', '/clientes-inactivos')).status, 403, 'Logística no maneja clientes');
+  const karol = (await s.duena.get('/vendedores')).find((v) => v.name === 'Karol');
+  const v = await s.userWithRole('ventas', karol.id);
+  assert.ok((await v.get('/clientes-inactivos')).lista.every((c) => /guapo/i.test(c.cliente)));
+  await s.duena.put('/settings', { dias_cliente_inactivo: 90 });
+});

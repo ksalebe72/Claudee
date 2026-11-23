@@ -1,7 +1,7 @@
 // Datos del tablero de operación: indicadores del periodo, serie mensual, lo que requiere atención y búsqueda global.
 // Todo respeta los permisos de cada rol (scope.js): un vendedor solo cuenta lo suyo y Logística no ve montos.
 import express from 'express';
-import { all, get } from './db.js';
+import { all, get, getSetting } from './db.js';
 import { currentPricing } from './config.js';
 import { filtroJobs, filtroContactos, soloPropios, esLogistica, tareaPermitida } from './scope.js';
 
@@ -20,6 +20,32 @@ export function mesesHacia(n, hoy = hoyMD()) {
     const d = new Date(Date.UTC(y, m - 1 - (n - 1 - i), 1));
     return d.toISOString().slice(0, 7);
   });
+}
+
+/** Días sin comprar para considerar a un cliente inactivo (Ajustes → General; por defecto 90). */
+export const diasInactivo = () => { const n = Number(getSetting('dias_cliente_inactivo', 90)); return Number.isFinite(n) && n >= 15 ? Math.round(n) : 90; };
+
+/**
+ * Clientes visibles que ya compraron alguna vez (en la app o en DecoNetwork) y llevan más de N días sin comprar.
+ * Ordenados por lo que han comprado (los más valiosos primero). Logística no recibe montos.
+ */
+export function clientesInactivos(user, dias = diasInactivo()) {
+  const fc = filtroContactos(user, 'c');
+  const hoy = hoyMD();
+  const filas = all(`SELECT c.id, c.name, c.company, c.phone, s.name AS vendedor,
+      (SELECT MAX(substr(o.fecha,1,10)) FROM historial_ordenes o WHERE o.contact_id = c.id) AS ult_deco,
+      (SELECT MAX(COALESCE(j.invoice_date, substr(j.created_at,1,10))) FROM jobs j WHERE j.contact_id = c.id AND j.kind = 'order') AS ult_app,
+      (SELECT COUNT(*) FROM historial_ordenes o WHERE o.contact_id = c.id) + (SELECT COUNT(*) FROM jobs j WHERE j.contact_id = c.id AND j.kind = 'order') AS compras,
+      (SELECT COALESCE(SUM(o.ventas),0) FROM historial_ordenes o WHERE o.contact_id = c.id) + (SELECT COALESCE(SUM(j.subtotal),0) FROM jobs j WHERE j.contact_id = c.id AND j.kind = 'order') AS ventas,
+      (SELECT COUNT(*) FROM jobs j WHERE j.contact_id = c.id AND j.kind = 'quote' AND j.status IN ('borrador','enviada')) AS cotizaciones_abiertas
+    FROM contacts c LEFT JOIN salespeople s ON s.id = c.salesperson_id WHERE ${fc.sql}`, ...fc.params);
+  const dif = (f) => Math.round((Date.parse(`${hoy}T00:00:00Z`) - Date.parse(`${f}T00:00:00Z`)) / 86400000);
+  const lista = filas.map((c) => {
+    const ultima = [c.ult_deco, c.ult_app].filter(Boolean).sort().pop() || null;
+    return { id: c.id, cliente: c.company || c.name, contacto: c.company ? c.name : null, telefono: c.phone, vendedor: c.vendedor, ultimaCompra: ultima, dias: ultima ? dif(ultima) : null, compras: c.compras, ventas: r2(c.ventas), cotizacionesAbiertas: c.cotizaciones_abiertas };
+  }).filter((c) => c.ultimaCompra && c.dias > dias)
+    .sort((a, b) => b.ventas - a.ventas || b.dias - a.dias);
+  return esLogistica(user) ? lista.map(({ ventas: _v, ...c }) => c) : lista;
 }
 
 /** Lo que requiere atención, según el rol. Cada aviso: { clave, titulo, detalle, n, to }. */
@@ -52,6 +78,10 @@ export function avisos(user) {
 
     const porCobrar = trabajos.filter((j) => j.kind === 'order' && j.status === 'entregado' && r2(j.total - j.pagado) > 0).length;
     add('cobros', 'Entregadas con saldo', 'Órdenes entregadas sin cobrar completas', porCobrar, '/cobranza');
+  }
+  if (!esLogistica(user)) {
+    const d = diasInactivo();
+    add('inactivos', 'Clientes sin comprar', `Más de ${d} días desde su última compra`, clientesInactivos(user, d).length, '/contactos?inactivos=1');
   }
   if (['duena', 'finanzas'].includes(rol)) {
     const sinConfirmar = trabajos.filter((j) => j.kind === 'order' && j.status === 'entregado' && !j.costs_confirmed_at).length;
@@ -123,6 +153,7 @@ export function tablero(user, meses = 6) {
     meses: n, desde, kpis, margen: currentPricing().config.margen,
     serie: sinMontos ? null : { ordenes: serie('order'), cotizaciones: serie('quote') },
     avisos: avisos(user),
+    inactivos: esLogistica(user) ? null : (() => { const d = diasInactivo(); const l = clientesInactivos(user, d); return { dias: d, total: l.length, ventas: r2(l.reduce((a, c) => a + c.ventas, 0)), lista: l.slice(0, 6) }; })(),
   };
 }
 
@@ -145,6 +176,7 @@ export function buscar(user, q) {
 export const tableroApi = express.Router();
 tableroApi.get('/tablero', wrap((req) => tablero(req.user, req.query.meses)));
 tableroApi.get('/avisos', wrap((req) => avisos(req.user)));
+tableroApi.get('/clientes-inactivos', wrap((req) => ({ dias: diasInactivo(), lista: clientesInactivos(req.user) })));
 tableroApi.get('/buscar', wrap((req) => {
   if (String(req.query.q || '').length > 100) throw fail(400, 'Búsqueda demasiado larga');
   return buscar(req.user, req.query.q);

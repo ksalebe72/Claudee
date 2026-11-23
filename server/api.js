@@ -176,6 +176,7 @@ api.get('/meta', wrap((req) => ({
   settings: {
     business_name: getSetting('business_name', 'Mi Taller'),
     deposit_pct: getSetting('deposit_pct', 0.5),
+    dias_cliente_inactivo: getSetting('dias_cliente_inactivo', 90),
   },
   asistente: { nombre: nombreAsistente() },
   brand: getBrand(),
@@ -188,6 +189,12 @@ api.get('/meta', wrap((req) => ({
 api.put('/settings', wrap((req) => {
   requireRole(req, 'duena');
   for (const k of ['business_name', 'deposit_pct']) if (k in req.body) { audit(req.user, 'ajustes', k, getSetting(k), req.body[k]); setSetting(k, req.body[k]); }
+  if ('dias_cliente_inactivo' in req.body) {
+    const n = Math.round(Number(req.body.dias_cliente_inactivo));
+    if (!Number.isFinite(n) || n < 15 || n > 730) throw fail(400, 'Los días sin comprar deben estar entre 15 y 730.');
+    audit(req.user, 'ajustes', 'días sin comprar para alertar', getSetting('dias_cliente_inactivo', 90), n);
+    setSetting('dias_cliente_inactivo', n);
+  }
   if ('asistente_nombre' in req.body) {
     const nombre = String(req.body.asistente_nombre || '').trim().slice(0, 40);
     if (nombre.length < 2) throw fail(400, 'El nombre del asistente debe tener al menos 2 letras.');

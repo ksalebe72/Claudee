@@ -721,3 +721,7 @@ code { font-size: .92em; font-weight: var(--fw-medium); }
 .lema-asistente { margin: 2px 0 0; font-family: var(--font-display); font-weight: var(--fw-semibold); font-size: var(--fs-sm); color: var(--tb-morado); }
 .pasos-import { margin: 0 0 12px; padding-left: 18px; line-height: 1.6; } .small-kpi { font-size: var(--fs-md) !important; }
 .clic { cursor: pointer; } .clic:hover td { background: var(--surface-2); } .lista-hist { margin: 4px 0; padding-left: 18px; display: grid; gap: 6px; }
+
+/* Tablas anchas dentro de tarjetas: se deslizan solas en el celular */
+.tabla-desliza { overflow-x: auto; max-width: 100%; }
+.tarjeta-inactivos { margin-top: 16px; min-width: 0; }

@@ -24,7 +24,7 @@ const I = {
   robot: <svg viewBox="0 0 24 24"><rect x="5" y="8" width="14" height="11" rx="3" /><path d="M12 4v4M9 13h.01M15 13h.01M9.5 16.5h5" /></svg>,
   enviar: <svg viewBox="0 0 24 24"><path d="m22 2-7 20-4-9-9-4z" /><path d="M22 2 11 13" /></svg>,
 };
-const ICONO_AVISO = { margenes: I.doc, atrasadas: I.reloj, seguimientos: I.lista, pruebas: I.arte, cambios: I.arte, cobros: I.caja, costos: I.doc, liquidaciones: I.meta, pagar: I.dolar };
+const ICONO_AVISO = { margenes: I.doc, atrasadas: I.reloj, seguimientos: I.lista, pruebas: I.arte, cambios: I.arte, cobros: I.caja, costos: I.doc, liquidaciones: I.meta, pagar: I.dolar, inactivos: I.reloj };
 
 export default function Dashboard() {
   const meta = useMeta();
@@ -152,6 +152,30 @@ export default function Dashboard() {
           </section>
         </div>
       </div>
+
+      {t.inactivos?.total > 0 && (
+        <section className="card tarjeta-inactivos">
+          <div className="card-head">
+            <div><h3 className="titulo-seccion">Clientes para reactivar</h3><p className="muted small">{t.inactivos.total} cliente(s) llevan más de {t.inactivos.dias} días sin comprar · antes compraban {money(t.inactivos.ventas)} · primero los que más compraban</p></div>
+            <Link to="/contactos?inactivos=1">Ver todos →</Link>
+          </div>
+          <div className="tabla-desliza"><table className="table mini-table">
+            <thead><tr><th>Cliente</th><th>Última compra</th><th className="num">Días</th><th className="num">Compras</th><th className="num">Vendido</th><th>Vendedor</th></tr></thead>
+            <tbody>
+              {t.inactivos.lista.map((c) => (
+                <tr key={c.id}>
+                  <td><Link to={`/contactos/${c.id}`}><strong>{c.cliente}</strong></Link>{c.cotizacionesAbiertas > 0 && <span className="badge tone-blue" style={{ marginLeft: 6 }}>cotización abierta</span>}</td>
+                  <td>{fmtDate(c.ultimaCompra)}</td>
+                  <td className={`num ${c.dias > t.inactivos.dias * 2 ? 'danger' : 'warn-txt'}`}>{c.dias}</td>
+                  <td className="num">{c.compras}</td>
+                  <td className="num">{money(c.ventas)}</td>
+                  <td className="muted">{c.vendedor || 'sin asignar'}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table></div>
+        </section>
+      )}
 
       <div className="grid-2">
         <section className="card">
