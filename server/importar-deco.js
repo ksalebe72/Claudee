@@ -147,12 +147,24 @@ export function armar(filas) {
 
 const claveCliente = (c) => c.cid || `email:${c.email || ''}`;
 
-/** Busca si el cliente ya existe en la app: por Customer ID, luego email, luego empresa. */
+/** Empresa normalizada para comparar («Guapo’s of Bethesda» = «guapos of bethesda»). */
+const empresaNorm = (v) => norm(v).replace(/[^a-z0-9 ]/g, '').replace(/\s+/g, ' ').trim();
+
+/**
+ * Busca si el cliente ya existe en la app. Cada Customer ID de Deco es un cliente distinto:
+ * un email compartido NO basta (la misma persona puede manejar varios restaurantes).
+ * 1) mismo Customer ID · 2) misma empresa (y mismo email si ambos lo tienen), siempre que ese contacto
+ *    no pertenezca ya a otro Customer ID de Deco.
+ */
 function clienteExistente(c) {
-  return (c.cid && get('SELECT * FROM contacts WHERE deco_customer_id = ?', c.cid))
-    || (c.email && get('SELECT * FROM contacts WHERE lower(email) = ?', c.email))
-    || (c.company && get("SELECT * FROM contacts WHERE lower(replace(company, '’', '''')) = ?", norm(c.company)))
-    || null;
+  if (c.cid) { const porId = get('SELECT * FROM contacts WHERE deco_customer_id = ?', c.cid); if (porId) return porId; }
+  const emp = empresaNorm(c.company);
+  if (!emp) return null;
+  const candidatos = all('SELECT * FROM contacts WHERE company IS NOT NULL');
+  return candidatos.find((x) => empresaNorm(x.company) === emp
+    && (!x.email || !c.email || x.email.toLowerCase() === c.email)
+    // si ese contacto ya es de otro Customer ID, solo se une si además comparten email (misma empresa y mismo contacto)
+    && (!x.deco_customer_id || x.deco_customer_id === c.cid || (x.email && c.email && x.email.toLowerCase() === c.email))) || null;
 }
 
 /** Vista previa: no guarda nada. */
@@ -160,19 +172,30 @@ export async function analizar(archivo, nombre) {
   const filas = await leerArchivo(archivo, nombre);
   const { clientes, ordenes } = armar(filas);
   const existentes = clientes.filter(clienteExistente);
-  // Clientes del archivo que son el mismo (comparten email o empresa con otro Customer ID): se unen en uno
-  const vistos = new Set(); let unidos = 0;
+  // Clientes del archivo que son el mismo: solo si es la misma empresa (un email compartido no basta)
+  const vistos = new Map(); let unidos = 0;
   for (const c of clientes) {
-    const claves = [c.email && `e:${c.email}`, c.company && `c:${norm(c.company)}`].filter(Boolean);
-    if (claves.some((k) => vistos.has(k))) unidos++;
-    claves.forEach((k) => vistos.add(k));
+    const emp = empresaNorm(c.company);
+    if (!emp) continue;
+    const previo = vistos.get(emp);
+    if (previo !== undefined && (!previo || !c.email || previo === c.email)) unidos++;
+    else vistos.set(emp, c.email || null);
   }
   const ya = ordenes.filter((o) => get("SELECT id FROM historial_ordenes WHERE origen = 'DecoNetwork' AND numero = ?", o.numero));
+  // Órdenes ya importadas que quedaron en el cliente equivocado (p. ej. unidas antes por email): se corrigen al importar
+  const porClave = new Map(clientes.map((c) => [claveCliente(c), c]));
+  const aReasignar = ya.filter((o) => {
+    const h = get("SELECT o.contact_id, c.deco_customer_id FROM historial_ordenes o LEFT JOIN contacts c ON c.id = o.contact_id WHERE o.origen = 'DecoNetwork' AND o.numero = ?", o.numero);
+    const cli = porClave.get(o.cid);
+    if (!h || !cli) return false;
+    const destino = clienteExistente(cli);
+    return destino ? destino.id !== h.contact_id : true; // si el cliente correcto no existe aún, se crea y se mueve
+  }).length;
   const fechas = ordenes.map((o) => o.fecha).filter(Boolean).sort();
   return {
     filas: filas.length,
     clientes: clientes.length - unidos, clientesUnidos: unidos, clientesNuevos: Math.max(0, clientes.length - unidos - existentes.length), clientesExistentes: existentes.length,
-    ordenes: ordenes.length, ordenesNuevas: ordenes.length - ya.length, ordenesYaImportadas: ya.length,
+    ordenes: ordenes.length, ordenesNuevas: ordenes.length - ya.length, ordenesYaImportadas: ya.length, ordenesAReasignar: aReasignar,
     lineas: ordenes.reduce((a, o) => a + o.lineas.length, 0),
     ventas: r2(ordenes.reduce((a, o) => a + o.ventas, 0)), total: r2(ordenes.reduce((a, o) => a + o.total, 0)),
     desde: fechas[0]?.slice(0, 10) || null, hasta: fechas.at(-1)?.slice(0, 10) || null,
@@ -186,7 +209,7 @@ export async function importar(archivo, nombre, { salesperson_id } = {}, user) {
   const filas = await leerArchivo(archivo, nombre);
   const { clientes, ordenes } = armar(filas);
   const sp = salesperson_id ? Number(salesperson_id) : null;
-  const res = { clientesCreados: 0, clientesActualizados: 0, ordenesImportadas: 0, ordenesOmitidas: 0, lineas: 0 };
+  const res = { clientesCreados: 0, clientesActualizados: 0, ordenesImportadas: 0, ordenesOmitidas: 0, ordenesReasignadas: 0, lineas: 0 };
   transaction(() => {
     const idPorCid = new Map();
     for (const c of clientes) {
@@ -209,8 +232,14 @@ export async function importar(archivo, nombre, { salesperson_id } = {}, user) {
       }
     }
     for (const o of ordenes) {
-      if (get("SELECT id FROM historial_ordenes WHERE origen = 'DecoNetwork' AND numero = ?", o.numero)) { res.ordenesOmitidas++; continue; }
       const contactId = idPorCid.get(o.cid);
+      const yaEsta = get("SELECT id, contact_id FROM historial_ordenes WHERE origen = 'DecoNetwork' AND numero = ?", o.numero);
+      if (yaEsta) {
+        // Ya estaba: si quedó en otro cliente (error anterior), se pasa al cliente correcto
+        if (contactId && yaEsta.contact_id !== contactId) { run('UPDATE historial_ordenes SET contact_id = ? WHERE id = ?', contactId, yaEsta.id); res.ordenesReasignadas++; }
+        else res.ordenesOmitidas++;
+        continue;
+      }
       const id = insert('historial_ordenes', {
         contact_id: contactId ?? null, origen: 'DecoNetwork', numero: o.numero, fecha: o.fecha, tienda: o.tienda, po: o.po, trabajo: o.trabajo,
         ventas: o.ventas, envio: o.envio, impuesto: o.impuesto, total: o.total, unidades: o.unidades, importado_por: user?.name || null,

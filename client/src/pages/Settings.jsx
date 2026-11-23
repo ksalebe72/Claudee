@@ -501,7 +501,7 @@ function ImportarDeco({ notify }) {
     e.target.value = '';
   }
   async function confirmar() {
-    if (!confirm(`¿Importar ${vista.clientesNuevos} cliente(s) nuevo(s) y ${vista.ordenesNuevas} orden(es) al historial?`)) return;
+    if (!confirm(`¿Importar ${vista.clientesNuevos} cliente(s) nuevo(s) y ${vista.ordenesNuevas} orden(es) al historial${vista.ordenesAReasignar ? `, y pasar ${vista.ordenesAReasignar} orden(es) a su cliente correcto` : ''}?`)) return;
     setBusy(true);
     try { setHecho(await api.post('/importar/deco/confirmar', { ...archivo, salesperson_id: vendedor ? Number(vendedor) : null })); setVista(null); setArchivo(null); recargarGuardado(); notify('Importación lista'); } catch (err) { notify(err.message, true); }
     setBusy(false);
@@ -524,8 +524,8 @@ function ImportarDeco({ notify }) {
         <section className="card wide">
           <h3>Vista previa · {archivo?.nombre}</h3>
           <div className="kpis">
-            <div className="kpi"><span className="kpi-label">Clientes</span><span className="kpi-value">{vista.clientes}</span><span className="kpi-sub">{vista.clientesNuevos} nuevos · {vista.clientesExistentes} ya existen{vista.clientesUnidos ? ` · ${vista.clientesUnidos} unidos (mismo email/empresa)` : ''}</span></div>
-            <div className="kpi"><span className="kpi-label">Órdenes</span><span className="kpi-value">{vista.ordenes}</span><span className="kpi-sub">{vista.ordenesNuevas} nuevas · {vista.ordenesYaImportadas} ya importadas</span></div>
+            <div className="kpi"><span className="kpi-label">Clientes</span><span className="kpi-value">{vista.clientes}</span><span className="kpi-sub">{vista.clientesNuevos} nuevos · {vista.clientesExistentes} ya existen{vista.clientesUnidos ? ` · ${vista.clientesUnidos} unidos (misma empresa)` : ''}</span></div>
+            <div className="kpi"><span className="kpi-label">Órdenes</span><span className="kpi-value">{vista.ordenes}</span><span className="kpi-sub">{vista.ordenesNuevas} nuevas · {vista.ordenesYaImportadas} ya importadas{vista.ordenesAReasignar ? ` · ${vista.ordenesAReasignar} se pasarán a su cliente correcto` : ''}</span></div>
             <div className="kpi"><span className="kpi-label">Ventas sin impuesto</span><span className="kpi-value">{money(vista.ventas)}</span><span className="kpi-sub">Total facturado {money(vista.total)}</span></div>
             <div className="kpi"><span className="kpi-label">Periodo</span><span className="kpi-value small-kpi">{vista.desde} → {vista.hasta}</span><span className="kpi-sub">{vista.lineas} líneas · tiendas: {vista.tiendas.join(', ')}</span></div>
           </div>
@@ -550,7 +550,7 @@ function ImportarDeco({ notify }) {
       {hecho && (
         <section className="card wide">
           <h3>✓ Importación lista</h3>
-          <p>{hecho.clientesCreados} cliente(s) creados · {hecho.clientesActualizados} actualizados (solo se llenaron datos vacíos) · {hecho.ordenesImportadas} orden(es) al historial · {hecho.ordenesOmitidas} ya estaban.</p>
+          <p>{hecho.clientesCreados} cliente(s) creados · {hecho.clientesActualizados} actualizados (solo se llenaron datos vacíos) · {hecho.ordenesImportadas} orden(es) al historial · {hecho.ordenesOmitidas} ya estaban{hecho.ordenesReasignadas ? ` · ${hecho.ordenesReasignadas} pasadas a su cliente correcto` : ''}.</p>
           <p className="muted small">Revisa en Contactos: cada cliente nuevo tiene la etiqueta «DecoNetwork». Asígnales vendedor e idioma desde su ficha. Queda en el Historial de cambios.</p>
         </section>
       )}

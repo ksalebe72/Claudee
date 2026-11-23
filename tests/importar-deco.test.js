@@ -19,7 +19,9 @@ const FILAS = [
   { ...base, 'Order Number': 1002, 'Order Line Id': 21, 'Date Ordered': '10-Oct-26 09:00', 'Product Name': 'Tee DTF', 'Product Code': 'PC61', Size: 'X Large', Color: 'Black', 'SKU Qty': 10, 'Line Qty': 10, 'Unit Price': 12, 'Line Total': 120, Tax: 7.2, 'Order Total': 127.2, 'Order Shipping Total': 0, 'Decoration Process': 'TRF', Company: 'ACME GYM', 'Billing First Name': 'Ana', 'Billing Last Name': 'Ruiz', 'Billing Email Address': 'ana@acme.com', 'Customer ID': 555 },
   // Orden 2001 · cliente B (tienda guapos)
   { ...base, 'Store Name': 'guapos', 'Order Number': 2001, 'Order Line Id': 31, 'Date Ordered': '05-Nov-26 15:30', 'Product Name': 'Apron', Size: 'ONE SIZE', 'SKU Qty': 6, 'Line Qty': 6, 'Unit Price': 20, 'Line Total': 120, Tax: 0, 'Order Total': 120, 'Order Shipping Total': 0, Company: "Guapo's of Bethesda", 'Billing First Name': 'Luis', 'Billing Last Name': 'Paz', 'Billing Email Address': 'luis@guapos.com', 'Customer ID': 777 },
-  // Cliente C: otro Customer ID con el mismo email que A → se une a A
+  // Guapo's Herndon: OTRO restaurante con el mismo email que Bethesda (lo maneja la misma persona) → cliente aparte
+  { ...base, 'Store Name': 'guapos', 'Order Number': 2002, 'Order Line Id': 32, 'Date Ordered': '06-Nov-26 10:00', 'Product Name': 'Apron', Size: 'ONE SIZE', 'SKU Qty': 4, 'Line Qty': 4, 'Unit Price': 20, 'Line Total': 80, Tax: 0, 'Order Total': 80, 'Order Shipping Total': 0, Company: "Guapo's Charcoal & Taqueria Herndon", 'Billing First Name': 'Luis', 'Billing Last Name': 'Paz', 'Billing Email Address': 'luis@guapos.com', 'Customer ID': 888 },
+  // Cliente C: otro Customer ID con el mismo email Y la misma empresa que A → es el mismo cliente
   { ...base, 'Order Number': 3001, 'Order Line Id': 41, 'Date Ordered': '01-Jun-26 10:00', 'Product Name': 'Gorra', 'SKU Qty': 4, 'Line Qty': 4, 'Unit Price': 15, 'Line Total': 60, Tax: 3.6, 'Order Total': 63.6, 'Order Shipping Total': 0, Company: 'Acme Gym', 'Billing First Name': 'Ana', 'Billing Last Name': 'Ruiz', 'Billing Email Address': 'ana@acme.com', 'Customer ID': 556 },
 ];
 
@@ -51,12 +53,12 @@ test('lectura de fechas y tallas de Deco', () => {
 
 test('vista previa: cuenta bien (líneas una vez, clientes unidos) y no guarda nada', async () => {
   const v = await s.duena.post('/importar/deco/analizar', { archivo, nombre: 'deco.xlsx' });
-  assert.equal(v.clientes, 2, 'A y C comparten email → un cliente');
+  assert.equal(v.clientes, 3, 'A y C (misma empresa y email) → uno; Bethesda y Herndon (mismo email, distinto restaurante) → dos');
   assert.equal(v.clientesUnidos, 1);
-  assert.equal(v.ordenes, 4);
-  assert.equal(v.lineas, 5);
-  assert.equal(v.ventas, 240 + 25 + 120 + 120 + 60, 'el total de la línea con dos tallas cuenta una vez');
-  assert.equal(v.total, Math.round((304.4 + 127.2 + 120 + 63.6) * 100) / 100);
+  assert.equal(v.ordenes, 5);
+  assert.equal(v.lineas, 6);
+  assert.equal(v.ventas, 240 + 25 + 120 + 120 + 80 + 60, 'el total de la línea con dos tallas cuenta una vez');
+  assert.equal(v.total, Math.round((304.4 + 127.2 + 120 + 80 + 63.6) * 100) / 100);
   assert.equal(v.desde, '2026-03-24');
   assert.equal((await s.duena.get('/contacts')).length, 0, 'la vista previa no guarda');
   const ventas = await s.userWithRole('ventas');
@@ -68,7 +70,9 @@ test('importar: crea clientes sin duplicar, guarda el historial y no se repite',
   const vend = await s.duena.get('/vendedores');
   const isabel = vend.find((v) => v.name === 'Isabel').id;
   const r = await s.duena.post('/importar/deco/confirmar', { archivo, nombre: 'deco.xlsx', salesperson_id: isabel });
-  assert.deepEqual(r, { clientesCreados: 2, clientesActualizados: 0, ordenesImportadas: 4, ordenesOmitidas: 0, lineas: 5 });
+  assert.deepEqual(r, { clientesCreados: 3, clientesActualizados: 0, ordenesImportadas: 5, ordenesOmitidas: 0, ordenesReasignadas: 0, lineas: 6 });
+  const contactosTodos = await s.duena.get('/contacts');
+  assert.ok(contactosTodos.find((c) => c.company === "Guapo's Charcoal & Taqueria Herndon"), 'Herndon es cliente aparte');
   const contactos = await s.duena.get('/contacts');
   const acme = contactos.find((c) => c.company === 'Acme Gym');
   assert.ok(acme, 'usa el nombre de empresa más frecuente');
@@ -90,7 +94,7 @@ test('importar: crea clientes sin duplicar, guarda el historial y no se repite',
   const r2 = await s.duena.post('/importar/deco/confirmar', { archivo: csv(), nombre: 'deco.csv' });
   assert.equal(r2.clientesCreados, 0);
   assert.equal(r2.ordenesImportadas, 0);
-  assert.equal(r2.ordenesOmitidas, 4);
+  assert.equal(r2.ordenesOmitidas, 5);
   const hist = await s.duena.get('/auditoria?area=clientes');
   assert.ok(hist.some((h) => h.field === 'importación DecoNetwork'));
 });
@@ -107,10 +111,10 @@ test('el historial cuenta: cliente existente, bordado previo, tablero y permisos
   assert.equal((await s.duena.get(`/contacts/${acme.id}/bordado-previo`)).yaBordo, true, 'ya bordó en Deco');
 
   const t = await s.duena.get('/tablero?meses=12');
-  assert.equal(t.kpis.historicas, 4);
-  assert.equal(t.kpis.historicasTotal, 4);
+  assert.equal(t.kpis.historicas, 5);
+  assert.equal(t.kpis.historicasTotal, 5);
   const res = await s.duena.get('/importar/deco/resumen');
-  assert.equal(res.ordenes, 4);
+  assert.equal(res.ordenes, 5);
   assert.ok(t.kpis.ventas >= 565);
   assert.ok(t.serie.ordenes.some((m) => m.historicas > 0));
 
@@ -121,4 +125,26 @@ test('el historial cuenta: cliente existente, bordado previo, tablero y permisos
   const bryan = await s.userWithRole('ventas', (await s.duena.get('/vendedores')).find((v) => v.name === 'Bryan').id);
   assert.equal((await bryan.call('GET', `/contacts/${acme.id}`)).status, 404);
   assert.equal((await bryan.get('/tablero')).kpis.historicas, 0);
+});
+
+test('si una importación anterior unió dos restaurantes, volver a subir el archivo los separa', async () => {
+  const { DatabaseSync } = await import('node:sqlite');
+  const { join } = await import('node:path');
+  const db = new DatabaseSync(join(s.dir, 't.db'));
+  // Simula el error anterior: la orden de Herndon quedó en el cliente Bethesda y Herndon no existe
+  const beth = db.prepare("SELECT id FROM contacts WHERE deco_customer_id = '777'").get().id;
+  const hern = db.prepare("SELECT id FROM contacts WHERE deco_customer_id = '888'").get().id;
+  db.prepare("UPDATE historial_ordenes SET contact_id = ? WHERE numero = '2002'").run(beth);
+  db.prepare('DELETE FROM contacts WHERE id = ?').run(hern);
+  db.close();
+  const v = await s.duena.post('/importar/deco/analizar', { archivo, nombre: 'deco.xlsx' });
+  assert.equal(v.ordenesAReasignar, 1);
+  const r = await s.duena.post('/importar/deco/confirmar', { archivo, nombre: 'deco.xlsx' });
+  assert.equal(r.clientesCreados, 1, 'vuelve a crear Herndon');
+  assert.equal(r.ordenesReasignadas, 1, 'y le devuelve su orden');
+  const herndon = (await s.duena.get('/contacts')).find((c) => c.company === "Guapo's Charcoal & Taqueria Herndon");
+  const ficha = await s.duena.get(`/contacts/${herndon.id}`);
+  assert.deepEqual(ficha.historial.map((o) => o.numero), ['2002']);
+  const fichaB = await s.duena.get(`/contacts/${beth}`);
+  assert.deepEqual(fichaB.historial.map((o) => o.numero), ['2001'], 'Bethesda queda solo con lo suyo');
 });
