@@ -312,7 +312,7 @@ input[type=color] { min-width: 40px; height: 32px; padding: 2px; }
 .layer-list li { display: flex; gap: 8px; align-items: center; padding: 5px 8px; border-radius: 6px; cursor: pointer; border: 1px solid transparent; }
 .layer-list li.on { border-color: var(--primary); background: var(--primary-soft); }
 .layer-list img { width: 28px; height: 28px; object-fit: contain; background: repeating-conic-gradient(#ddd 0% 25%, #fff 0% 50%) 50% / 8px 8px; border-radius: 4px; }
-.t-icon { width: 28px; height: 28px; display: grid; place-items: center; font-weight: 800; background: var(--surface-2); border-radius: 4px; }
+.t-icon { width: 28px; height: 28px; display: grid; place-items: center; font-weight: 700; background: var(--surface-2); border-radius: 4px; }
 .btn-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
 .btn-grid .btn { justify-content: center; font-size: 12px; padding: 6px 8px; white-space: normal; }
 .export-hidden { position: fixed; left: -10000px; top: 0; width: 400px; height: 440px; }
@@ -576,7 +576,7 @@ input[type=color] { min-width: 40px; height: 32px; padding: 2px; }
 }
 .buscador { min-width: 0; }
 .buscador input { min-width: 0; width: 100%; }
-.titulo-grande, .titulo-seccion { font-stretch: condensed; }
+
 .al-dia-resumen { display: flex; gap: 8px; align-items: flex-start; padding: 10px 8px 2px; border-top: 1px solid var(--border); font-size: 12.5px; color: var(--muted); }
 .al-dia-resumen .check { color: var(--estado-ok); font-weight: 700; }
 @media (max-width: 760px) {
@@ -631,3 +631,81 @@ input[type=color] { min-width: 40px; height: 32px; padding: 2px; }
 .asistente-avatar { background: none; width: auto; height: auto; }
 .asistente-avatar .don-pixel { box-shadow: 0 4px 14px rgba(30, 140, 255, .35); }
 .pixel-titulo .don-pixel { box-shadow: 0 4px 14px rgba(30, 140, 255, .35); }
+
+/* =====================================================================
+   Sistema tipográfico de ColorPlus OS
+   · Geist: títulos y métricas destacadas · Inter: navegación, tablas, formularios y contenido
+   · Pesos: 400 regular · 500 medio · 600 semibold · 700 bold
+   · Números tabulares en importes, porcentajes y columnas financieras
+   Va al final para que mande sobre estilos anteriores. No depende del tema: los colores siguen
+   saliendo de las variables, así que funciona igual en modo claro y oscuro.
+   ===================================================================== */
+:root {
+  --font-display: 'Geist', 'Inter', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  --font-ui: 'Inter', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  --fw-regular: 400; --fw-medium: 500; --fw-semibold: 600; --fw-bold: 700;
+  --fs-2xs: 11px; --fs-xs: 12px; --fs-sm: 13px; --fs-base: 14px; --fs-md: 15px;
+  --fs-lg: 17px; --fs-xl: 20px; --fs-2xl: 24px; --fs-3xl: 30px;
+  --lh-tight: 1.2; --lh-base: 1.5;
+  /* Compatibilidad con los tokens del tablero */
+  --font-titulo: var(--font-display);
+  --font-num: var(--font-display);
+}
+
+/* Base: Inter para todo el contenido */
+html { -webkit-text-size-adjust: 100%; }
+:root, body, button, input, select, textarea { font-family: var(--font-ui); }
+body { font-size: var(--fs-base); font-weight: var(--fw-regular); line-height: var(--lh-base); -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale; text-rendering: optimizeLegibility; }
+input, select, textarea { font-size: var(--fs-base); }
+strong, b, th { font-weight: var(--fw-semibold); }
+label, .field > span, .field span:first-child { font-weight: var(--fw-medium); }
+.btn, .link-btn, .tabs button, .seg button, .chip { font-family: var(--font-ui); font-weight: var(--fw-medium); }
+.btn.primary, .btn-azul, .btn-morado { font-weight: var(--fw-semibold); }
+small, .small { font-size: var(--fs-xs); }
+.muted { font-weight: var(--fw-regular); }
+
+/* Navegación */
+.nav-link { font-family: var(--font-ui); font-size: var(--fs-base); font-weight: var(--fw-medium); }
+.nav-group { font-family: var(--font-ui); font-size: var(--fs-2xs); font-weight: var(--fw-semibold); letter-spacing: .08em; }
+.brand strong { font-family: var(--font-display); font-weight: var(--fw-semibold); letter-spacing: -.01em; }
+
+/* Títulos: Geist */
+h1, h2, h3, h4, .page-header h1, .modal h2, .modal h3 { font-family: var(--font-display); color: var(--text); letter-spacing: -.01em; line-height: var(--lh-tight); }
+h1, .page-header h1 { font-size: var(--fs-2xl); font-weight: var(--fw-semibold); }
+h2 { font-size: var(--fs-xl); font-weight: var(--fw-semibold); }
+h3, .card h3, .card-head h3 { font-size: var(--fs-md); font-weight: var(--fw-semibold); }
+h4 { font-size: var(--fs-sm); font-weight: var(--fw-semibold); }
+.page-header p, .page-header .muted { font-family: var(--font-ui); }
+
+/* Tablero: mismos títulos Geist, sin mayúsculas forzadas */
+.titulo-grande { font-family: var(--font-display); font-size: var(--fs-3xl); font-weight: var(--fw-bold); letter-spacing: -.02em; line-height: 1.1; text-transform: none; color: var(--tb-tinta); }
+.titulo-seccion { font-family: var(--font-display); font-size: var(--fs-lg); font-weight: var(--fw-semibold); letter-spacing: -.01em; text-transform: none; color: var(--tb-tinta); }
+.titulo-seccion .muted { font-family: var(--font-ui); font-size: var(--fs-sm); font-weight: var(--fw-regular); }
+.ceja { font-family: var(--font-ui); font-size: var(--fs-2xs); font-weight: var(--fw-semibold); letter-spacing: .1em; }
+.kpi-titulo, .kpi-label { font-family: var(--font-ui); font-size: var(--fs-sm); font-weight: var(--fw-medium); }
+.kpi-pie, .kpi-sub { font-family: var(--font-ui); font-size: var(--fs-xs); }
+.dona-titulo, .menu-titulo { font-family: var(--font-display); font-weight: var(--fw-semibold); }
+@media (max-width: 760px) { .titulo-grande { font-size: var(--fs-2xl); } h1, .page-header h1 { font-size: var(--fs-xl); } }
+
+/* Métricas destacadas: Geist + números tabulares */
+.kpi-value, .kpi-num, .dona-num, .contador, .aviso-n, .atencion-n {
+  font-family: var(--font-display); font-weight: var(--fw-semibold); font-variant-numeric: tabular-nums; letter-spacing: -.01em;
+}
+.kpi-value, .kpi-num { font-size: var(--fs-2xl); line-height: 1.15; }
+@media (max-width: 760px) { .kpi-num, .kpi-value { font-size: var(--fs-lg); } }
+
+/* Importes, porcentajes y columnas financieras: números tabulares (alinean por columna) */
+table, .table, .mini-table, td.num, th.num, .num, input[type="number"],
+.row.between, .totals, .total-row, .portal-totals, .item-foot, .item-total, .size, .size-price, .total-pcs,
+.bar-val, .kpi-pie, .tooltip-graf, .eje-txt, .leyenda, .graf-dona, .aviso-base, .list li, .proofs, .stepper,
+.liquidacion, .reportes, .fin, .money {
+  font-variant-numeric: tabular-nums;
+}
+td.num, th.num { font-feature-settings: "tnum" 1; }
+.tooltip-graf b { font-family: var(--font-display); font-weight: var(--fw-semibold); }
+
+/* Tablas y formularios: Inter, jerarquía clara */
+.table th { font-family: var(--font-ui); font-size: var(--fs-xs); font-weight: var(--fw-semibold); letter-spacing: .02em; }
+.table td { font-size: var(--fs-base); }
+.mono, kbd, code { font-family: var(--font-ui); font-variant-numeric: tabular-nums; }
+code { font-size: .92em; font-weight: var(--fw-medium); }
