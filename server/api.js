@@ -15,7 +15,7 @@ import { analizar as analizarDeco, importar as importarDeco, historialCliente, a
 import { getBrand, setBrandColors, saveLogo, removeLogo } from './brand.js';
 import { productosPrevios, logosDeCliente, guardarLogo, borrarLogo, guardarLogosDeDiseno } from './atajos-cotizacion.js';
 import { iaConfigurada , nombreAsistente } from './ia.js';
-import { sendMessage } from './messaging.js';
+import { sendMessage, canales, envioAutomatico, telefonoE164 } from './messaging.js';
 import { sanmar, sanmarConfigured, cacheImage, getStyleAreas, setStyleAreas, clearSanmarCache } from './sanmar.js';
 
 // Carpeta de archivos (pruebas de arte, logos, fotos de SanMar). En producción va en el disco permanente.
@@ -186,7 +186,7 @@ api.get('/meta', wrap((req) => ({
   procesos: PROCESOS,
   roles: ROLES,
   pricingVersion: currentPricing().id,
-  integrations: { sanmar: sanmarConfigured(), ia: iaConfigurada() },
+  integrations: { sanmar: sanmarConfigured(), ia: iaConfigurada(), mensajes: canales() },
 })));
 
 /** Días que se suman a hoy para la fecha de entrega de una cotización nueva (Ajustes → General; 0 = sin fecha). */
@@ -365,14 +365,34 @@ api.get('/contacts/:id/bordado-previo', wrap((req) => {
   return { yaBordo: todas.length > 0, ordenes: todas };
 }));
 
-api.post('/contacts/:id/activities', wrap((req) => {
+api.post('/contacts/:id/activities', awrap(async (req) => {
   const c = contactById(req.params.id);
   if (!c) throw fail(404, 'Contacto no encontrado');
   const { type = 'nota', body, direction = 'interno' } = req.body;
   if (!body) throw fail(400, 'Escribe un mensaje');
-  const status = (type === 'sms' || type === 'email') && direction === 'saliente' ? sendMessage(type, c, body) : null;
-  const id = insert('activities', { contact_id: c.id, type, body, direction, status });
-  return get('SELECT * FROM activities WHERE id = ?', id);
+  // Texto, WhatsApp o email salientes: se envían si el canal está conectado; si no, quedan solo anotados
+  const sale = ['sms', 'whatsapp', 'email'].includes(type) && direction === 'saliente';
+  const envio = sale ? await sendMessage(type, c, body) : null;
+  const id = insert('activities', { contact_id: c.id, type, body, direction, status: envio ? envio.estado : null });
+  return { ...get('SELECT * FROM activities WHERE id = ?', id), enviado: envio ? envio.ok : undefined };
+}));
+
+// Mensajería: estado de los canales, prueba de envío y avisos automáticos (solo el dueño)
+api.get('/mensajes/estado', wrap((req) => { requireRole(req, 'duena'); return { canales: canales(), automatico: envioAutomatico() }; }));
+api.put('/mensajes/automatico', wrap((req) => {
+  requireRole(req, 'duena');
+  const v = req.body.activo === true;
+  audit(req.user, 'ajustes', 'envío automático de mensajes', envioAutomatico(), v);
+  setSetting('mensajes_automaticos', v);
+  return { canales: canales(), automatico: v };
+}));
+api.post('/mensajes/prueba', awrap(async (req) => {
+  requireRole(req, 'duena');
+  const canal = req.body.canal === 'whatsapp' ? 'whatsapp' : 'sms';
+  if (!telefonoE164(req.body.telefono)) throw fail(400, 'Escribe un teléfono válido, por ejemplo (301) 555-0101.');
+  const r = await sendMessage(canal, { phone: req.body.telefono }, `Prueba de ${getSetting('business_name', 'Color Plus LLC')}: tu ${canal === 'sms' ? 'texto' : 'WhatsApp'} está conectado con ColorPlus OS.`);
+  audit(req.user, 'ajustes', `prueba de ${canal}`, null, r.estado);
+  return r;
 }));
 
 // ---------- oportunidades (pipeline) ----------

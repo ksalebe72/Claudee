@@ -1,7 +1,7 @@
 // Motor de automatizaciones estilo "workflows" de HighLevel:
 // un evento (trigger) + condición opcional -> acción.
 import { all, get, getSetting, insert, run } from './db.js';
-import { sendMessage } from './messaging.js';
+import { sendMessage, envioAutomatico } from './messaging.js';
 
 export const TRIGGERS = {
   'contact.created': 'Nuevo contacto creado',
@@ -90,8 +90,15 @@ function execute(rule, payload) {
       if (!contact) return;
       const channel = rule.action === 'send_sms' ? 'sms' : 'email';
       const body = render(p.message, ctx);
-      const status = sendMessage(channel, contact, body, render(p.subject || '', ctx));
-      insert('activities', { contact_id: contact.id, job_id: job?.id ?? null, type: channel, direction: 'saliente', body, status: `${status} · auto` });
+      // Los avisos automáticos solo salen si el dueño los prendió en Ajustes; si no, quedan anotados para enviarlos a mano
+      if (!envioAutomatico()) {
+        insert('activities', { contact_id: contact.id, job_id: job?.id ?? null, type: channel, direction: 'saliente', body, status: 'registrado · auto (envío automático apagado)' });
+        break;
+      }
+      const actId = insert('activities', { contact_id: contact.id, job_id: job?.id ?? null, type: channel, direction: 'saliente', body, status: 'enviando… · auto' });
+      sendMessage(channel, contact, body, render(p.subject || '', ctx))
+        .then((r) => run('UPDATE activities SET status = ? WHERE id = ?', `${r.estado} · auto`, actId))
+        .catch(() => run('UPDATE activities SET status = ? WHERE id = ?', 'no enviado · auto', actId));
       break;
     }
     case 'set_order_status':
