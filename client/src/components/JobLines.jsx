@@ -3,7 +3,14 @@ import { money } from '../utils.js';
 import { PROCESOS } from '../../../shared/pricing.js';
 
 export const LOCATIONS = ['Frente', 'Espalda', 'Pecho izquierdo', 'Pecho derecho', 'Manga izquierda', 'Manga derecha', 'Nuca', 'Frente gorra', 'Lateral gorra'];
-const DEFAULT_SIZES = ['XS', 'S', 'M', 'L', 'XL', '2XL', '3XL'];
+/** Combinaciones de decoración más usadas: un toque las agrega con su ubicación (y el tamaño estándar de Ajustes). */
+export const COMBOS_DECORACION = [
+  { nombre: 'Bordado pecho izq.', decoraciones: [{ process: 'bordado', location: 'Pecho izquierdo' }] },
+  { nombre: 'DTF frente + espalda', decoraciones: [{ process: 'dtf', location: 'Frente' }, { process: 'dtf', location: 'Espalda' }] },
+  { nombre: 'DTF pecho izq. + espalda', decoraciones: [{ process: 'dtf', location: 'Pecho izquierdo' }, { process: 'dtf', location: 'Espalda' }] },
+  { nombre: 'Bordado pecho + DTF espalda', decoraciones: [{ process: 'bordado', location: 'Pecho izquierdo' }, { process: 'dtf', location: 'Espalda' }] },
+];
+export const DEFAULT_SIZES = ['XS', 'S', 'M', 'L', 'XL', '2XL', '3XL'];
 
 export const emptyPrenda = () => ({ line_type: 'prenda', product_id: '', description: '', color: '', sizes: {}, qty: 0, unit_cost: '', size_costs: {}, price_mode: 'auto', manual_price: '', line_discount: '', decorations: [] });
 export const emptyDiseno = () => ({ line_type: 'diseno', description: 'Diseño/Digitalizado', qty: 1, unit_price: '', unit_cost: '', commissionable: false, decorations: [] });
@@ -34,7 +41,7 @@ const pend = (v, txt = 'pendiente') => (v == null ? <span className="warn-txt">{
  * Casilla única para la prenda: escribes el código (ej. PC61) y la línea se llena sola.
  * Primero busca en el catálogo; si no está y SanMar está conectado, lo trae de SanMar.
  */
-function CodigoPrenda({ idx, item, products, editable, onImport, onPick }) {
+export function CodigoPrenda({ idx, item, products, editable, onImport, onPick }) {
   const prendas = products.filter((p) => p.kind !== 'servicio');
   const actual = prendas.find((p) => p.id === Number(item.product_id));
   const [codigo, setCodigo] = React.useState(actual?.sku || '');
@@ -220,6 +227,15 @@ export function LineEditor({ idx, item, calc, products, editable, onChange, onRe
                 const location = item.decorations.length ? 'Espalda' : 'Frente';
                 set({ decorations: [...item.decorations, { process: k, location, ...conTamano({ process: k }, location), ...(k === 'heat_transfer' ? { sheets: 1 } : {}) }] });
               }}>+ {v}</button>
+            ))}
+          </div>
+        )}
+        {editable && (
+          <div className="row gap wrap combos-deco">
+            <span className="muted small">De un toque:</span>
+            {COMBOS_DECORACION.map((c) => (
+              <button key={c.nombre} type="button" className="chip" title="Agrega la decoración ya con su ubicación y tamaño estándar"
+                onClick={() => set({ decorations: [...item.decorations, ...c.decoraciones.map((d) => ({ ...d, ...conTamano(d, d.location) }))] })}>{c.nombre}</button>
             ))}
           </div>
         )}

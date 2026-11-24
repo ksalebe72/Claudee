@@ -1,7 +1,9 @@
 import React, { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react';
 import { textos, procesoCliente, ubicacionCliente, fechaCliente } from '../../../../shared/idiomas.js';
 import { api, fileToDataUrl } from '../../api.js';
-import { fmtDate } from '../../utils.js';
+import { fmtDate, money } from '../../utils.js';
+import { calcularLinea } from '../../../../shared/pricing.js';
+import { CodigoPrenda, snapshotFromProduct, DEFAULT_SIZES } from '../JobLines.jsx';
 import {
   GARMENTS, areaFor, locationsFor, garmentFromCategory, colorHex, SWATCHES, shade, isDark, FONTS, DEFAULT_LOCATION, guiaPara,
 } from './garments.js';
@@ -120,6 +122,29 @@ async function toDataUrl(url) {
       .catch((e) => { photoCache.delete(url); throw e; }));
   }
   return photoCache.get(url);
+}
+
+/**
+ * Decoraciones de la línea según el diseño: una por ubicación con arte y proceso elegido.
+ * Tamaño: el estándar de la ubicación si el arte cabe en él (así se cotiza siempre igual); si se pasa, el tamaño real del arte.
+ * Las decoraciones que ya tenía la línea y no tienen arte en el diseño se conservan tal cual.
+ */
+export function decoracionesDeDiseno(design, item, guias = []) {
+  const previas = item?.decorations || [];
+  const out = [];
+  for (const [loc, p] of Object.entries(design.placements)) {
+    const capas = design.layers.filter((l) => l.location === loc);
+    const prev = previas.find((d) => d.location === loc);
+    if (!capas.length || !p.method) { if (prev) out.push(prev); continue; }
+    const g = guiaPara(guias, loc);
+    const u = unionBox(capas);
+    const a = areaOf(design, loc);
+    const arriba = (n) => Math.ceil(n * 4 - 1e-6) / 4;
+    const tam = g && !excesoGuia(design, loc, guias) ? { width: g.ancho, height: g.alto } : { width: arriba(inches(u.w, a)), height: arriba(inches(u.h, a)) };
+    out.push({ ...(prev && prev.process === p.method ? prev : {}), process: p.method, location: loc, ...tam, ...(p.method === 'heat_transfer' && !prev?.sheets ? { sheets: 1 } : {}) });
+  }
+  for (const d of previas) if (!(d.location in design.placements)) out.push(d);
+  return out;
 }
 
 export function designFromItem(item) {
@@ -367,10 +392,10 @@ async function buildSheet({ design, job, item, methodName, business, brand, vers
 }
 
 // ---------- componente principal ----------
-export default function ProofDesigner({ job, methods, business, brand, initialDesign, onClose, onSent, notify, sanmarEnabled, guias = [] }) {
+export default function ProofDesigner({ job, methods, business, brand, initialDesign, onClose, onSent, notify, sanmarEnabled, guias = [], cfg = null, products = [], onImportSanmar = null, onItemChange = null, onAddItem = null, ensureSaved = null }) {
   const items = job.items || [];
   const [itemIdx, setItemIdx] = useState(initialDesign?.itemIdx ?? 0);
-  const [design, setDesign] = useState(() => initialDesign || designFromItem(items[0]));
+  const [design, setDesign] = useState(() => initialDesign || designFromItem(items[initialDesign?.itemIdx ?? 0]));
   const [activeLoc, setActiveLoc] = useState(() => Object.keys((initialDesign || designFromItem(items[0])).placements)[0]);
   const [view, setView] = useState(() => areaOf(design, activeLoc).view);
   const [selectedId, setSelectedId] = useState(null);
@@ -447,17 +472,58 @@ export default function ProofDesigner({ job, methods, business, brand, initialDe
     setSelectedId(null);
   }
 
+  // ---------- la orden desde el decorador ----------
+  const puedeEditarLinea = !!onItemChange;
+  const producto = products.find((p) => p.id === Number(item?.product_id));
+  const tallasLinea = producto?.sizes?.length ? producto.sizes : Object.keys(item?.sizes || {}).length ? Object.keys(item.sizes) : DEFAULT_SIZES;
+  const decoraciones = useMemo(() => decoracionesDeDiseno(design, item, guias), [design, item, guias]);
+  const precio = useMemo(() => {
+    if (!cfg || !item || !(item.product_id || item.description)) return null;
+    try { return calcularLinea({ ...item, decorations: decoraciones }, cfg); } catch { return null; }
+  }, [cfg, item, decoraciones]);
+  /** Pasa a la línea de la cotización lo que se armó aquí: color, proceso, ubicación y tamaño de cada arte. */
+  function aplicarALinea() {
+    if (!puedeEditarLinea || !item) return;
+    onItemChange(itemIdx, { ...(design.colorName ? { color: design.colorName } : {}), decorations: decoraciones });
+  }
+  const sinProceso = Object.entries(design.placements).filter(([loc, p]) => !p.method && design.layers.some((l) => l.location === loc)).map(([loc]) => loc);
+  function pasarACotizacion() {
+    if (sinProceso.length && !confirm(`Falta escoger el proceso (bordado, DTF…) en: ${sinProceso.join(', ')}.\nEsas ubicaciones no se pasarán a la cotización. ¿Continuar?`)) return;
+    aplicarALinea();
+    notify('Listo: la línea de la cotización quedó con el color, la decoración y las tallas del decorador');
+    onClose(design, itemIdx);
+  }
+
+  // Logos guardados del cliente (se llenan solos con cada logo que se sube o se envía en una prueba)
+  const [logos, setLogos] = useState([]);
+  useEffect(() => {
+    if (!job.contact_id) { setLogos([]); return; }
+    api.get(`/contacts/${job.contact_id}/logos`).then(setLogos).catch(() => setLogos([]));
+  }, [job.contact_id]);
+  async function usarLogo(logo) {
+    try {
+      const blob = await (await fetch(logo.file_url)).blob();
+      await addImage(new File([blob], logo.name || 'logo', { type: blob.type }), { guardar: false, nombre: logo.name });
+    } catch (e) { notify(`No se pudo cargar el logo: ${e.message}`, true); }
+  }
+  async function quitarLogo(logo) {
+    if (!confirm('¿Quitar este logo de la biblioteca del cliente? Las pruebas ya enviadas no cambian.')) return;
+    try { setLogos(await api.del(`/contacts/${job.contact_id}/logos/${logo.id}`)); } catch (e) { notify(e.message, true); }
+  }
+
   // capas
-  async function addImage(file) {
+  async function addImage(file, { guardar = true, nombre = null } = {}) {
     if (!file) return;
     try {
       const { src, w, h } = await normalizeImage(await fileToDataUrl(file));
       const k = 100 / Math.max(w, h);
       const baseW = w * k, baseH = h * k;
       const scale = Math.min((area.w * 0.85) / baseW, (area.h * 0.85) / baseH);
-      const layer = { id: uid(), type: 'image', location: activeLoc, src, orig: src, baseW, baseH, scale, rot: 0, cx: area.x + area.w / 2, cy: area.y + area.h / 2 };
+      const layer = { id: uid(), type: 'image', location: activeLoc, src, orig: src, name: nombre || file.name?.replace(/\.[a-z0-9]+$/i, '') || 'Logo', baseW, baseH, scale, rot: 0, cx: area.x + area.w / 2, cy: area.y + area.h / 2 };
       commit((d) => ({ ...d, layers: [...d.layers, layer] }));
       setSelectedId(layer.id);
+      // El logo queda guardado en la biblioteca del cliente para la próxima vez
+      if (guardar && job.contact_id) api.post(`/contacts/${job.contact_id}/logos`, { file: src, name: layer.name }).then((l) => setLogos((ls) => (ls.some((x) => x.id === l.id) ? ls : [l, ...ls]))).catch(() => {});
     } catch (e) { notify(e.message, true); }
   }
   function addText() {
@@ -560,7 +626,7 @@ export default function ProofDesigner({ job, methods, business, brand, initialDe
     if (design.photo?.source === 'sanmar' && design.photo.style) { loadSanmar(design.photo.style, design.photo.color, { apply: false }); return; }
     if (!design.photo && item?.product_sku && /sanmar/i.test(item.product_supplier || '')) loadSanmar(item.product_sku, item.color);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [itemIdx]);
+  }, [itemIdx, item?.product_id]);
 
   // arrastre
   const toSvg = (e) => {
@@ -646,14 +712,17 @@ export default function ProofDesigner({ job, methods, business, brand, initialDe
     const pasados = Object.keys(design.placements).map((loc) => excesoGuia(design, loc, guias)).filter(Boolean);
     if (pasados.length && !confirm(`El diseño se sale de la medida estándar:\n${pasados.map((p) => `· ${p.ubicacion}: ${p.ancho.toFixed(1)}" × ${p.alto.toFixed(1)}" (máximo ${p.guia.ancho}" × ${p.guia.alto}")`).join('\n')}\n\n¿Continuar de todos modos?`)) return;
     setBusy(true);
-    try { const png = await makeSheet(); if (png) setPreview(png); } catch (e) { notify(e.message, true); }
+    try { const png = await makeSheet(); if (png) { aplicarALinea(); setPreview(png); } } catch (e) { notify(e.message, true); }
     setBusy(false);
   }
   async function send() {
     setBusy(true);
     try {
-      const j = await api.post(`/jobs/${job.id}/proofs`, {
-        file: preview, filename: `prueba-${job.order_number || job.number}-v${version}.png`, note: design.note, design: { ...design, itemIdx },
+      // La prueba va sobre la cotización guardada: si es nueva o tiene cambios, se guarda primero
+      const guardado = ensureSaved ? await ensureSaved() : job;
+      if (!guardado?.id) { setBusy(false); return; }
+      const j = await api.post(`/jobs/${guardado.id}/proofs`, {
+        file: preview, filename: `prueba-${guardado.order_number || guardado.number}-v${version}.png`, note: design.note, design: { ...design, itemIdx },
       });
       notify(`Prueba v${version} enviada al cliente`);
       onSent(j);
@@ -671,17 +740,67 @@ export default function ProofDesigner({ job, methods, business, brand, initialDe
     <div className="designer" role="dialog" aria-label="Decorador de pruebas">
       <header className="designer-head">
         <div>
-          <strong>Decorador · {job.order_number || job.number}</strong>
+          <strong>Decorador · {job.order_number || job.number || 'cotización nueva'}</strong>
           <span className="muted"> · Prueba v{version}</span>
+          {precio && precio.qty > 0 && (
+            <span className="designer-precio" title="Con las tarifas vigentes: prenda + decoración de esta línea">
+              {precio.venta != null ? <><strong>{money(precio.venta)}</strong> · {money(precio.unitPrice)}/pz · {precio.qty} pzs</> : <span className="warn-txt">precio pendiente: falta un costo</span>}
+            </span>
+          )}
         </div>
         <div className="row gap">
           <button className="btn" onClick={undo} disabled={!history.current.length} title="Ctrl+Z">↶ Deshacer</button>
-          <button className="btn" onClick={onClose}>Cerrar</button>
+          <button className="btn" onClick={() => onClose(design, itemIdx)} title="Cierra sin tocar la cotización; el diseño se conserva mientras sigas en esta pantalla">Cerrar</button>
+          {puedeEditarLinea && <button className="btn btn-morado" onClick={pasarACotizacion} title="Pone en la línea el color, el proceso, la ubicación y el tamaño de cada arte">✓ Pasar a la cotización</button>}
           <button className="btn primary" onClick={openPreview} disabled={busy}>{busy ? 'Generando…' : 'Revisar y enviar →'}</button>
         </div>
       </header>
 
       <aside className="designer-left">
+        {puedeEditarLinea && (
+          <div className="field d-prenda"><span>Prenda de esta línea</span>
+            <CodigoPrenda key={`${itemIdx}-${item?.product_id || ''}`} idx={`dec${itemIdx}`} item={item || {}} products={products} editable onImport={onImportSanmar}
+              onPick={(p) => {
+                const linea = snapshotFromProduct(p, item);
+                onItemChange(itemIdx, linea);
+                // El dibujo toma el color del producto; el tipo de prenda solo si todavía no hay arte puesto
+                commit((d) => {
+                  const garment = d.layers.length ? d.garment : garmentFromCategory(p.category, p.name);
+                  const base = garment === d.garment ? d : { ...d, garment, areas: undefined, placements: { [DEFAULT_LOCATION[garment]]: Object.values(d.placements)[0] || { method: '', inks: '' } } };
+                  return { ...base, colorName: linea.color || d.colorName, color: linea.color ? colorHex(linea.color) : d.color };
+                });
+                if (!design.layers.length) { const g = garmentFromCategory(p.category, p.name); if (g !== design.garment) { setActiveLoc(DEFAULT_LOCATION[g]); setView(areaFor(g, DEFAULT_LOCATION[g]).view); } }
+              }} />
+            {onAddItem && <button type="button" className="link-btn small" onClick={() => { const n = onAddItem(); setItemIdx(n); const d = designFromItem(null); commit(d); setActiveLoc(Object.keys(d.placements)[0]); setSelectedId(null); }}>+ Otra prenda en la cotización</button>}
+          </div>
+        )}
+        {puedeEditarLinea && item && (item.product_id || item.description) && (
+          <div className="field"><span>Tallas · {Object.values(item.sizes || {}).reduce((a, n) => a + (Number(n) || 0), 0)} pzs</span>
+            <div className="sizes d-tallas">
+              {tallasLinea.map((t) => (
+                <label key={t} className="size">{t}
+                  <input type="number" min="0" inputMode="numeric" value={item.sizes?.[t] || ''} onChange={(e) => {
+                    const sizes = { ...(item.sizes || {}), [t]: e.target.value === '' ? 0 : Math.max(0, Math.round(Number(e.target.value))) };
+                    onItemChange(itemIdx, { sizes, qty: Object.values(sizes).reduce((a, n) => a + (Number(n) || 0), 0) });
+                  }} />
+                </label>
+              ))}
+            </div>
+          </div>
+        )}
+        <div className="field d-logos"><span>Logos de este cliente</span>
+          {!job.contact_id ? <small className="muted">Escoge el cliente en la cotización para ver y guardar sus logos.</small>
+            : !logos.length ? <small className="muted">Aún no tiene logos guardados. El que subas con «Subir logo» queda guardado aquí para la próxima vez.</small> : (
+              <div className="d-logos-grid">
+                {logos.map((l) => (
+                  <div key={l.id} className="d-logo">
+                    <button type="button" onClick={() => usarLogo(l)} title={`Poner «${l.name}» en ${activeLoc}`}><img src={l.file_url} alt={l.name} /></button>
+                    <button type="button" className="d-logo-x" onClick={() => quitarLogo(l)} title="Quitar de la biblioteca" aria-label="Quitar logo">×</button>
+                  </div>
+                ))}
+              </div>
+            )}
+        </div>
         {items.length > 1 && (
           <label className="field"><span>Producto de la orden</span>
             <select value={itemIdx} onChange={(e) => changeItem(Number(e.target.value))}>

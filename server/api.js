@@ -13,6 +13,7 @@ import { ROLES, requireRole } from './auth.js';
 import { filtroContactos, filtroJobs, soloPropios, esLogistica, sinFinanzas, tareaPermitida } from './scope.js';
 import { analizar as analizarDeco, importar as importarDeco, historialCliente, asignarVendedorPorEmpresa, previaVendedorPorEmpresa, borrarReglaVendedor, reglasVendedor, comisionesDeco, completarVendedoresDesdeClientes } from './importar-deco.js';
 import { getBrand, setBrandColors, saveLogo, removeLogo } from './brand.js';
+import { productosPrevios, logosDeCliente, guardarLogo, borrarLogo, guardarLogosDeDiseno } from './atajos-cotizacion.js';
 import { iaConfigurada , nombreAsistente } from './ia.js';
 import { sendMessage } from './messaging.js';
 import { sanmar, sanmarConfigured, cacheImage, getStyleAreas, setStyleAreas, clearSanmarCache } from './sanmar.js';
@@ -178,6 +179,7 @@ api.get('/meta', wrap((req) => ({
     business_name: getSetting('business_name', 'Mi Taller'),
     deposit_pct: getSetting('deposit_pct', 0.5),
     dias_cliente_inactivo: diasInactivo(),
+    dias_entrega: diasEntrega(),
   },
   asistente: { nombre: nombreAsistente() },
   brand: getBrand(),
@@ -187,12 +189,20 @@ api.get('/meta', wrap((req) => ({
   integrations: { sanmar: sanmarConfigured(), ia: iaConfigurada() },
 })));
 
+/** Días que se suman a hoy para la fecha de entrega de una cotización nueva (Ajustes → General; 0 = sin fecha). */
+function diasEntrega() { const n = Number(getSetting('dias_entrega', 8)); return Number.isFinite(n) && n >= 0 && n <= 90 ? Math.round(n) : 8; }
+
 api.put('/settings', wrap((req) => {
   requireRole(req, 'duena');
   // Primero se valida todo; si algo está mal no se guarda nada (antes quedaba medio formulario guardado)
   const cambios = [];
   for (const k of ['business_name', 'deposit_pct']) if (k in req.body) cambios.push([k, k, getSetting(k), req.body[k]]);
   if ('dias_cliente_inactivo' in req.body) cambios.push(['dias_cliente_inactivo', 'días sin comprar para alertar', diasInactivo(), validarDiasInactivo(req.body.dias_cliente_inactivo)]);
+  if ('dias_entrega' in req.body) {
+    const n = Math.round(Number(req.body.dias_entrega));
+    if (req.body.dias_entrega === '' || !Number.isFinite(n) || n < 0 || n > 90) throw fail(400, 'Los días de entrega por defecto deben estar entre 0 y 90 (0 = sin fecha por defecto).');
+    cambios.push(['dias_entrega', 'días de entrega por defecto', diasEntrega(), n]);
+  }
   if ('asistente_nombre' in req.body) {
     const nombre = String(req.body.asistente_nombre || '').trim().slice(0, 40);
     if (nombre.length < 2) throw fail(400, 'El nombre del asistente debe tener al menos 2 letras.');
@@ -315,6 +325,11 @@ api.put('/contacts/:id', wrap((req) => {
   });
   return contactById(req.params.id);
 }));
+// Atajos del cotizador: lo que el cliente ya pidió (sin precios) y sus logos guardados
+api.get('/contacts/:id/productos-previos', wrap((req) => productosPrevios(Number(req.params.id), { excluirJob: req.query.excluir })));
+api.get('/contacts/:id/logos', wrap((req) => logosDeCliente(Number(req.params.id))));
+api.post('/contacts/:id/logos', express.json({ limit: '12mb' }), wrap((req) => guardarLogo(Number(req.params.id), req.body.file, req.body.name, UPLOAD_DIR)));
+api.delete('/contacts/:id/logos/:logo', wrap((req) => borrarLogo(Number(req.params.id), Number(req.params.logo))));
 api.delete('/contacts/:id', wrap((req) => { run('DELETE FROM contacts WHERE id = ?', req.params.id); return { ok: true }; }));
 
 // Importar clientes e historial de DecoNetwork (solo el dueño). Primero «analizar» (vista previa), luego «confirmar».
@@ -586,6 +601,7 @@ api.post('/jobs/:id/proofs', express.json({ limit: '20mb' }), wrap((req) => {
   if (!fileUrl) throw fail(400, 'Adjunta un archivo');
   const version = (get('SELECT MAX(version) AS v FROM proofs WHERE job_id = ?', job.id).v || 0) + 1;
   const pid = insert('proofs', { job_id: job.id, version, file_url: fileUrl, note: note || null, design: design ? JSON.stringify(design) : null });
+  if (design) guardarLogosDeDiseno(job.contact_id, design, UPLOAD_DIR); // los logos usados quedan en la biblioteca del cliente
   logSystem(job, `Prueba de arte v${version} subida`);
   if (job.kind === 'order' && job.status === 'arte') setOrderStatus(job.id, 'aprobacion');
   const base = `${req.protocol}://${req.get('host')}`;

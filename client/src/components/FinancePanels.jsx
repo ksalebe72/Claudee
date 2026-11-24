@@ -81,6 +81,16 @@ export function RentabilidadCard({ fin, preview, margen, user, jobId, onUpdated,
 }
 
 /** Vendedor, regla de comisión y tipo de cliente. */
+/** Regla de comisión que se sugiere al escoger un vendedor: la de su perfil; si no, la primera suya que no sea especial (wraps). */
+export function reglaSugerida(reglas, vendedores, sp, clientStatus) {
+  if (!sp) return null;
+  const v = vendedores.find((x) => x.id === sp);
+  if (v?.es_dueno) return null; // el dueño no cobra comisión
+  const especial = (r) => /wrap/i.test(r.name);
+  const propias = reglas.filter((r) => r.active && r.salesperson_id === sp).sort((a, b) => especial(a) - especial(b));
+  return propias.find((r) => r.id === v?.default_rule_id) || propias.find((r) => !r.client_type || r.client_type === clientStatus) || propias[0] || reglas.find((r) => r.name === 'Sin comisión') || null;
+}
+
 export function VendedorCard({ job, set, vendedores, reglas, editable }) {
   const opciones = reglas.filter((r) => r.active && (!r.salesperson_id || r.salesperson_id === Number(job.salesperson_id)));
   return (
@@ -90,12 +100,7 @@ export function VendedorCard({ job, set, vendedores, reglas, editable }) {
         <label className="field"><span>Vendedor</span>
           <select disabled={!editable} value={job.salesperson_id || ''} onChange={(e) => {
             const sp = e.target.value ? Number(e.target.value) : null;
-            // Las reglas especiales (wraps) no se sugieren solas: se eligen a mano en la orden
-            const especial = (r) => /wrap/i.test(r.name);
-            const propias = reglas.filter((r) => r.active && r.salesperson_id === sp).sort((a, b) => especial(a) - especial(b));
-            const perfil = vendedores.find((v) => v.id === sp)?.default_rule_id;
-            const sugerida = propias.find((r) => r.id === perfil) || propias.find((r) => !r.client_type || r.client_type === job.client_status) || propias[0] || reglas.find((r) => r.name === 'Sin comisión');
-            set({ salesperson_id: sp, commission_rule_id: sugerida?.id || null });
+            set({ salesperson_id: sp, commission_rule_id: reglaSugerida(reglas, vendedores, sp, job.client_status)?.id || null });
           }}>
             <option value="">— Sin vendedor —</option>
             {vendedores.filter((v) => v.active).map((v) => <option key={v.id} value={v.id}>{v.name}</option>)}

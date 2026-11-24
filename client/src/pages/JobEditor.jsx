@@ -5,9 +5,11 @@ import { money, fmtDate, fmtDateTime, label, today, useLoad } from '../utils.js'
 import { Badge, Field, PageHeader, useMeta, useToast } from '../components/ui.jsx';
 import { calcularLinea, calcularRentabilidad } from '../../../shared/pricing.js';
 import ProofDesigner from '../components/designer/ProofDesigner.jsx';
-import { LineEditor, emptyPrenda, emptyDiseno, lineaDigitalizado, esDigitalizado } from '../components/JobLines.jsx';
-import { RentabilidadCard, VendedorCard, EnvioCostosCard, CostosRealesCard, CreditosCard } from '../components/FinancePanels.jsx';
+import { LineEditor, emptyPrenda, emptyDiseno, lineaDigitalizado, esDigitalizado, snapshotFromProduct } from '../components/JobLines.jsx';
+import { RentabilidadCard, VendedorCard, EnvioCostosCard, CostosRealesCard, CreditosCard, reglaSugerida } from '../components/FinancePanels.jsx';
 import { RedactarIAModal } from '../components/IA.jsx';
+import { ClienteBuscador, PedidoAntesModal, FaltaPorCompletar } from '../components/CotizadorAtajos.jsx';
+import { PROCESOS } from '../../../shared/pricing.js';
 
 /** Regla de comisión con la tasa vigente (misma lógica que el servidor). */
 function reglaVigente(reglas, job) {
@@ -19,6 +21,24 @@ function reglaVigente(reglas, job) {
   const fecha = job.invoice_date || today();
   const tasa = r.tasas.find((t) => t.effective_from <= fecha);
   return { nombre: r.name, base: r.base, tasa: tasa ? tasa.rate : null, minContribucion: tasa?.min_contribucion ?? null, tasaReducida: tasa?.rate_reducida ?? null };
+}
+
+/** Fecha de entrega de una cotización nueva: hoy + los días de Ajustes → General (0 = sin fecha). */
+function fechaEntregaPorDefecto(dias) {
+  const n = Number(dias);
+  if (!Number.isFinite(n) || n <= 0) return '';
+  const d = new Date(`${today()}T12:00:00`);
+  d.setDate(d.getDate() + n);
+  return d.toISOString().slice(0, 10);
+}
+
+/** Nombre del trabajo cuando se deja vacío: «Polo · Bordado · Guapo's of Bethesda». */
+function tituloAutomatico(job, contacts) {
+  const prenda = job.items.find((it) => (it.line_type || 'prenda') === 'prenda' && it.description);
+  const proceso = prenda?.decorations?.[0]?.process;
+  const c = contacts?.find((x) => x.id === Number(job.contact_id));
+  const partes = [prenda?.description, PROCESOS[proceso], c?.company || c?.name].filter(Boolean);
+  return partes.length ? partes.join(' · ').slice(0, 90) : 'Cotización';
 }
 
 export default function JobEditor() {
@@ -36,7 +56,7 @@ export default function JobEditor() {
     return p;
   };
   const [methodsList] = useLoad(() => api.get('/methods'));
-  const [contacts] = useLoad(() => api.get('/contacts'));
+  const [contacts, , setContacts] = useLoad(() => api.get('/contacts'));
   const [opps] = useLoad(() => api.get('/opportunities'));
   const [vendedores] = useLoad(() => api.get('/vendedores'));
   const [reglas] = useLoad(() => api.get('/comisiones/reglas'));
@@ -46,6 +66,9 @@ export default function JobEditor() {
   const [toast, notify] = useToast();
   const [designer, setDesigner] = useState(null);
   const [redactar, setRedactar] = useState(false);
+  const [masOpciones, setMasOpciones] = useState(false);
+  const [pedidoAntes, setPedidoAntes] = useState(false);
+  const [borradorDiseno, setBorradorDiseno] = useState(null); // diseño en curso del decorador (se conserva al cerrarlo)
 
   const reload = () => api.get(`/jobs/${id}`).then((j) => { setJob(j); setDirty(false); });
   useEffect(() => {
@@ -53,7 +76,7 @@ export default function JobEditor() {
     else {
       const contact_id = params.get('contact') ? Number(params.get('contact')) : '';
       setJob({
-        kind: 'quote', status: 'borrador', title: '', notes: '', discount: '', contact_id,
+        kind: 'quote', status: 'borrador', title: '', notes: '', discount: '', contact_id, due_date: fechaEntregaPorDefecto(meta.settings.dias_entrega),
         opportunity_id: params.get('opp') ? Number(params.get('opp')) : '',
         items: [emptyPrenda()], proofs: [], payments: [], extra_costs: [], shipping_charged: '', shipping_cost: '',
         tax_exempt: 0, salesperson_id: user.salesperson_id || null, commission_rule_id: null, client_status: '', client_status_manual: 0,
@@ -122,7 +145,7 @@ export default function JobEditor() {
 
   async function save({ abrirDecorador = false } = {}) {
     const body = {
-      title: job.title || 'Cotización', contact_id: job.contact_id || null, opportunity_id: job.opportunity_id || null,
+      title: job.title?.trim() || tituloAutomatico(job, contacts), contact_id: job.contact_id || null, opportunity_id: job.opportunity_id || null,
       due_date: job.due_date || null, priority: job.priority, assignee: job.assignee, notes: job.notes,
       discount: job.discount, shipping_charged: job.shipping_charged, shipping_cost: job.shipping_cost, extra_costs: job.extra_costs,
       tax_exempt: job.tax_exempt, salesperson_id: job.salesperson_id || null, commission_rule_id: job.commission_rule_id || null, idioma: job.idioma || null,
@@ -180,14 +203,47 @@ export default function JobEditor() {
   function quitarAjuste() { set({ items: job.items.map((it) => ({ ...it, ajuste_pct: 0 })) }); }
 
   async function abrirDecorador(proof = null) {
-    if (!job.items.some((it) => it.product_id || it.description)) return notify('Agrega primero la prenda a la orden.', true);
-    if (!id) { await save({ abrirDecorador: true }); return; } // al guardar se abre solo
-    if (dirty && !(await save())) return;
+    // Abre aquí mismo, sin guardar antes: desde el decorador se puede escoger la prenda, las tallas y la decoración
     try {
-      const initialDesign = proof ? await api.get(`/proofs/${proof.id}/design`) : null;
+      const initialDesign = proof ? await api.get(`/proofs/${proof.id}/design`) : borradorDiseno;
       setDesigner({ initialDesign });
     } catch (e) { notify(e.message, true); }
   }
+
+  /** Agrega una prenda que el cliente ya pidió: producto del catálogo (o lo trae de SanMar por su código), color, tallas y decoración. */
+  async function agregarPedidoAntes(p) {
+    let prod = p.product_id ? products.find((x) => x.id === p.product_id) : products.find((x) => String(x.sku).toUpperCase() === String(p.codigo || '').toUpperCase());
+    if (!prod && p.codigo && meta.integrations?.sanmar) { try { prod = await importarSanmar(p.codigo); } catch { /* no está en SanMar: queda como línea libre */ } }
+    const base = prod ? snapshotFromProduct(prod, emptyPrenda()) : { ...emptyPrenda(), description: [p.codigo, p.descripcion].filter(Boolean).join(' · ') };
+    const colores = prod?.colors || [];
+    const color = colores.find((c) => c.toLowerCase() === String(p.color).toLowerCase()) || (colores.length ? base.color : p.color);
+    const validas = prod?.sizes?.length ? prod.sizes : null;
+    const sizes = Object.fromEntries(Object.entries(p.tallas || {}).filter(([t, n]) => Number(n) > 0 && (!validas || validas.includes(t))).map(([t, n]) => [t, Number(n)]));
+    const tam = (d) => { const t = (cfg.dtf.tamanos || []).find((x) => String(x.ubicacion).toLowerCase() === String(d.location || '').toLowerCase()); return d.width || !t ? {} : { width: t.ancho, height: t.alto }; };
+    const linea = { ...base, color, sizes, qty: Object.values(sizes).reduce((a, n) => a + n, 0), decorations: p.decoraciones.map((d) => ({ ...d, ...tam(d), ...(d.process === 'heat_transfer' && !d.sheets ? { sheets: 1 } : {}) })) };
+    setJob((j) => ({ ...j, items: [...j.items.filter((it) => it.product_id || it.description), linea] }));
+    setDirty(true);
+    notify(`Agregado: ${linea.description}${p.revisarDecoracion ? ' · revisa la ubicación y el tamaño de la decoración' : ''}`);
+  }
+
+  // Lo que falta para poder enviar la cotización (lista corta, arriba a la derecha)
+  const pendientes = [];
+  if (editable) {
+    if (!job.contact_id) pendientes.push('Escoger el cliente');
+    const prendas = job.items.filter((it) => it.product_id || it.description);
+    if (!prendas.length) pendientes.push('Agregar al menos una prenda o servicio');
+    prendas.forEach((it, i) => { if ((it.line_type || 'prenda') === 'prenda' && !Object.values(it.sizes || {}).some((n) => Number(n) > 0)) pendientes.push(`Línea ${i + 1} (${it.description}): poner las tallas`); });
+    if (!job.due_date) pendientes.push('Fecha de entrega');
+    for (const f of [...new Set([...(fin.faltantesPrecio || []), ...(fin.faltantes || [])])].filter((x) => !/^Línea:/.test(x)).slice(0, 6)) pendientes.push(f);
+    if (fin.aprobacion && !fin.aprobacion.ok) pendientes.push('Aprobación de margen (contribución bajo el mínimo)');
+  }
+
+  // El decorador necesita los datos del producto de cada línea aunque todavía no se haya guardado
+  const jobDecorador = {
+    ...job,
+    contact: job.contact || contacts?.find((c) => c.id === Number(job.contact_id)) || null,
+    items: job.items.map((it) => { const p = products.find((x) => x.id === Number(it.product_id)); return p ? { ...it, product_sku: it.product_sku ?? p.sku, product_supplier: it.product_supplier ?? p.supplier, product_category: it.product_category ?? p.category, product_name: it.product_name ?? p.name } : it; }),
+  };
 
   const contactOpps = (opps || []).filter((o) => o.contact_id === Number(job.contact_id));
   const docNumber = isOrder ? job.order_number : job.number;
@@ -196,7 +252,7 @@ export default function JobEditor() {
   return (
     <div className="job-editor">
       <PageHeader title={id ? `${docNumber} · ${job.title}` : 'Nueva cotización'} subtitle={id && <>{isOrder ? `De la cotización ${job.number}` : 'Cotización'} · <Badge status={job.status} /> · tarifas v{job.pricing_version_id}</>}>
-        {!logistica && <button className="btn primary" onClick={() => abrirDecorador()}>🎨 Proof</button>}
+        {!logistica && <button className="btn primary" onClick={() => abrirDecorador()} title="Abre el decorador aquí mismo: pon el logo, las tallas y pásalo a la cotización">🎨 Decorador</button>}
         {id && !logistica && meta.integrations?.ia && <button className="btn ia-btn" onClick={() => setRedactar(true)}>✨ Redactar mensaje</button>}
         {id && <button className="btn" onClick={() => window.print()}>Imprimir</button>}
         {id && !logistica && <button className="btn" onClick={duplicate}>Duplicar</button>}
@@ -238,36 +294,63 @@ export default function JobEditor() {
 
       <div className="job-grid">
         <div className="stack">
-          <section className="card">
-            <div className="form-grid three">
-              <Field label="Título del trabajo"><input value={job.title} onChange={(e) => set({ title: e.target.value })} placeholder="Ej. Uniformes equipo de fútbol" /></Field>
-              <Field label="Cliente">
-                <select value={job.contact_id || ''} onChange={(e) => {
-                  const c = contacts?.find((x) => x.id === Number(e.target.value));
-                  set({ contact_id: c ? c.id : '', opportunity_id: '', tax_exempt: c?.tax_exempt ? 1 : 0 });
-                }}>
-                  <option value="">— Selecciona —</option>
-                  {contacts?.map((c) => <option key={c.id} value={c.id}>{c.name}{c.company ? ` (${c.company})` : ''}</option>)}
-                </select>
-              </Field>
-              <Field label="Oportunidad">
-                <select value={job.opportunity_id || ''} onChange={(e) => set({ opportunity_id: e.target.value ? Number(e.target.value) : '' })}>
-                  <option value="">—</option>
-                  {contactOpps.map((o) => <option key={o.id} value={o.id}>{o.title}</option>)}
-                </select>
-              </Field>
+          <section className="card encabezado-cot">
+            <div className="encabezado-fila">
+              <div className="field campo-cliente"><span>Cliente</span>
+                <ClienteBuscador contacts={contacts} value={job.contact_id} disabled={logistica} notify={notify}
+                  onCreated={(c) => setContacts((l) => [c, ...(l || [])])}
+                  onPick={(c) => {
+                    const patch = { contact_id: c.id, opportunity_id: '', tax_exempt: c.tax_exempt ? 1 : 0 };
+                    // Cotización nueva: el vendedor del cliente y su regla se ponen solos (un vendedor siempre cotiza a su nombre)
+                    if (!id && user.role !== 'ventas' && c.salesperson_id) Object.assign(patch, { salesperson_id: c.salesperson_id, commission_rule_id: reglaSugerida(reglas, vendedores, c.salesperson_id, job.client_status)?.id || null });
+                    set(patch);
+                  }} />
+              </div>
+              <Field label="Nombre del trabajo"><input value={job.title} onChange={(e) => set({ title: e.target.value })} placeholder="Se arma solo si lo dejas vacío" /></Field>
               <Field label="Fecha de entrega"><input type="date" value={job.due_date || ''} onChange={(e) => set({ due_date: e.target.value })} /></Field>
-              <Field label="Prioridad">
-                <select value={job.priority || 'normal'} onChange={(e) => set({ priority: e.target.value })}>
-                  <option value="baja">Baja</option><option value="normal">Normal</option><option value="alta">Alta</option><option value="urgente">Urgente (rush)</option>
-                </select>
-              </Field>
-              {isOrder ? (
+              {!logistica && user.role !== 'ventas' && (
+                <Field label="Vendedor">
+                  <select disabled={!(editable || finanzasRol)} value={job.salesperson_id || ''} onChange={(e) => {
+                    const sp = e.target.value ? Number(e.target.value) : null;
+                    set({ salesperson_id: sp, commission_rule_id: reglaSugerida(reglas, vendedores, sp, job.client_status)?.id || null });
+                  }}>
+                    <option value="">— Sin vendedor —</option>
+                    {vendedores.filter((v) => v.active).map((v) => <option key={v.id} value={v.id}>{v.name}</option>)}
+                  </select>
+                </Field>
+              )}
+              {isOrder && (
                 <Field label="Fecha de factura">
                   <input type="date" value={job.invoice_date || ''} disabled={!finanzasRol} onChange={(e) => setInvoiceDate(e.target.value)} title="Solo Finanzas o el dueño" />
                 </Field>
-              ) : <Field label="Responsable"><input value={job.assignee || ''} onChange={(e) => set({ assignee: e.target.value })} placeholder="Quién lo lleva" /></Field>}
+              )}
             </div>
+            <button type="button" className="link-btn mas-opciones" onClick={() => setMasOpciones(!masOpciones)}>{masOpciones ? '▾ Menos opciones' : '▸ Más opciones: prioridad, oportunidad, responsable, idioma y comisión'}</button>
+            {masOpciones && (
+              <div className="form-grid three" style={{ marginTop: 10 }}>
+                <Field label="Prioridad">
+                  <select value={job.priority || 'normal'} onChange={(e) => set({ priority: e.target.value })}>
+                    <option value="baja">Baja</option><option value="normal">Normal</option><option value="alta">Alta</option><option value="urgente">Urgente (rush)</option>
+                  </select>
+                </Field>
+                <Field label="Oportunidad">
+                  <select value={job.opportunity_id || ''} onChange={(e) => set({ opportunity_id: e.target.value ? Number(e.target.value) : '' })}>
+                    <option value="">—</option>
+                    {contactOpps.map((o) => <option key={o.id} value={o.id}>{o.title}</option>)}
+                  </select>
+                </Field>
+                <Field label="Responsable"><input value={job.assignee || ''} onChange={(e) => set({ assignee: e.target.value })} placeholder="Quién lo lleva" /></Field>
+                {!logistica && (
+                  <Field label="Idioma de la factura, cotización y proofs">
+                    <select value={job.idioma || ''} onChange={(e) => set({ idioma: e.target.value || null })}>
+                      <option value="">Según el cliente ({(contacts || []).find((c) => c.id === Number(job.contact_id))?.idioma === 'en' ? 'English' : 'Español'})</option>
+                      <option value="es">Español</option>
+                      <option value="en">English</option>
+                    </select>
+                  </Field>
+                )}
+              </div>
+            )}
           </section>
 
           {job.items.map((it, idx) => (
@@ -288,6 +371,7 @@ export default function JobEditor() {
           {editable && (
             <div className="row gap wrap">
               <button className="btn add-line grow" onClick={() => set({ items: [...job.items, emptyPrenda()] })}>+ Prenda</button>
+              <button className="btn add-line" disabled={!job.contact_id} title={job.contact_id ? 'Lo que este cliente ya compró o cotizó, en la app y en DecoNetwork' : 'Escoge primero el cliente'} onClick={() => setPedidoAntes(true)}>↻ Pedido antes</button>
               <button className="btn add-line" onClick={() => set({ items: [...job.items, lineaDigitalizado(cfg)] })} title="Trae el costo y precio del digitalizado de la matriz; cámbialo si es otro diseño">+ Diseño / Digitalizado</button>
               {products.some((p) => p.kind === 'servicio') && <button className="btn add-line" onClick={() => {
                 const p = products.find((x) => x.kind === 'servicio');
@@ -297,26 +381,15 @@ export default function JobEditor() {
           )}
 
           {!logistica && <EnvioCostosCard job={job} set={set} editable={editable || finanzasRol} />}
-          {!logistica && <VendedorCard job={job} set={set} vendedores={vendedores} reglas={reglas} editable={(editable || finanzasRol) && user.role !== 'ventas'} />}
+          {!logistica && masOpciones && <VendedorCard job={job} set={set} vendedores={vendedores} reglas={reglas} editable={(editable || finanzasRol) && user.role !== 'ventas'} />}
 
           <section className="card">
             <Field label="Notas (visibles para el cliente y producción)"><textarea rows={3} disabled={logistica} value={job.notes || ''} onChange={(e) => set({ notes: e.target.value })} /></Field>
-            {!logistica && (() => {
-              const delCliente = (contacts || []).find((c) => c.id === Number(job.contact_id))?.idioma || 'es';
-              return (
-                <Field label="Idioma de la factura, cotización y proofs para el cliente">
-                  <select value={job.idioma || ''} onChange={(e) => set({ idioma: e.target.value || null })}>
-                    <option value="">Según el cliente ({delCliente === 'en' ? 'English' : 'Español'})</option>
-                    <option value="es">Español</option>
-                    <option value="en">English</option>
-                  </select>
-                </Field>
-              );
-            })()}
           </section>
         </div>
 
         <div className="stack sticky">
+          {!logistica && <FaltaPorCompletar pendientes={pendientes} />}
           {id && !logistica && <Proofs job={job} setJob={setJob} notify={notify} onDesign={abrirDecorador} />}
           {editable && (
             <div className="row gap ajuste-meta">
@@ -347,10 +420,17 @@ export default function JobEditor() {
           )}
         </div>
       </div>
+      {pedidoAntes && <PedidoAntesModal contactId={job.contact_id} jobId={id} onAdd={agregarPedidoAntes} onClose={() => setPedidoAntes(false)} />}
       {redactar && <RedactarIAModal job={job} notify={notify} onClose={() => setRedactar(false)} />}
       {designer && (
-        <ProofDesigner guias={cfg.dtf.tamanos || []} job={job} methods={methodsList} business={meta.settings.business_name} brand={meta.brand} sanmarEnabled={!!meta.integrations?.sanmar} initialDesign={designer.initialDesign}
-          notify={notify} onClose={() => setDesigner(null)} onSent={(j) => { setJob(j); setDesigner(null); }} />
+        <ProofDesigner guias={cfg.dtf.tamanos || []} job={jobDecorador} methods={methodsList} business={meta.settings.business_name} brand={meta.brand} sanmarEnabled={!!meta.integrations?.sanmar} initialDesign={designer.initialDesign}
+          cfg={logistica ? null : cfg} products={products} onImportSanmar={meta.integrations?.sanmar ? importarSanmar : null}
+          onItemChange={editable ? (idx, patch) => { setJob((j) => ({ ...j, items: j.items.map((it, i) => (i === idx ? { ...it, ...patch } : it)) })); setDirty(true); } : null}
+          onAddItem={editable ? () => { const n = job.items.length; set({ items: [...job.items, emptyPrenda()] }); return n; } : null}
+          ensureSaved={async () => (dirty || !id ? save() : job)}
+          notify={notify}
+          onClose={(design, itemIdx) => { if (design?.layers?.length) setBorradorDiseno({ ...design, itemIdx }); setDesigner(null); }}
+          onSent={(j) => { setJob(j); setDirty(false); setBorradorDiseno(null); setDesigner(null); }} />
       )}
       {toast}
     </div>

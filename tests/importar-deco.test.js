@@ -266,3 +266,42 @@ test('el dueño no cobra comisión en ningún lado, aunque tenga una regla, y el
   const hist = await s.duena.get('/auditoria?area=comisiones');
   assert.ok(hist.some((h) => h.field === 'vendedor Karol' && /"dueno_sin_comision":true/.test(h.old_value) && /"dueno_sin_comision":false/.test(h.new_value)));
 });
+
+test('atajos del cotizador: productos pedidos antes (app + Deco, sin precios), logos por cliente y días de entrega', async () => {
+  const contactos = await s.duena.get('/contacts');
+  const acme = contactos.find((c) => c.company === 'Acme Gym');
+  // Deco: K500 Navy (bordado) y PC61 Black (transfer); la app: la cotización «Nueva» con el producto T1
+  const previos = await s.duena.get(`/contacts/${acme.id}/productos-previos`);
+  const k500 = previos.find((p) => p.codigo === 'K500');
+  assert.equal(k500.origen, 'deco');
+  assert.deepEqual(k500.tallas, { M: 5, L: 3 });
+  assert.deepEqual(k500.decoraciones, [{ process: 'bordado', location: 'Pecho izquierdo' }]);
+  assert.equal(k500.revisarDecoracion, true, 'Deco no guarda ubicación ni tamaño: se avisa');
+  assert.ok(previos.some((p) => p.origen === 'app' && p.codigo === 'T1'));
+  assert.ok(previos.every((p) => !('precio' in p) && !('total' in p) && !('unit_price' in p)), 'sin precios: se cotiza con las tarifas de hoy');
+
+  // Logos: se guardan una sola vez por archivo, se listan y se pueden quitar
+  const png = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==';
+  const logo = await s.duena.post(`/contacts/${acme.id}/logos`, { file: png, name: 'Logo Acme' });
+  assert.match(logo.file_url, /^\/uploads\/logo-[0-9a-f]{40}\.png$/);
+  assert.equal((await s.duena.post(`/contacts/${acme.id}/logos`, { file: png, name: 'otra vez' })).id, logo.id, 'el mismo archivo no se duplica');
+  assert.equal((await s.duena.call('POST', `/contacts/${acme.id}/logos`, { file: 'data:text/html;base64,PGI+', name: 'x' })).status, 400);
+  assert.equal((await s.duena.get(`/contacts/${acme.id}/logos`)).length, 1);
+  // Al enviar una prueba, los logos del diseño quedan en la biblioteca del cliente
+  const guapos = contactos.find((c) => c.company === "Guapo's of Bethesda");
+  const q = await s.duena.post('/jobs', { title: 'Con arte', contact_id: guapos.id, items: [] });
+  await s.duena.post(`/jobs/${q.id}/proofs`, { file: png, filename: 'p.png', design: { layers: [{ type: 'image', src: png, orig: png, name: 'Guapos' }, { type: 'text', text: 'hola' }], placements: {} } });
+  assert.deepEqual((await s.duena.get(`/contacts/${guapos.id}/logos`)).map((l) => l.name), ['Guapos']);
+  // Un vendedor no ve logos ni productos de clientes ajenos
+  const bryan = await s.userWithRole('ventas', (await s.duena.get('/vendedores')).find((v) => v.name === 'Bryan').id);
+  assert.equal((await bryan.call('GET', `/contacts/${guapos.id}/logos`)).status, 404);
+  assert.equal((await bryan.call('GET', `/contacts/${guapos.id}/productos-previos`)).status, 404);
+  assert.equal((await s.duena.del(`/contacts/${acme.id}/logos/${logo.id}`)).length, 0);
+
+  // Días de entrega por defecto: 8, editable y validado
+  assert.equal((await s.duena.get('/meta')).settings.dias_entrega, 8);
+  await s.duena.put('/settings', { dias_entrega: 10 });
+  assert.equal((await s.duena.get('/meta')).settings.dias_entrega, 10);
+  assert.equal((await s.duena.call('PUT', '/settings', { dias_entrega: 400 })).status, 400);
+  await s.duena.put('/settings', { dias_entrega: 8 });
+});
