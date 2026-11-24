@@ -2,7 +2,7 @@
 import React, { useState } from 'react';
 import { useParams } from 'react-router-dom';
 import { api } from '../api.js';
-import { money, fmtDate, useLoad } from '../utils.js';
+import { money, fmtDateUS as fmtDate, useLoad } from '../utils.js';
 import { applyBrand } from '../brand.jsx';
 
 export default function TallerPO() {

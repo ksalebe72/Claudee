@@ -13,7 +13,7 @@ import { requireRole } from './auth.js';
 import { esLogistica, soloPropios, jobPermitido } from './scope.js';
 import { PROCESOS } from '../shared/pricing.js';
 import { loadJob, logSystem, setOrderStatus, nextNumber, UPLOAD_DIR } from './api.js';
-import { getBrand } from './brand.js';
+import { getBrand, logoFilePath } from './brand.js';
 
 const fail = (status, msg) => Object.assign(new Error(msg), { status });
 const wrap = (fn) => (req, res) => { try { const out = fn(req, res); if (out !== undefined) res.json(out); } catch (e) { res.status(e.status || 500).json({ error: e.message }); } };
@@ -319,61 +319,152 @@ r.get('/portal/taller/:token/pdf', (req, res) => {
 // ---------- PDF ----------
 const dinero = (n) => (n == null ? 'por definir' : `$${Number(n).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`);
 
+/** Fecha estilo americano: 2026-12-10 → 12/10/2026 */
+const fechaUS = (f) => { const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(String(f || '')); return m ? `${m[2]}/${m[3]}/${m[1]}` : null; };
+const COLOR_ESTADO = { borrador: ['#eef0f5', '#555555'], enviado: ['#e7f0ff', '#1556c0'], recibido: ['#fff3d6', '#8a5a00'], terminado: ['#dff5e7', '#17663c'], cancelado: ['#fde8e6', '#b42318'] };
+const GRADIENTE = ['#1ec5da', '#613bbb', '#bd68d4', '#f8822b', '#facc59'];
+
+/** PDF del PO con el mismo diseño que la página del enlace: franja de marca, logo, cajas por línea, tallas en recuadros y la prueba en su marco. */
 function pdfDelPO(po, res, { conMontos }) {
   const job = get('SELECT order_number, title FROM jobs WHERE id = ?', po.job_id);
   const taller = get('SELECT * FROM talleres WHERE id = ?', po.taller_id);
   const negocio = getSetting('business_name', 'Color Plus LLC');
-  const doc = new PDFDocument({ size: 'LETTER', margin: 40 });
+  const M = 44;
+  const doc = new PDFDocument({ size: 'LETTER', margin: M });
   res.setHeader('Content-Type', 'application/pdf');
   res.setHeader('Content-Disposition', `inline; filename="${po.numero}.pdf"`);
   doc.pipe(res);
-  const ancho = doc.page.width - 80;
-  const salto = (alto = 60) => { if (doc.y > doc.page.height - 40 - alto) doc.addPage(); };
+  const W = doc.page.width - M * 2;
+  const DER = M + W;
+  const GRIS = '#6b7189', TEXTO = '#1c2033', BORDE = '#e3e5ee', SUAVE = '#ebe7f7';
+  const franja = () => {
+    const g = doc.linearGradient(M, 0, DER, 0);
+    GRADIENTE.forEach((c, k) => g.stop(k / (GRADIENTE.length - 1), c));
+    doc.rect(M, 30, W, 4).fill(g);
+  };
+  const fondo = () => doc.page.height - M;
+  let y = 0;
+  const cabe = (alto) => { if (y + alto > fondo()) { doc.addPage(); franja(); y = 50; } };
+  const titulo = (t) => { cabe(40); doc.font('Helvetica-Bold').fontSize(12).fillColor(TEXTO).text(t, M, y); y += 20; };
 
-  doc.font('Helvetica-Bold').fontSize(18).text(`${negocio} · Orden de compra ${po.numero}`);
-  doc.font('Helvetica').fontSize(10).fillColor('#444')
-    .text(`Orden interna: ${job?.order_number || '—'} · ${job?.title || ''}`)
-    .text(`Estado: ${ESTADOS_PO[po.status]}${po.sent_at ? ` · Enviado: ${po.sent_at.slice(0, 10)}` : ''}`);
-  doc.moveDown(0.6).fillColor('#000').font('Helvetica-Bold').fontSize(11).text(`Taller: ${taller?.name || '—'}`);
-  doc.font('Helvetica').fontSize(10);
-  if (taller?.contacto) doc.text(`Contacto: ${taller.contacto}`);
-  if (taller?.address) doc.text(`Dirección: ${taller.address}`);
-  doc.font('Helvetica-Bold').text(`Fecha de entrega: ${po.fecha_entrega || 'por confirmar'}`);
+  // ---- encabezado ----
+  franja();
+  y = 48;
+  const logo = logoFilePath(UPLOAD_DIR);
+  if (logo) { try { doc.image(logo, M, y, { fit: [120, 52] }); y += 60; } catch { /* sin logo */ } }
+  const yCab = y;
+  doc.font('Helvetica-Bold').fontSize(20).fillColor(TEXTO).text(`Orden de compra ${po.numero}`, M, y, { width: W - 190 });
+  y = doc.y + 4;
+  doc.font('Helvetica').fontSize(10).fillColor(GRIS).text(`${negocio} · Orden interna ${job?.order_number || '—'} · ${job?.title || ''}`, M, y, { width: W - 190 });
+  y = doc.y;
+  // columna derecha: estado, taller y fecha
+  const [bg, fg] = COLOR_ESTADO[po.status] || COLOR_ESTADO.borrador;
+  const etiqueta = ESTADOS_PO[po.status];
+  doc.font('Helvetica-Bold').fontSize(8.5);
+  const wB = doc.widthOfString(etiqueta) + 16;
+  let yD = logo ? 52 : yCab;
+  doc.roundedRect(DER - wB, yD, wB, 16, 8).fill(bg);
+  doc.fillColor(fg).text(etiqueta, DER - wB, yD + 4.5, { width: wB, align: 'center' });
+  yD += 26;
+  const derecha = (negrita, resto) => {
+    doc.font('Helvetica').fontSize(10);
+    const wr = doc.widthOfString(resto);
+    doc.font('Helvetica-Bold');
+    const wn = doc.widthOfString(negrita);
+    doc.fillColor(TEXTO).text(negrita, DER - wn - wr, yD, { lineBreak: false });
+    doc.font('Helvetica').text(resto, DER - wr, yD, { lineBreak: false });
+    yD += 18;
+  };
+  derecha('Para: ', taller?.name || '—');
+  derecha('Entregar el: ', fechaUS(po.fecha_entrega) || 'por confirmar');
+  y = Math.max(y, yD) + 12;
+  doc.moveTo(M, y).lineTo(DER, y).lineWidth(1).strokeColor(BORDE).stroke();
+  y += 16;
 
-  if (po.instrucciones) {
-    doc.moveDown(0.6).font('Helvetica-Bold').fontSize(11).text('Instrucciones');
-    doc.font('Helvetica').fontSize(10).text(po.instrucciones, { width: ancho });
+  if (po.status === 'cancelado') {
+    doc.font('Helvetica-Bold').fontSize(10).fillColor('#b42318').text(`Este PO fue cancelado.${po.cancel_reason ? ` ${po.cancel_reason}` : ''}`, M, y, { width: W });
+    y = doc.y + 12;
   }
 
-  doc.moveDown(0.8).font('Helvetica-Bold').fontSize(11).text('Trabajo');
-  doc.font('Helvetica').fontSize(9).fillColor('#444').text('Las prendas las envía SanMar directo al taller. Verifica cantidades y tallas al recibirlas.').fillColor('#000');
+  // ---- instrucciones ----
+  if (po.instrucciones) {
+    titulo('Instrucciones');
+    doc.font('Helvetica').fontSize(10).fillColor(TEXTO);
+    cabe(doc.heightOfString(po.instrucciones, { width: W }) + 10);
+    doc.text(po.instrucciones, M, y, { width: W });
+    y = doc.y + 16;
+  }
+
+  // ---- trabajo ----
+  titulo('Trabajo');
+  doc.font('Helvetica').fontSize(8.5).fillColor(GRIS).text('Las prendas las envía SanMar directo a tu taller. Verifica cantidades y tallas al recibirlas.', M, y, { width: W });
+  y = doc.y + 8;
+  const PAD = 10;
+  const filaMonto = (izq, der, negritaDer = false) => {
+    doc.font('Helvetica').fontSize(9.5).fillColor(TEXTO);
+    const wDer = der ? doc.widthOfString(der) + 4 : 0;
+    doc.text(izq, M + PAD, y, { width: W - PAD * 2 - wDer - 8 });
+    const yFin = doc.y;
+    if (der) doc.font(negritaDer ? 'Helvetica-Bold' : 'Helvetica').text(der, DER - PAD - wDer, y, { width: wDer, align: 'right', lineBreak: false });
+    y = yFin + 5;
+  };
   po.lineas.forEach((l, i) => {
-    salto(90);
-    doc.moveDown(0.5).font('Helvetica-Bold').fontSize(10);
-    if (l.tipo === 'prenda') {
-      doc.text(`${i + 1}. ${l.codigo ? `${l.codigo} · ` : ''}${l.descripcion}${l.color ? ` · ${l.color}` : ''}`, { width: ancho });
-      doc.font('Helvetica').text(`Tallas: ${Object.entries(l.tallas).map(([t, n]) => `${t} ${n}`).join('   ') || '—'}     Total: ${l.cantidad} piezas`);
+    const esPrenda = l.tipo === 'prenda';
+    const alto = esPrenda ? 62 + l.decoraciones.length * 20 : 30;
+    cabe(alto + 8);
+    const y0 = y;
+    y += PAD;
+    if (esPrenda) {
+      doc.font('Helvetica-Bold').fontSize(10.5).fillColor(TEXTO).text(`${i + 1}. ${l.codigo ? `${l.codigo} · ` : ''}${l.descripcion}`, M + PAD, y, { continued: !!l.color, width: W - PAD * 2 });
+      if (l.color) doc.font('Helvetica').text(` · ${l.color}`);
+      y = doc.y + 6;
+      // tallas en recuadros, como en la página
+      let x = M + PAD;
+      const chip = (arriba, abajo, resaltado) => {
+        const w = Math.max(40, doc.font('Helvetica-Bold').fontSize(10).widthOfString(String(abajo)) + 18, doc.font('Helvetica').fontSize(7.5).widthOfString(String(arriba)) + 14);
+        if (x + w > DER - PAD) { x = M + PAD; y += 34; }
+        doc.roundedRect(x, y, w, 30, 5).fillAndStroke(resaltado ? SUAVE : '#ffffff', BORDE);
+        doc.font('Helvetica').fontSize(7.5).fillColor(GRIS).text(String(arriba), x, y + 5, { width: w, align: 'center', lineBreak: false });
+        doc.font('Helvetica-Bold').fontSize(10).fillColor(TEXTO).text(String(abajo), x, y + 15, { width: w, align: 'center', lineBreak: false });
+        x += w + 6;
+      };
+      for (const [t, n] of Object.entries(l.tallas)) chip(t, n, false);
+      chip('Total', l.cantidad, true);
+      y += 38;
       for (const d of l.decoraciones) {
-        const medida = d.ancho && d.alto ? ` · ${d.ancho}" × ${d.alto}"` : '';
-        const extra = [d.puntadas ? `${d.puntadas} puntadas` : null, d.hojas ? `${d.hojas} hoja(s) por pieza` : null, d.colores ? `colores: ${d.colores}` : null].filter(Boolean).join(' · ');
-        doc.text(`   • ${d.nombre} · ${d.ubicacion}${medida}${extra ? ` · ${extra}` : ''}${conMontos ? `     ${dinero(d.costoUnitario)}/pz × ${l.cantidad} = ${dinero(d.total)}` : ''}`, { width: ancho });
+        doc.moveTo(M + PAD, y - 2).lineTo(DER - PAD, y - 2).dash(2, { space: 2 }).strokeColor(BORDE).stroke().undash();
+        y += 4;
+        const detalle = [`${d.nombre} · ${d.ubicacion}`, d.ancho && d.alto ? `${d.ancho}" × ${d.alto}"` : null, d.puntadas ? `${d.puntadas} puntadas` : null, d.hojas ? `${d.hojas} hoja(s) por pieza` : null, d.colores ? `colores: ${d.colores}` : null].filter(Boolean).join(' · ');
+        filaMonto(detalle, conMontos ? `${dinero(d.costoUnitario)}/pz × ${l.cantidad} = ${dinero(d.total)}` : '');
       }
     } else {
-      doc.text(`${i + 1}. ${l.descripcion}`, { width: ancho });
-      doc.font('Helvetica').text(`   Cantidad: ${l.cantidad}${conMontos ? `     ${dinero(l.costoUnitario)} × ${l.cantidad} = ${dinero(l.total)}` : ''}`);
+      filaMonto(`${i + 1}. ${l.descripcion} × ${l.cantidad}`, conMontos ? dinero(l.total) : '', true);
     }
+    y += PAD - 5;
+    doc.roundedRect(M, y0, W, y - y0, 7).lineWidth(1).strokeColor(BORDE).stroke();
+    y += 6;
   });
-  if (conMontos) { salto(40); doc.moveDown(0.8).font('Helvetica-Bold').fontSize(12).text(`Total a pagar al taller: ${dinero(po.total)}`, { align: 'right', width: ancho }); }
+  if (conMontos) {
+    cabe(30);
+    y += 4;
+    doc.font('Helvetica-Bold').fontSize(12).fillColor(TEXTO).text('Total a pagar', DER - 300, y, { width: 150, lineBreak: false });
+    doc.text(dinero(po.total), DER - 150, y, { width: 150, align: 'right', lineBreak: false });
+    y += 28;
+  }
 
-  // Pruebas de arte aprobadas (solo imágenes; otros archivos se listan)
+  // ---- arte aprobado (misma caja que en la página) ----
   for (const p of po.pruebas) {
     const archivo = resolve(UPLOAD_DIR, basename(String(p.file_url || '')));
     const esImagen = /\.(png|jpe?g)$/i.test(archivo) && existsSync(archivo);
-    doc.addPage();
-    doc.font('Helvetica-Bold').fontSize(12).text(`Prueba de arte aprobada por el cliente · v${p.version}`);
-    doc.moveDown(0.4);
-    if (esImagen) { try { doc.image(archivo, { fit: [ancho, doc.page.height - doc.y - 50], align: 'center' }); } catch { doc.font('Helvetica').fontSize(10).text('No se pudo incluir la imagen; ábrela desde el enlace del PO.'); } }
-    else doc.font('Helvetica').fontSize(10).text('El archivo de la prueba no es una imagen; ábrelo desde el enlace del PO.');
+    if (fondo() - y < 260) { doc.addPage(); franja(); y = 50; }
+    titulo(`Arte aprobado por el cliente${po.pruebas.length > 1 ? ` · v${p.version}` : ''}`);
+    const altoCaja = Math.min(fondo() - y, 520);
+    doc.roundedRect(M, y, W, altoCaja, 10).fill(SUAVE);
+    doc.roundedRect(M + 12, y + 12, W - 24, altoCaja - 24, 6).fill('#ffffff');
+    if (esImagen) {
+      try { doc.image(archivo, M + 20, y + 20, { fit: [W - 40, altoCaja - 40], align: 'center', valign: 'center' }); } catch { doc.font('Helvetica').fontSize(10).fillColor(GRIS).text('No se pudo incluir la imagen; ábrela desde el enlace del PO.', M + 24, y + 28, { width: W - 48 }); }
+    } else doc.font('Helvetica').fontSize(10).fillColor(GRIS).text(`La prueba v${p.version} no es una imagen; ábrela o descárgala desde el enlace del PO.`, M + 24, y + 28, { width: W - 48 });
+    y += altoCaja + 16;
   }
   doc.end();
 }

@@ -1,7 +1,7 @@
 // Producción externa: tarjeta de la orden para preparar y mandar el PO al taller, y la lista de talleres.
 import React, { useState } from 'react';
 import { api } from '../api.js';
-import { money, fmtDate, useLoad } from '../utils.js';
+import { money, fmtDateUS as fmtDate, useLoad } from '../utils.js';
 
 const vacio = { name: '', contacto: '', phone: '', email: '', address: '', notas: '' };
 const tallas = (t) => Object.entries(t || {}).map(([k, n]) => `${k} ${n}`).join(' · ');

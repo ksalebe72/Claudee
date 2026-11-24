@@ -8,6 +8,8 @@ export const fmtDate = (d) => {
   const dt = new Date(d.length <= 10 ? d + 'T12:00:00' : d.replace(' ', 'T') + 'Z');
   return dt.toLocaleDateString('es', { day: 'numeric', month: 'short', year: dt.getFullYear() !== new Date().getFullYear() ? 'numeric' : undefined });
 };
+/** Fecha estilo americano (MM/DD/AAAA), para los documentos que salen de Color Plus hacia talleres. */
+export const fmtDateUS = (d) => { const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(String(d || '')); return m ? `${m[2]}/${m[3]}/${m[1]}` : '—'; };
 export const fmtDateTime = (d) => {
   if (!d) return '';
   const dt = new Date(d.replace(' ', 'T') + 'Z');
