@@ -1,6 +1,9 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { api } from '../api.js';
-import { BrandMark } from '../brand.jsx';
+
+// El logo de fábrica trae letras negras; en el fondo oscuro usamos su versión con letras blancas.
+const LOGO_FABRICA = '/brand/colorplus-logo.png';
+const logoClaro = (brand) => (!brand?.logo || brand.logo === LOGO_FABRICA ? '/brand/colorplus-logo-claro.png' : brand.logo);
 
 const SERVICIOS = ['Serigrafía', 'Bordado', 'DTF', 'Rótulos', 'Wraps', 'Promocionales'];
 
@@ -65,7 +68,7 @@ export default function Login({ setup, onDone, brand, requiereCodigo }) {
       </section>
 
       <form className="login-card anim-card" onSubmit={submit}>
-        <div className="login-brand"><BrandMark brand={brand} /><strong>{brand?.name || 'Color Plus'}</strong><small>Sistema interno</small></div>
+        <div className="login-brand"><img className="login-logo" src={logoClaro(brand)} alt={brand?.name || 'Color Plus'} /><small>Sistema interno</small></div>
         <h2>{setup ? 'Crear la cuenta del dueño' : 'Iniciar sesión'}</h2>
         {setup && <p className="muted">Es la primera vez que se abre el sistema. Esta cuenta tendrá acceso a Ajustes, tarifas y aprobaciones.</p>}
         {setup && requiereCodigo && <label className="field"><span>Código de instalación</span><input required value={f.codigo} onChange={set('codigo')} autoComplete="off" placeholder="Está en Render → Environment → SETUP_CODE" /></label>}

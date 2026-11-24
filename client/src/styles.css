@@ -801,7 +801,7 @@ code { font-size: .92em; font-weight: var(--fw-medium); }
 .login-card .muted { color: #9ea1ba; margin: 0; }
 .login-brand { display: flex; flex-direction: column; align-items: center; gap: 6px; padding-bottom: 6px; }
 .login-brand small { color: #8d90a8; font-size: 11px; letter-spacing: .18em; text-transform: uppercase; }
-.login-brand .brand-mark { width: 72px; height: 72px; object-fit: contain; filter: drop-shadow(0 6px 24px rgba(30,197,218,.25)); }
+.login-logo { width: auto; height: 150px; max-width: 100%; object-fit: contain; filter: drop-shadow(0 6px 24px rgba(30,197,218,.25)); }
 .login .field > span { color: #a9acc4; }
 .login .field input { background: rgba(255,255,255,.05); border: 1px solid rgba(255,255,255,.12); color: #fff; padding: 11px 13px; border-radius: 10px;
   transition: border-color .2s, background .2s, box-shadow .2s; }
@@ -833,10 +833,10 @@ code { font-size: .92em; font-weight: var(--fw-medium); }
   .login-sub { margin-bottom: 16px; }
   .login-chips { display: none; }
   .login-card { padding: 24px 20px; }
+  .login-logo { height: 120px; }
   .login-veil { background: linear-gradient(180deg, rgba(7,7,12,.6) 0%, rgba(7,7,12,.85) 60%, rgba(7,7,12,.95) 100%); }
 }
 @media (prefers-reduced-motion: reduce) {
   .login *, .login *::before, .login *::after { animation: none !important; transition: none !important; }
   .login-video { display: none; }
 }
-.login-brand strong { color: #fff; font-family: Geist, Inter, sans-serif; font-size: 17px; letter-spacing: .02em; margin-top: 4px; }
