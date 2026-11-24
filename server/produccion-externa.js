@@ -12,6 +12,7 @@ import { computeJob } from './finance.js';
 import { requireRole } from './auth.js';
 import { esLogistica, soloPropios, jobPermitido } from './scope.js';
 import { PROCESOS } from '../shared/pricing.js';
+import { fechaUS } from '../shared/idiomas.js';
 import { loadJob, logSystem, setOrderStatus, nextNumber, UPLOAD_DIR } from './api.js';
 import { getBrand, logoFilePath } from './brand.js';
 
@@ -320,7 +321,6 @@ r.get('/portal/taller/:token/pdf', (req, res) => {
 const dinero = (n) => (n == null ? 'por definir' : `$${Number(n).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`);
 
 /** Fecha estilo americano: 2026-12-10 → 12/10/2026 */
-const fechaUS = (f) => { const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(String(f || '')); return m ? `${m[2]}/${m[3]}/${m[1]}` : null; };
 const COLOR_ESTADO = { borrador: ['#eef0f5', '#555555'], enviado: ['#e7f0ff', '#1556c0'], recibido: ['#fff3d6', '#8a5a00'], terminado: ['#dff5e7', '#17663c'], cancelado: ['#fde8e6', '#b42318'] };
 const GRADIENTE = ['#1ec5da', '#613bbb', '#bd68d4', '#f8822b', '#facc59'];
 

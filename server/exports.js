@@ -1,5 +1,7 @@
 // Exportación de una liquidación de comisiones a PDF y Excel.
 import PDFDocument from 'pdfkit';
+import { fechaUS } from '../shared/idiomas.js';
+const mesUS = (m) => { const x = /^(\d{4})-(\d{2})$/.exec(String(m || '')); return x ? `${x[2]}/${x[1]}` : m; };
 import ExcelJS from 'exceljs';
 
 const money = (n) => (n == null ? '—' : (n < 0 ? '-$' : '$') + Math.abs(n).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }));
@@ -11,8 +13,8 @@ const COLUMNAS = [
   ['Tipo', (e) => (e.tipo === 'ajuste' ? 'Ajuste' : 'Orden')],
   ['Orden', (e) => e.orden],
   ['Cliente', (e) => e.cliente],
-  ['Fecha factura', (e) => e.fechaFactura || '—'],
-  ['Cobro completo', (e) => e.fechaCobroCompleto || '—'],
+  ['Fecha factura', (e) => fechaUS(e.fechaFactura) || '—'],
+  ['Cobro completo', (e) => fechaUS(e.fechaCobroCompleto) || '—'],
   ['Venta neta', (e) => e.ventaNeta, true],
   ['Costo', (e) => e.costo, true],
   ['Ganancia', (e) => e.ganancia, true],
@@ -31,8 +33,8 @@ export function liquidationPdf(v, business, res, logoPath = null) {
   }
   doc.font('Helvetica-Bold').fontSize(16).text(`${business} · Liquidación de comisiones`);
   doc.font('Helvetica').fontSize(11).fillColor('#444')
-    .text(`Vendedor: ${v.vendedor?.name || '—'}    Mes: ${v.periodo}    Pago previsto: ${L.fechaPagoPrevista}`)
-    .text(`Estado: ${ESTADOS[L.status] || L.status}${L.reviewed_by ? `   · Revisó: ${L.reviewed_by}` : ''}${L.approved_by ? `   · Aprobó: ${L.approved_by}` : ''}${L.paid_at ? `   · Pagada el ${L.paid_at} (ref. ${L.paid_reference})` : ''}`);
+    .text(`Vendedor: ${v.vendedor?.name || '—'}    Mes: ${mesUS(v.periodo)}    Pago previsto: ${fechaUS(L.fechaPagoPrevista) || L.fechaPagoPrevista}`)
+    .text(`Estado: ${ESTADOS[L.status] || L.status}${L.reviewed_by ? `   · Revisó: ${L.reviewed_by}` : ''}${L.approved_by ? `   · Aprobó: ${L.approved_by}` : ''}${L.paid_at ? `   · Pagada el ${fechaUS(L.paid_at) || L.paid_at} (ref. ${L.paid_reference})` : ''}`);
   doc.moveDown(0.8).fillColor('#000');
   if (logoPath) doc.y = Math.max(doc.y, 24 + 70 + 8); // la tabla empieza debajo del logo
 
@@ -69,8 +71,8 @@ export async function liquidationXlsx(v, business) {
   const ws = wb.addWorksheet(`Liquidación ${v.periodo}`);
   const L = v.liquidacion;
   ws.addRow([`${business} · Liquidación de comisiones`]).font = { bold: true, size: 14 };
-  ws.addRow([`Vendedor: ${v.vendedor?.name || '—'}`, '', `Mes: ${v.periodo}`, '', `Pago previsto: ${L.fechaPagoPrevista}`]);
-  ws.addRow([`Estado: ${ESTADOS[L.status] || L.status}`, '', L.paid_at ? `Pagada: ${L.paid_at} (ref. ${L.paid_reference})` : '']);
+  ws.addRow([`Vendedor: ${v.vendedor?.name || '—'}`, '', `Mes: ${mesUS(v.periodo)}`, '', `Pago previsto: ${fechaUS(L.fechaPagoPrevista) || L.fechaPagoPrevista}`]);
+  ws.addRow([`Estado: ${ESTADOS[L.status] || L.status}`, '', L.paid_at ? `Pagada: ${fechaUS(L.paid_at) || L.paid_at} (ref. ${L.paid_reference})` : '']);
   ws.addRow([]);
   const head = ws.addRow(COLUMNAS.map((c) => c[0]));
   head.font = { bold: true };

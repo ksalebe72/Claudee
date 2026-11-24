@@ -3,17 +3,22 @@ import { useCallback, useEffect, useState } from 'react';
 export const money = (n) =>
   (Number(n) || 0).toLocaleString('es-US', { style: 'currency', currency: 'USD' });
 
+/** Fechas estilo americano en toda la app: MM/DD/AAAA. */
 export const fmtDate = (d) => {
   if (!d) return '—';
-  const dt = new Date(d.length <= 10 ? d + 'T12:00:00' : d.replace(' ', 'T') + 'Z');
-  return dt.toLocaleDateString('es', { day: 'numeric', month: 'short', year: dt.getFullYear() !== new Date().getFullYear() ? 'numeric' : undefined });
+  const s = String(d);
+  // Fecha sola (AAAA-MM-DD): se muestra tal cual, sin pasar por zonas horarias
+  if (s.length <= 10) { const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(s); return m ? `${m[2]}/${m[3]}/${m[1]}` : s; }
+  // Fecha con hora (la base la guarda en UTC): día local
+  return new Date(s.replace(' ', 'T') + (/[zZ]|[+-]\d\d:?\d\d$/.test(s) ? '' : 'Z')).toLocaleDateString('en-US', { month: '2-digit', day: '2-digit', year: 'numeric' });
 };
-/** Fecha estilo americano (MM/DD/AAAA), para los documentos que salen de Color Plus hacia talleres. */
-export const fmtDateUS = (d) => { const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(String(d || '')); return m ? `${m[2]}/${m[3]}/${m[1]}` : '—'; };
+export const fmtDateUS = fmtDate;
+/** Mes estilo americano: 2026-11 → 11/2026 */
+export const fmtMes = (m) => { const x = /^(\d{4})-(\d{2})$/.exec(String(m || '')); return x ? `${x[2]}/${x[1]}` : m || '—'; };
 export const fmtDateTime = (d) => {
   if (!d) return '';
   const dt = new Date(d.replace(' ', 'T') + 'Z');
-  return dt.toLocaleString('es', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
+  return dt.toLocaleString('en-US', { month: '2-digit', day: '2-digit', year: 'numeric', hour: 'numeric', minute: '2-digit' });
 };
 export const today = () => new Date().toISOString().slice(0, 10);
 

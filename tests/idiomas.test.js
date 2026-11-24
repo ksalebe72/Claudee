@@ -20,7 +20,8 @@ test('textos del cliente en los dos idiomas', () => {
   assert.equal(procesoCliente('Bordado', 'en'), 'Embroidery');
   assert.equal(ubicacionCliente('Pecho izquierdo', 'en'), 'Left chest');
   assert.equal(ubicacionCliente('Espalda alta', 'en'), 'Espalda alta', 'lo escrito a mano no se cambia');
-  assert.match(fechaCliente('2026-12-15', 'en'), /Dec/);
+  assert.equal(fechaCliente('2026-12-15', 'en'), '12/15/2026');
+  assert.equal(fechaCliente('2026-12-15', 'es'), '12/15/2026', 'formato americano en los dos idiomas');
   // Todas las claves existen en ambos idiomas
   assert.deepEqual(Object.keys(textos('en')).sort(), Object.keys(textos('es')).sort());
 });

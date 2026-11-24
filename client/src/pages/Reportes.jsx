@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { api } from '../api.js';
-import { money, fmtDate, useLoad } from '../utils.js';
+import { money, fmtDate, fmtMes, useLoad } from '../utils.js';
 import { Empty, PageHeader } from '../components/ui.jsx';
 import { Semaforo } from '../components/FinancePanels.jsx';
 import { PROCESOS } from '../../../shared/pricing.js';
@@ -97,7 +97,7 @@ function TablaComisionesDeco({ data }) {
             <tbody>
               {filas.map((f) => (
                 <tr key={`${f.salesperson_id}-${f.mes}`}>
-                  <td>{f.vendedor}</td><td>{f.mes}</td><td className="num">{f.ordenes}</td><td className="num">{money(f.ventas)}</td>
+                  <td>{f.vendedor}</td><td>{fmtMes(f.mes)}</td><td className="num">{f.ordenes}</td><td className="num">{money(f.ventas)}</td>
                   <td className="num">{money(f.comision)}</td><td className="num">{f.pendientes ? <span className="warn-txt">{f.pendientes}</span> : '—'}</td>
                   <td className="small">{f.reglas.join(' · ') || '—'}</td>
                 </tr>

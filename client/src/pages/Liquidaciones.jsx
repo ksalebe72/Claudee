@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { api } from '../api.js';
-import { money, fmtDate, fmtDateTime, today, useLoad } from '../utils.js';
+import { money, fmtDate, fmtDateTime, fmtMes, today, useLoad } from '../utils.js';
 import { Empty, PageHeader, useMeta, useToast } from '../components/ui.jsx';
 
 const ESTADO = {
@@ -60,7 +60,7 @@ export default function Liquidaciones() {
           <section className="card">
             <div className="row between wrap gap">
               <div>
-                <h3>{v.vendedor.name} · {periodo}</h3>
+                <h3>{v.vendedor.name} · {fmtMes(periodo)}</h3>
                 <div className="muted small">Pago previsto: <strong>{fmtDate(L.fechaPagoPrevista)}</strong> · <span className={`badge tone-${st.tone}`}>{st.label}</span></div>
                 <div className="muted small">
                   {L.reviewed_by && <>Revisó {L.reviewed_by} ({fmtDateTime(L.reviewed_at?.replace('T', ' ').slice(0, 19))}) · </>}

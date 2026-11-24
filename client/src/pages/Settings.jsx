@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { Talleres } from '../components/ProduccionExterna.jsx';
 import { api } from '../api.js';
-import { fmtDateTime, money, today, useLoad } from '../utils.js';
+import { fmtDate, fmtDateTime, money, today, useLoad } from '../utils.js';
 import { Field, PageHeader, useMeta, useToast } from '../components/ui.jsx';
 import { LOCATIONS } from '../components/JobLines.jsx';
 
@@ -250,7 +250,7 @@ function Comisiones({ editable, notify }) {
                 <td>{editable ? <select value={r.base} onChange={(e) => run(() => api.put(`/comisiones/reglas/${r.id}`, { base: e.target.value }), 'Base actualizada')}>{Object.entries(BASES).map(([k, v]) => <option key={k} value={k}>{v}</option>)}</select> : BASES[r.base]}</td>
                 <td>{r.client_type || '—'}</td>
                 <td>{(() => { const t = r.tasas.find((x) => x.effective_from <= today()); return t ? <><strong>{pct(t.rate)}%</strong>{t.rate_reducida != null && <div className="small warn-txt">{pct(t.rate_reducida)}% si la contribución queda bajo {pct(t.min_contribucion)}%</div>}</> : '—'; })()}</td>
-                <td className="small">{r.tasas.map((t) => <div key={t.id}>{pct(t.rate)}%{t.rate_reducida != null ? ` (${pct(t.rate_reducida)}% bajo ${pct(t.min_contribucion)}%)` : ''} desde {t.effective_from === '2000-01-01' ? 'el inicio' : t.effective_from}</div>)}</td>
+                <td className="small">{r.tasas.map((t) => <div key={t.id}>{pct(t.rate)}%{t.rate_reducida != null ? ` (${pct(t.rate_reducida)}% bajo ${pct(t.min_contribucion)}%)` : ''} desde {t.effective_from === '2000-01-01' ? 'el inicio' : fmtDate(t.effective_from)}</div>)}</td>
                 {editable && (
                   <td>
                     <div className="row gap">
@@ -586,7 +586,7 @@ function ImportarDeco({ notify }) {
           <li>Se crea <strong>un cliente por cada cliente de Deco</strong> (sin duplicar los que ya existen) y sus compras quedan como <strong>historial</strong> en su ficha.</li>
         </ol>
         <label className="btn primary">{busy && !vista ? 'Leyendo…' : '📄 Elegir archivo (.xlsx o .csv)'}<input type="file" accept=".xlsx,.csv" hidden onChange={elegir} disabled={busy} /></label>
-        {guardado?.ordenes > 0 && <p className="ok small">Ya guardado en la app: <strong>{guardado.ordenes}</strong> órdenes de <strong>{guardado.clientes}</strong> clientes · {guardado.desde} → {guardado.hasta} · ventas sin impuesto {money(guardado.ventas)} · total {money(guardado.total)}.</p>}
+        {guardado?.ordenes > 0 && <p className="ok small">Ya guardado en la app: <strong>{guardado.ordenes}</strong> órdenes de <strong>{guardado.clientes}</strong> clientes · {fmtDate(guardado.desde)} → {fmtDate(guardado.hasta)} · ventas sin impuesto {money(guardado.ventas)} · total {money(guardado.total)}.</p>}
         <p className="muted small">El historial no crea órdenes de producción, cobros ni comisiones: guarda las compras tal como vinieron de Deco. Puedes volver a subir el mismo archivo: las órdenes ya importadas se saltan.</p>
       </section>
 
@@ -599,7 +599,7 @@ function ImportarDeco({ notify }) {
             <div className="kpi"><span className="kpi-label">Clientes</span><span className="kpi-value">{vista.clientes}</span><span className="kpi-sub">{vista.clientesNuevos} nuevos · {vista.clientesExistentes} ya existen{vista.clientesUnidos ? ` · ${vista.clientesUnidos} unidos (misma empresa)` : ''}</span></div>
             <div className="kpi"><span className="kpi-label">Órdenes</span><span className="kpi-value">{vista.ordenes}</span><span className="kpi-sub">{vista.ordenesNuevas} nuevas · {vista.ordenesYaImportadas} ya importadas{vista.ordenesAReasignar ? ` · ${vista.ordenesAReasignar} se pasarán a su cliente correcto` : ''}</span></div>
             <div className="kpi"><span className="kpi-label">Ventas sin impuesto</span><span className="kpi-value">{money(vista.ventas)}</span><span className="kpi-sub">Total facturado {money(vista.total)}</span></div>
-            <div className="kpi"><span className="kpi-label">Periodo</span><span className="kpi-value small-kpi">{vista.desde} → {vista.hasta}</span><span className="kpi-sub">{vista.lineas} líneas · tiendas: {vista.tiendas.join(', ')}</span></div>
+            <div className="kpi"><span className="kpi-label">Periodo</span><span className="kpi-value small-kpi">{fmtDate(vista.desde)} → {fmtDate(vista.hasta)}</span><span className="kpi-sub">{vista.lineas} líneas · tiendas: {vista.tiendas.join(', ')}</span></div>
           </div>
           <h4>Muestra de clientes</h4>
           <table className="table mini-table">

@@ -72,8 +72,12 @@ export function procesoCliente(proceso, idioma) {
 /** Ubicación para el cliente: en inglés traduce las estándar; las escritas a mano se dejan igual. */
 export const ubicacionCliente = (ubicacion, idioma) => (idiomaValido(idioma) === 'en' ? UBICACIONES_EN[String(ubicacion || '').trim().toLowerCase()] || ubicacion : ubicacion);
 /** Fecha corta en el idioma del cliente. */
-export function fechaCliente(iso, idioma) {
-  if (!iso) return '';
-  const d = new Date(`${String(iso).slice(0, 10)}T12:00:00`);
-  return d.toLocaleDateString(idiomaValido(idioma) === 'en' ? 'en-US' : 'es-US', { year: 'numeric', month: 'short', day: 'numeric' });
+/** Fecha estilo americano MM/DD/AAAA (toda la app y todos los documentos la usan así). 2026-12-15 → 12/15/2026 */
+export function fechaUS(iso) {
+  const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(String(iso || ''));
+  return m ? `${m[2]}/${m[3]}/${m[1]}` : '';
+}
+/** Fecha en los documentos del cliente: mismo formato americano en español y en inglés. */
+export function fechaCliente(iso, _idioma) {
+  return fechaUS(iso);
 }
