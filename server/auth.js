@@ -126,7 +126,9 @@ usersRouter.put('/usuarios/:id', wrap((req) => {
   requireRole(req, 'duena');
   const u = get('SELECT * FROM users WHERE id = ?', req.params.id);
   if (!u) throw fail(404, 'No encontrado');
-  const { name, role, active, password, salesperson_id } = req.body;
+  const { role, active, password, salesperson_id } = req.body;
+  const name = req.body.name === undefined ? undefined : String(req.body.name).trim().slice(0, 80);
+  if (name !== undefined && name.length < 2) throw fail(400, 'El nombre debe tener al menos 2 letras.');
   if (role && !ROLES[role]) throw fail(400, 'Rol inválido');
   if (u.id === req.user.id && (role && role !== 'duena' || active === false)) throw fail(400, 'No puedes quitarte el rol de dueño ni desactivarte.');
   run('UPDATE users SET name = ?, role = ?, active = ?, salesperson_id = ? WHERE id = ?',

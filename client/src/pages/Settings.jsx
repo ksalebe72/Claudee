@@ -302,7 +302,7 @@ function Usuarios({ notify }) {
         <tbody>
           {users.map((u) => (
             <tr key={u.id}>
-              <td>{u.name}</td><td>{u.username}</td>
+              <td><input className="nombre-usuario" defaultValue={u.name} aria-label={`Nombre de ${u.username}`} title="Así lo saluda la app. Cámbialo y sal de la casilla para guardar." onBlur={(e) => { const v = e.target.value.trim(); if (v && v !== u.name) run(() => api.put(`/usuarios/${u.id}`, { name: v }), u.id === meta.user.id ? 'Nombre actualizado: lo verás al recargar la página' : 'Nombre actualizado'); else e.target.value = u.name; }} /></td><td>{u.username}</td>
               <td><select value={u.role} disabled={u.id === meta.user.id} onChange={(e) => run(() => api.put(`/usuarios/${u.id}`, { role: e.target.value }), 'Rol actualizado')}>{Object.entries(meta.roles).map(([k, v]) => <option key={k} value={k}>{v}</option>)}</select></td>
               <td><select value={u.salesperson_id || ''} onChange={(e) => run(() => api.put(`/usuarios/${u.id}`, { salesperson_id: e.target.value ? Number(e.target.value) : null }), 'Actualizado')}><option value="">—</option>{vend.map((v) => <option key={v.id} value={v.id}>{v.name}</option>)}</select></td>
               <td>{u.active ? 'activo' : 'inactivo'}</td>

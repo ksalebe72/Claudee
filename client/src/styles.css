@@ -931,3 +931,6 @@ code { font-size: .92em; font-weight: var(--fw-medium); }
 @keyframes bienvenida-aparece { from { opacity: 0; } }
 @keyframes bienvenida-sube { from { opacity: 0; transform: translateY(14px) scale(.97); } }
 @media (prefers-reduced-motion: reduce) { .bienvenida-fondo, .bienvenida { animation: none; } }
+
+.nombre-usuario { border-color: transparent; background: transparent; padding: 4px 6px; width: 100%; min-width: 140px; }
+.nombre-usuario:hover, .nombre-usuario:focus { border-color: var(--border); background: var(--surface, #fff); }

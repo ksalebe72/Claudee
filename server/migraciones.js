@@ -51,6 +51,13 @@ export function aplicarMigraciones() {
   // Corrección de la comisión sobre ganancia (costo real de una categoría no cotizada, caso OT-2003):
   // recalcula el resumen guardado de cada orden y cotización. Las liquidaciones cerradas no se tocan; si cambia algo ya liquidado, se ajusta en la próxima.
   unaVez('recalculo_costos_sin_linea', () => { for (const { id } of all('SELECT id FROM jobs')) computeJob(id); });
+  // El saludo usa el nombre, no el usuario: la cuenta del dueño tenía «ksalebe» también como nombre
+  unaVez('nombre_dueno_karol', () => {
+    const u = get("SELECT id, name, username FROM users WHERE lower(username) = 'ksalebe' AND lower(name) = lower(username)");
+    if (!u) return;
+    run("UPDATE users SET name = 'Karol Salebe' WHERE id = ?", u.id);
+    audit(null, 'usuarios', `nombre de ${u.username}`, u.name, 'Karol Salebe', String(u.id));
+  });
   // Biblioteca de logos por cliente: se llena con los logos de las pruebas que ya existían
   unaVez('logos_de_pruebas', () => logosDePruebasAnteriores(process.env.UPLOAD_DIR || resolve(dirname(fileURLToPath(import.meta.url)), 'uploads')));
   // Órdenes de Deco sin vendedor toman el de su cliente (las que ya tienen vendedor no se tocan)
