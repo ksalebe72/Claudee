@@ -1,5 +1,6 @@
 import React from 'react';
 import { money } from '../utils.js';
+import { api } from '../api.js';
 import { PROCESOS } from '../../../shared/pricing.js';
 
 export const LOCATIONS = ['Frente', 'Espalda', 'Pecho izquierdo', 'Pecho derecho', 'Manga izquierda', 'Manga derecha', 'Nuca', 'Frente gorra', 'Lateral gorra'];
@@ -86,11 +87,82 @@ export function CodigoPrenda({ idx, item, products, editable, onImport, onPick }
   );
 }
 
+// ---------- SanMar en la línea: muestras de color e inventario por talla (solo lectura; se pide una vez por sesión) ----------
+const sanmarEstilos = new Map(); // sku → promesa del estilo (colores con su muestra)
+const sanmarColores = new Map(); // sku|color → promesa del detalle (inventario por talla)
+const imagenSanmar = (u) => `/api/sanmar/image?u=${encodeURIComponent(u)}`;
+const pedir = (mapa, clave, url) => {
+  if (!mapa.has(clave)) mapa.set(clave, api.get(url).catch((e) => { mapa.delete(clave); throw e; }));
+  return mapa.get(clave);
+};
+
+/** Colores del estilo en SanMar (con muestra) e inventario por talla del color elegido. null mientras carga o si no aplica. */
+function useSanmarLinea(product, color, activo) {
+  const sku = activo && product && /sanmar/i.test(product.supplier || '') ? product.sku : null;
+  const [colores, setColores] = React.useState(null);
+  const [stock, setStock] = React.useState(null);
+  React.useEffect(() => {
+    setColores(null);
+    if (!sku) return undefined;
+    let vivo = true;
+    pedir(sanmarEstilos, sku, `/sanmar/style/${encodeURIComponent(sku)}`).then((d) => vivo && setColores(d.colores || [])).catch(() => {});
+    return () => { vivo = false; };
+  }, [sku]);
+  React.useEffect(() => {
+    setStock(null);
+    if (!sku || !color) return undefined;
+    let vivo = true;
+    const t = setTimeout(() => {
+      pedir(sanmarColores, `${sku}|${color}`, `/sanmar/style/${encodeURIComponent(sku)}/${encodeURIComponent(color)}`)
+        .then((d) => vivo && setStock({ porTalla: Object.fromEntries(d.tallas.map((x) => [x.talla, x.inventario])), consultado: d.tallas[0]?.consultado }))
+        .catch(() => vivo && setStock({ error: true, porTalla: {} }));
+    }, 400);
+    return () => { vivo = false; clearTimeout(t); };
+  }, [sku, color]);
+  return { colores, stock, esSanmar: !!sku };
+}
+
+/** Selector de color con muestras (como la cuadrícula de Deco). Si SanMar no da muestras, queda la lista normal. */
+function ColorMuestras({ colores, nombres, value, disabled, onChange }) {
+  const [abierto, setAbierto] = React.useState(false);
+  const caja = React.useRef(null);
+  React.useEffect(() => {
+    if (!abierto) return undefined;
+    const fuera = (e) => { if (caja.current && !caja.current.contains(e.target)) setAbierto(false); };
+    document.addEventListener('mousedown', fuera);
+    return () => document.removeEventListener('mousedown', fuera);
+  }, [abierto]);
+  const conMuestra = (colores || []).filter((c) => c.swatch);
+  if (!conMuestra.length) {
+    return <select disabled={disabled} value={value} onChange={(e) => onChange(e.target.value)}>{nombres.map((c) => <option key={c}>{c}</option>)}</select>;
+  }
+  const actual = colores.find((c) => c.nombre.toLowerCase() === String(value || '').toLowerCase());
+  return (
+    <div className="color-muestras" ref={caja}>
+      <button type="button" className="color-actual" disabled={disabled} onClick={() => setAbierto(!abierto)} aria-haspopup="listbox" aria-expanded={abierto}>
+        {actual?.swatch ? <img src={imagenSanmar(actual.swatch)} alt="" /> : <span className="sin-muestra" />}
+        <span>{value || 'Color'}</span><span className="muted">▾</span>
+      </button>
+      {abierto && (
+        <div className="color-grid" role="listbox">
+          {colores.map((c) => (
+            <button type="button" key={c.codigo || c.nombre} role="option" aria-selected={c === actual} className={c === actual ? 'on' : ''} onClick={() => { onChange(c.nombre); setAbierto(false); }}>
+              {c.swatch ? <img src={imagenSanmar(c.swatch)} alt="" loading="lazy" /> : <span className="sin-muestra" />}
+              <span>{c.nombre}</span>
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 export function LineEditor({ idx, item, calc, products, editable, onChange, onRemove, onDuplicate, onImportSanmar, tamanosDtf = [], produccion = false }) {
   // produccion = vista de Logística: tallas y decoraciones, sin precios, costos ni márgenes
   const product = products.find((p) => p.id === Number(item.product_id));
   const tipo = item.line_type || 'prenda';
   const set = (patch) => onChange(patch);
+  const sm = useSanmarLinea(tipo === 'prenda' ? product : null, item.color, editable && !produccion && !!onImportSanmar);
   const setDeco = (i, patch) => set({ decorations: item.decorations.map((d, j) => (j === i ? { ...d, ...patch } : d)) });
   // Tamaño estándar de la ubicación (Ajustes → Tarifas → DTF)
   const estandar = (ubic) => tamanosDtf.find((t) => String(t.ubicacion).trim().toLowerCase() === String(ubic || '').trim().toLowerCase());
@@ -142,9 +214,7 @@ export function LineEditor({ idx, item, calc, products, editable, onChange, onRe
         <span className="item-n">{idx + 1}</span>
         <CodigoPrenda idx={idx} item={item} products={products} editable={editable} onImport={onImportSanmar} onPick={(p) => set(snapshotFromProduct(p, item))} />
         {product?.colors?.length > 0 && (
-          <select disabled={!editable} value={item.color} onChange={(e) => set({ color: e.target.value })}>
-            {product.colors.map((c) => <option key={c}>{c}</option>)}
-          </select>
+          <ColorMuestras colores={sm.colores} nombres={product.colors} value={item.color} disabled={!editable} onChange={(c) => set({ color: c })} />
         )}
         <div className="item-actions">
           {editable && <button className="icon-btn" title="Duplicar" onClick={onDuplicate}>⧉</button>}
@@ -167,11 +237,21 @@ export function LineEditor({ idx, item, calc, products, editable, onChange, onRe
                   else set({ qty: v, sizes: {} });
                 }} />
               {t && !produccion && <small className="size-price" title={`Costo ${t.costo == null ? 'desconocido' : money(t.costo)}`}>{t.precio == null ? '—' : money(t.precio)}</small>}
+              {s && sm.esSanmar && item.color && (() => {
+                const inv = sm.stock?.porTalla?.[s];
+                const pedido = Number(item.sizes?.[s]) || 0;
+                if (!sm.stock) return <small className="size-stock muted" title="Consultando inventario en SanMar…">…</small>;
+                if (inv == null) return <small className="size-stock muted" title="SanMar no devolvió inventario para esta talla">inv. —</small>;
+                return <small className={`size-stock ${pedido > inv ? 'falta' : inv === 0 ? 'cero' : ''}`} title={pedido > inv ? `Pides ${pedido} y SanMar tiene ${inv}` : 'Inventario de SanMar (todos sus almacenes)'}>{inv.toLocaleString('en-US')}</small>;
+              })()}
             </label>
           );
         })}
         <div className="size total-pcs"><span>Total</span><strong>{calc?.qty || 0}</strong></div>
       </div>
+      {sm.esSanmar && item.color && sm.stock && !sm.stock.error && (
+        <div className="muted small nota-stock">Debajo de cada talla: inventario de SanMar en {item.color} (se actualiza cada 15 min).{Object.keys(item.sizes || {}).some((k) => (Number(item.sizes[k]) || 0) > (sm.stock.porTalla[k] ?? Infinity)) && <strong className="danger"> Hay tallas donde pides más de lo que SanMar tiene.</strong>}</div>
+      )}
 
       {!produccion && <div className="row gap wrap price-row">
         <label className="field mini-field"><span>Costo prenda</span>

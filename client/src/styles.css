@@ -877,3 +877,18 @@ code { font-size: .92em; font-weight: var(--fw-medium); }
 .d-logo img { width: 100%; height: 100%; object-fit: contain; display: block; }
 .d-logo-x { position: absolute; top: -6px; right: -6px; width: 20px; height: 20px; border-radius: 50%; border: 1px solid var(--border); background: #fff; color: var(--muted); line-height: 1; cursor: pointer; opacity: 0; }
 .d-logo:hover .d-logo-x, .d-logo-x:focus { opacity: 1; }
+
+/* SanMar en la línea: muestras de color e inventario por talla */
+.color-muestras { position: relative; }
+.color-actual { display: inline-flex; align-items: center; gap: 8px; border: 1px solid var(--border); background: var(--surface, #fff); border-radius: 8px; padding: 6px 10px; cursor: pointer; min-width: 150px; }
+.color-actual img, .color-grid img, .sin-muestra { width: 20px; height: 20px; border-radius: 4px; border: 1px solid rgba(0,0,0,.15); object-fit: cover; flex: none; display: inline-block; background: #eee; }
+.color-actual > span:nth-of-type(1) { flex: 1; text-align: left; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.color-grid { position: absolute; z-index: 24; right: 0; top: calc(100% + 4px); width: min(560px, calc(100vw - 32px)); max-height: 340px; overflow-y: auto; background: var(--surface, #fff); border: 1px solid var(--border); border-radius: 12px; box-shadow: 0 16px 40px rgba(15, 12, 41, .18); padding: 8px; display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 2px; }
+.color-grid button { display: flex; align-items: center; gap: 8px; border: 1px solid transparent; background: none; border-radius: 6px; padding: 5px 6px; cursor: pointer; text-align: left; font-size: 13px; }
+.color-grid button:hover { background: var(--primary-soft); }
+.color-grid button.on { border-color: var(--primary); background: var(--primary-soft); }
+.size-stock { font-size: 10.5px; font-variant-numeric: tabular-nums; color: var(--estado-ok, #1a7f4b); }
+.size-stock.muted { color: var(--muted); }
+.size-stock.cero { color: var(--muted); text-decoration: line-through; }
+.size-stock.falta { color: var(--danger, #d92d20); font-weight: 700; }
+.nota-stock { margin-top: 4px; }
