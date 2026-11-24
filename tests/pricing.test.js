@@ -175,3 +175,24 @@ test('Comisión sobre ganancia: un costo real de una categoría no cotizada tamb
   assert.equal(r.comision.monto, round(r.gananciaProducto * 0.4));
   assert.ok(r.contribucion >= r.comision.monto, 'sin envío ni líneas sin comisión, a Color Plus le queda más que al vendedor');
 });
+
+test('Comisión reducida por margen bajo: se mide con la tasa normal; 40% → 20% bajo 30% de contribución', () => {
+  const regla = { nombre: 'Bryan · Utilidad 40%', base: 'ganancia_producto', tasa: 0.4, minContribucion: 0.3, tasaReducida: 0.2 };
+  const linea = (precio) => calcularLinea({ line_type: 'servicio', description: 'Trabajo', qty: 1, unit_cost: 500, unit_price: precio }, cfg);
+  // Venta 1000, costo 500 → ganancia 500; normal: comisión 200, contribución 300 = 30% → NO se reduce (justo en el mínimo)
+  const ok = calcularRentabilidad({ lineas: [linea(1000)], regla, margen: cfg.margen });
+  assert.equal(ok.gananciaBruta, 500);
+  assert.equal(ok.comision.monto, 200);
+  assert.equal(ok.comision.reducida, undefined);
+  // Venta 900, costo 500 → ganancia 400; normal: comisión 160, contribución 240 = 26.67% → se reduce a 20% = 80
+  const bajo = calcularRentabilidad({ lineas: [linea(900)], regla, margen: cfg.margen });
+  assert.equal(bajo.comision.tasa, 0.2);
+  assert.equal(bajo.comision.monto, 80);
+  assert.equal(bajo.contribucion, 320);
+  assert.equal(bajo.comision.reducida.montoNormal, 160);
+  assert.match(bajo.comision.motivo, /Margen bajo/);
+  // «Ajustar a meta» mide sin la reducción
+  assert.equal(calcularRentabilidad({ lineas: [linea(900)], regla, margen: cfg.margen, sinReduccion: true }).comision.monto, 160);
+  // Sin configuración de reducción no cambia nada
+  assert.equal(calcularRentabilidad({ lineas: [linea(900)], regla: { ...regla, minContribucion: null, tasaReducida: null }, margen: cfg.margen }).comision.monto, 160);
+});

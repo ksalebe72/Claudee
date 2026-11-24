@@ -104,9 +104,18 @@ r.post('/comisiones/reglas/:id/tasas', wrap((req) => {
   const rate = num(req.body.rate);
   if (rate == null || rate < 0 || rate > 1) throw fail(400, 'Tasa entre 0 y 100%');
   if (!isDate(req.body.effective_from)) throw fail(400, 'Fecha de vigencia inválida');
-  const anterior = get('SELECT rate FROM commission_rates WHERE rule_id = ? AND effective_from <= ? ORDER BY effective_from DESC, id DESC LIMIT 1', rule.id, req.body.effective_from);
-  insert('commission_rates', { rule_id: rule.id, rate, effective_from: req.body.effective_from, created_by: req.user.name });
-  audit(req.user, 'comisiones', `tasa ${rule.name} desde ${req.body.effective_from}`, anterior?.rate ?? null, rate, String(rule.id));
+  const anterior = get('SELECT * FROM commission_rates WHERE rule_id = ? AND effective_from <= ? ORDER BY effective_from DESC, id DESC LIMIT 1', rule.id, req.body.effective_from);
+  // Comisión reducida por margen bajo (opcional): si no se manda, se conserva la que tenía la tasa anterior
+  const b = req.body;
+  let min = 'min_contribucion' in b ? num(b.min_contribucion) : anterior?.min_contribucion ?? null;
+  let reducida = 'rate_reducida' in b ? num(b.rate_reducida) : anterior?.rate_reducida ?? null;
+  if ((min == null) !== (reducida == null)) throw fail(400, 'Para la comisión reducida pon las dos cosas: el mínimo de contribución y la tasa reducida (o deja las dos vacías).');
+  if (min != null && (min <= 0 || min >= 1)) throw fail(400, 'El mínimo de contribución debe estar entre 1% y 99%.');
+  if (reducida != null && (reducida < 0 || reducida >= rate)) { if ('rate_reducida' in b) throw fail(400, 'La tasa reducida debe ser menor que la tasa normal.'); min = null; reducida = null; }
+  insert('commission_rates', { rule_id: rule.id, rate, effective_from: req.body.effective_from, created_by: req.user.name, min_contribucion: min, rate_reducida: reducida });
+  audit(req.user, 'comisiones', `tasa ${rule.name} desde ${req.body.effective_from}`,
+    anterior ? { tasa: anterior.rate, minimo_contribucion: anterior.min_contribucion ?? null, tasa_reducida: anterior.rate_reducida ?? null } : null,
+    { tasa: rate, minimo_contribucion: min, tasa_reducida: reducida }, String(rule.id));
   return listRules().find((x) => x.id === rule.id);
 }));
 

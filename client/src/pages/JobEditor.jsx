@@ -18,7 +18,7 @@ function reglaVigente(reglas, job) {
   }
   const fecha = job.invoice_date || today();
   const tasa = r.tasas.find((t) => t.effective_from <= fecha);
-  return { nombre: r.name, base: r.base, tasa: tasa ? tasa.rate : null };
+  return { nombre: r.name, base: r.base, tasa: tasa ? tasa.rate : null, minContribucion: tasa?.min_contribucion ?? null, tasaReducida: tasa?.rate_reducida ?? null };
 }
 
 export default function JobEditor() {
@@ -89,7 +89,9 @@ export default function JobEditor() {
   const cfg = job?.pricing?.config || tarifas?.config;
   const calcs = useMemo(() => (job && cfg ? job.items.map((it) => calcularLinea(it, cfg)) : []), [job, cfg]);
   // Rentabilidad para un juego de líneas (se usa en la vista previa y en «Ajustar a meta»)
+  // sinReduccion: la meta se busca con la comisión NORMAL, para que el precio ajustado no dependa de castigar al vendedor
   const rentabilidadDe = (lineas) => calcularRentabilidad({
+    sinReduccion: true,
     lineas, descuentoGlobal: job.discount, creditos: job.finanzas?.creditos || 0,
     envioCobrado: job.shipping_charged, costoEnvio: job.shipping_cost, costosExtra: job.extra_costs || [],
     tasaImpuesto: cfg.impuesto.tasa, exento: !!job.tax_exempt, reales: job.finanzas?.costos?.reales || {},

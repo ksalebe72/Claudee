@@ -122,7 +122,7 @@ export function computeJob(jobOrId, { persist = true } = {}) {
   const resumen = {
     ...fin, cobro, aprobacion, pricingVersion: version.id,
     costosConfirmados: !!job.costs_confirmed_at, costosConfirmadosPor: job.costs_confirmed_by, costosConfirmadosEn: job.costs_confirmed_at,
-    regla: regla ? { id: regla.id, nombre: regla.nombre, base: regla.base, tasa: regla.tasa, salesperson_id: regla.salesperson_id } : null,
+    regla: regla ? { id: regla.id, nombre: regla.nombre, base: regla.base, tasa: regla.tasa, salesperson_id: regla.salesperson_id, minContribucion: regla.minContribucion, tasaReducida: regla.tasaReducida } : null,
     calculado: new Date().toISOString(),
   };
   if (persist) {

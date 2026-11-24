@@ -5,6 +5,7 @@ import { ensurePricing, ensureCommissionSetup, aplicarCambioComisionBryan, aplic
 import { asignarVendedorPorEmpresa, completarVendedoresDesdeClientes } from './importar-deco.js';
 import { computeJob } from './finance.js';
 import { all } from './db.js';
+import { hoyNY } from './clientes-recencia.js';
 
 function unaVez(clave, fn) {
   if (getSetting(clave)) return;
@@ -25,6 +26,16 @@ export function aplicarMigraciones() {
   ensureCommissionSetup();
   if (process.env.CAMBIO_BRYAN_DISABLED !== '1') { aplicarCambioComisionBryan(); aplicarCambioWrapsBryan(); fijarReglaAutomaticaBryan(); }
   asignarClientesExistentes();
+  // Pedido del dueño: si una orden de Bryan queda bajo 30% de contribución, su comisión baja de 40% a 20% (desde hoy)
+  if (process.env.CAMBIO_BRYAN_DISABLED !== '1') unaVez('bryan_comision_reducida', () => {
+    const regla = get("SELECT r.id FROM commission_rules r JOIN salespeople s ON s.id = r.salesperson_id WHERE s.name = 'Bryan' AND r.name = 'Bryan · Utilidad 40%' AND r.active = 1");
+    if (!regla) return;
+    const hoy = hoyNY();
+    const actual = get('SELECT * FROM commission_rates WHERE rule_id = ? AND effective_from <= ? ORDER BY effective_from DESC, id DESC LIMIT 1', regla.id, hoy);
+    if (!actual || actual.rate_reducida != null) return;
+    insert('commission_rates', { rule_id: regla.id, rate: actual.rate, effective_from: hoy, created_by: 'sistema (pedido del dueño)', min_contribucion: 0.3, rate_reducida: 0.2 });
+    audit(null, 'comisiones', `tasa Bryan · Utilidad 40% desde ${hoy}`, { tasa: actual.rate, minimo_contribucion: null, tasa_reducida: null }, { tasa: actual.rate, minimo_contribucion: 0.3, tasa_reducida: 0.2 }, String(regla.id));
+  });
   // «Todas las de Guapo's son de Karol»
   unaVez('karol_guapos', () => asignarVendedorPorEmpresa({ texto: 'guapo', salesperson_id: vendedor('Karol').id }, null));
   // «I'm Karol the owner»: sus ventas son de la casa, sin comisión

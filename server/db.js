@@ -169,6 +169,8 @@ CREATE TABLE IF NOT EXISTS commission_entries (
   created_at TEXT DEFAULT (datetime('now'))
 );
 `);
+addColumn('commission_rates', 'min_contribucion', 'REAL'); // si la contribución (con la tasa normal) queda bajo este %, aplica rate_reducida
+addColumn('commission_rates', 'rate_reducida', 'REAL');
 addColumn('salespeople', 'es_dueno', 'INTEGER DEFAULT 0'); // el dueño vende pero no cobra comisión (cuentas de la casa)
 addColumn('salespeople', 'default_rule_id', 'INTEGER'); // regla de comisión automática del vendedor
 

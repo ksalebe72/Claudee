@@ -167,7 +167,8 @@ export function ruleAt(ruleId, date) {
   const r = get('SELECT * FROM commission_rules WHERE id = ?', ruleId);
   if (!r) return null;
   const rate = get('SELECT * FROM commission_rates WHERE rule_id = ? AND effective_from <= ? ORDER BY effective_from DESC, id DESC LIMIT 1', ruleId, date);
-  return { id: r.id, nombre: r.name, base: r.base, client_type: r.client_type, salesperson_id: r.salesperson_id, tasa: rate ? rate.rate : null, vigenteDesde: rate?.effective_from ?? null };
+  return { id: r.id, nombre: r.name, base: r.base, client_type: r.client_type, salesperson_id: r.salesperson_id, tasa: rate ? rate.rate : null, vigenteDesde: rate?.effective_from ?? null,
+    minContribucion: rate?.min_contribucion ?? null, tasaReducida: rate?.rate_reducida ?? null };
 }
 
 export function listRules() {

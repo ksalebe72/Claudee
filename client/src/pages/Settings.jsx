@@ -209,6 +209,11 @@ function Comisiones({ editable, notify }) {
   const [reglas, reloadR] = useLoad(() => api.get('/comisiones/reglas'));
   const [nueva, setNueva] = useState(null);
   const [tasa, setTasa] = useState({});
+  const pct = (v) => Math.round(v * 10000) / 100;
+  // Comisión reducida por margen bajo: lo escrito, o lo que la regla ya tiene vigente
+  const vigenteDe = (r) => r.tasas.find((x) => x.effective_from <= today());
+  const campoRed = (r, k) => tasa[r.id]?.[k] ?? (() => { const t = vigenteDe(r); const v = k === 'min' ? t?.min_contribucion : t?.rate_reducida; return v == null ? '' : pct(v); })();
+  const reducidaDe = (r) => { const min = campoRed(r, 'min'), red = campoRed(r, 'red'); return { min_contribucion: min === '' ? null : Number(min) / 100, rate_reducida: red === '' ? null : Number(red) / 100 }; };
   if (!vend || !reglas) return <div className="loading">Cargando…</div>;
   const run = async (fn, msg) => { try { await fn(); notify(msg); reloadV(); reloadR(); } catch (e) { notify(e.message, true); } };
   return (
@@ -242,14 +247,17 @@ function Comisiones({ editable, notify }) {
                 <td>{r.salesperson_name || 'Cualquiera'}</td>
                 <td>{editable ? <select value={r.base} onChange={(e) => run(() => api.put(`/comisiones/reglas/${r.id}`, { base: e.target.value }), 'Base actualizada')}>{Object.entries(BASES).map(([k, v]) => <option key={k} value={k}>{v}</option>)}</select> : BASES[r.base]}</td>
                 <td>{r.client_type || '—'}</td>
-                <td><strong>{(() => { const t = r.tasas.find((x) => x.effective_from <= today()); return t ? `${Math.round(t.rate * 10000) / 100}%` : '—'; })()}</strong></td>
-                <td className="small">{r.tasas.map((t) => <div key={t.id}>{Math.round(t.rate * 10000) / 100}% desde {t.effective_from === '2000-01-01' ? 'el inicio' : t.effective_from}</div>)}</td>
+                <td>{(() => { const t = r.tasas.find((x) => x.effective_from <= today()); return t ? <><strong>{pct(t.rate)}%</strong>{t.rate_reducida != null && <div className="small warn-txt">{pct(t.rate_reducida)}% si la contribución queda bajo {pct(t.min_contribucion)}%</div>}</> : '—'; })()}</td>
+                <td className="small">{r.tasas.map((t) => <div key={t.id}>{pct(t.rate)}%{t.rate_reducida != null ? ` (${pct(t.rate_reducida)}% bajo ${pct(t.min_contribucion)}%)` : ''} desde {t.effective_from === '2000-01-01' ? 'el inicio' : t.effective_from}</div>)}</td>
                 {editable && (
                   <td>
                     <div className="row gap">
                       <input type="number" step="0.5" className="mini" placeholder="%" value={tasa[r.id]?.rate ?? ''} onChange={(e) => setTasa({ ...tasa, [r.id]: { ...tasa[r.id], rate: e.target.value } })} />
                       <input type="date" value={tasa[r.id]?.date ?? today()} onChange={(e) => setTasa({ ...tasa, [r.id]: { ...tasa[r.id], date: e.target.value } })} />
-                      <button className="btn" disabled={tasa[r.id]?.rate === undefined || tasa[r.id]?.rate === ''} onClick={() => run(() => api.post(`/comisiones/reglas/${r.id}/tasas`, { rate: Number(tasa[r.id].rate) / 100, effective_from: tasa[r.id].date || today() }).then(() => setTasa({ ...tasa, [r.id]: {} })), 'Tasa agregada')}>Agregar</button>
+                      <button className="btn" disabled={tasa[r.id]?.rate === undefined || tasa[r.id]?.rate === ''} onClick={() => run(() => api.post(`/comisiones/reglas/${r.id}/tasas`, { rate: Number(tasa[r.id].rate) / 100, effective_from: tasa[r.id].date || today(), ...reducidaDe(r) }).then(() => setTasa({ ...tasa, [r.id]: {} })), 'Tasa agregada')}>Agregar</button>
+                    </div>
+                    <div className="row gap small muted" title="Opcional. Se mide con la comisión normal: si aun así la contribución queda bajo el mínimo, se paga la tasa reducida. Deja las dos vacías para quitarla.">
+                      Si la contribución queda bajo <input type="number" step="1" className="mini" placeholder="%" value={campoRed(r, 'min')} onChange={(e) => setTasa({ ...tasa, [r.id]: { ...tasa[r.id], min: e.target.value } })} />% paga <input type="number" step="0.5" className="mini" placeholder="%" value={campoRed(r, 'red')} onChange={(e) => setTasa({ ...tasa, [r.id]: { ...tasa[r.id], red: e.target.value } })} />%
                     </div>
                     <button className="link-btn small" onClick={() => run(() => api.put(`/comisiones/reglas/${r.id}`, { active: !r.active }), 'Actualizada')}>{r.active ? 'Desactivar regla' : 'Activar regla'}</button>
                   </td>

@@ -308,7 +308,8 @@ function repartir(monto, pesos) {
  * @param o.envioCobrado, o.costoEnvio (null = desconocido), o.costosExtra [{ concepto, tipo, monto }]
  * @param o.tasaImpuesto, o.exento
  * @param o.reales        costo real por categoría { prendas: 120, dtf: 30 } (de facturas de proveedor)
- * @param o.regla         { nombre, base: 'venta_neta'|'ganancia_producto'|'ganancia_total', tasa } | null
+ * @param o.regla         { nombre, base: 'venta_neta'|'ganancia_producto'|'ganancia_total', tasa, minContribucion?, tasaReducida? } | null
+ * @param o.sinReduccion  true = ignora la comisión reducida por margen bajo (para «Ajustar a meta»)
  * @param o.margen        { objetivo, minimo }
  */
 export function calcularRentabilidad(o) {
@@ -411,6 +412,25 @@ export function calcularRentabilidad(o) {
       com.monto = round2(com.base * com.tasa);
       com.estado = 'calculada';
       if (base < 0) com.motivo = 'La base sobre ganancia es negativa: la comisión es $0';
+    }
+  }
+  // Comisión reducida por margen bajo: si con la tasa NORMAL la contribución queda bajo el mínimo de la regla, aplica la tasa reducida.
+  // (Se mide con la tasa normal para que el resultado no dependa de sí mismo.)
+  const minCom = num(o.regla?.minContribucion);
+  const tasaRed = num(o.regla?.tasaReducida);
+  if (!o.sinReduccion && com.estado === 'calculada' && minCom != null && tasaRed != null && tasaRed < com.tasa) {
+    if (gananciaBruta == null) {
+      com.estado = 'pendiente';
+      com.monto = null;
+      com.motivo = 'Falta un costo para saber si aplica la comisión reducida por margen bajo';
+    } else {
+      const pctNormal = ingresoSinImpuesto ? ((gananciaBruta - com.monto) / ingresoSinImpuesto) * 100 : null;
+      if (pctNormal != null && round2(pctNormal) < round2(minCom * 100)) {
+        com.reducida = { tasaNormal: com.tasa, montoNormal: com.monto, contribucionNormalPct: round2(pctNormal), minimo: minCom };
+        com.tasa = tasaRed;
+        com.monto = round2(com.base * tasaRed);
+        com.motivo = `Margen bajo: con la comisión normal de ${round2(com.reducida.tasaNormal * 100)}% la contribución sería ${round2(pctNormal)}% (mínimo ${round2(minCom * 100)}%), así que aplica la comisión reducida de ${round2(tasaRed * 100)}%`;
+      }
     }
   }
 

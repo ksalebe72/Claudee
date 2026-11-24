@@ -250,7 +250,34 @@ test('Tasas con fecha de vigencia: se usa la vigente en la fecha de la factura',
   const o2 = await finanzas.put(`/jobs/${o.id}`, { invoice_date: '2027-02-01' });
   assert.equal(o2.finanzas.comision.tasa, 0.2, 'factura de 2027 usa 20%');
   const hist = await duena.get('/auditoria?area=comisiones');
-  assert.ok(hist.some((h) => h.field.includes('2027-01-01') && JSON.parse(h.old_value) === 0.25 && JSON.parse(h.new_value) === 0.2));
+  assert.ok(hist.some((h) => h.field.includes('2027-01-01') && JSON.parse(h.old_value).tasa === 0.25 && JSON.parse(h.new_value).tasa === 0.2));
+});
+
+test('Comisión reducida de Bryan: 40% normal, 20% si la contribución queda bajo 30%; editable y con historial', async () => {
+  const reglas = await duena.get('/comisiones/reglas');
+  const r = reglas.find((x) => x.name === 'Bryan · Utilidad 40%');
+  const vigente = r.tasas[0];
+  assert.deepEqual([vigente.rate, vigente.min_contribucion, vigente.rate_reducida], [0.4, 0.3, 0.2], 'queda configurada al arrancar');
+
+  const serv = (precio) => ({ line_type: 'servicio', description: 'Trabajo', qty: 1, unit_cost: 500, unit_price: precio });
+  const buena = await duena.post('/jobs', { title: 'Margen sano', salesperson_id: bryan, commission_rule_id: r.id, tax_exempt: true, items: [serv(1000)] });
+  assert.equal(buena.fin.comision.monto, 200, '50% de ganancia → 40% completo');
+  const baja = await duena.post('/jobs', { title: 'Margen bajo', salesperson_id: bryan, commission_rule_id: r.id, tax_exempt: true, items: [serv(900)] });
+  assert.equal(baja.fin.comision.tasa, 0.2);
+  assert.equal(baja.fin.comision.monto, 80, 'bajo 30% → 20%');
+  assert.equal(baja.fin.contribucion, 320);
+
+  // Validaciones y edición
+  const hoy = new Date().toLocaleDateString('en-CA', { timeZone: 'America/New_York' });
+  assert.equal((await duena.call('POST', `/comisiones/reglas/${r.id}/tasas`, { rate: 0.4, effective_from: hoy, min_contribucion: 0.3, rate_reducida: null })).status, 400, 'las dos o ninguna');
+  assert.equal((await duena.call('POST', `/comisiones/reglas/${r.id}/tasas`, { rate: 0.4, effective_from: hoy, min_contribucion: 0.3, rate_reducida: 0.5 })).status, 400, 'la reducida debe ser menor');
+  // Una tasa nueva sin mencionar la reducción la conserva
+  const r2 = await duena.post(`/comisiones/reglas/${r.id}/tasas`, { rate: 0.45, effective_from: '2031-01-01' });
+  assert.deepEqual([r2.tasas[0].rate, r2.tasas[0].min_contribucion, r2.tasas[0].rate_reducida], [0.45, 0.3, 0.2]);
+  // Quitarla (las dos vacías) queda en el historial
+  await duena.post(`/comisiones/reglas/${r.id}/tasas`, { rate: 0.45, effective_from: '2032-01-01', min_contribucion: null, rate_reducida: null });
+  const hist = await duena.get('/auditoria?area=comisiones');
+  assert.ok(hist.some((h) => h.field.includes('2032-01-01') && JSON.parse(h.old_value).tasa_reducida === 0.2 && JSON.parse(h.new_value).tasa_reducida === null));
 });
 
 test('Reportes: por orden, cliente, proceso, vendedor, bajo margen y comisiones', async () => {
