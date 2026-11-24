@@ -9,6 +9,7 @@ import { applyBrand, BrandMark } from './brand.jsx';
 import Dashboard from './pages/Dashboard.jsx';
 import Contacts, { ClientesInactivos } from './pages/Contacts.jsx';
 import TallerPO from './pages/TallerPO.jsx';
+import Bienvenida from './components/Bienvenida.jsx';
 import ContactDetail from './pages/ContactDetail.jsx';
 import Pipeline from './pages/Pipeline.jsx';
 import Jobs from './pages/Jobs.jsx';
@@ -53,6 +54,7 @@ export default function App() {
   const [auth, setAuth] = useState(null); // { necesitaConfiguracion, usuario }
   const [meta, setMeta] = useState(null);
   const [menuOpen, setMenuOpen] = useState(false);
+  const [bienvenida, setBienvenida] = useState(false); // se muestra una vez, justo después de iniciar sesión
 
   const loadAuth = useCallback(() => api.get('/auth/estado').then(setAuth).catch(() => setAuth({ necesitaConfiguracion: false, usuario: null })), []);
   const reloadMeta = useCallback(() => api.get('/meta').then(setMeta), []);
@@ -70,7 +72,7 @@ export default function App() {
     return <Routes><Route path="/portal/taller/:token" element={<TallerPO />} /><Route path="/portal/:token" element={<Portal />} /></Routes>;
   }
   if (!auth) return <div className="loading">Cargando…</div>;
-  if (!auth.usuario) return <Login setup={auth.necesitaConfiguracion} requiereCodigo={auth.requiereCodigo} brand={auth.marca} onDone={(u) => setAuth((a) => ({ ...a, necesitaConfiguracion: false, usuario: u }))} />;
+  if (!auth.usuario) return <Login setup={auth.necesitaConfiguracion} requiereCodigo={auth.requiereCodigo} brand={auth.marca} onDone={(u) => { setBienvenida(true); setAuth((a) => ({ ...a, necesitaConfiguracion: false, usuario: u })); }} />;
   if (!meta) return <div className="loading">Cargando…</div>;
 
   const user = auth.usuario;
@@ -79,6 +81,7 @@ export default function App() {
   return (
     <MetaContext.Provider value={{ ...meta, user, reloadMeta }}>
       <div className="layout">
+        {bienvenida && <Bienvenida nombre={String(user.name || '').split(' ')[0]} asistente={meta.asistente?.nombre} onClose={() => setBienvenida(false)} />}
         {menuOpen && <div className="menu-fondo" onClick={() => setMenuOpen(false)} aria-hidden="true" />}
         <aside className={`sidebar ${menuOpen ? 'open' : ''}`} onClick={() => setMenuOpen(false)}>
           <div className="brand">

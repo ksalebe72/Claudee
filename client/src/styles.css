@@ -915,3 +915,19 @@ code { font-size: .92em; font-weight: var(--fw-medium); }
 .taller-form .ancho { grid-column: 1 / -1; }
 .link-btn.danger { color: var(--danger, #d92d20); }
 @media (max-width: 800px) { .taller-form { grid-template-columns: minmax(0, 1fr); } }
+
+/* ===== Bienvenida al iniciar sesión ===== */
+.bienvenida-fondo { position: fixed; inset: 0; z-index: 90; display: grid; place-items: center; padding: 16px; background: rgba(15, 12, 41, .62); backdrop-filter: blur(4px); animation: bienvenida-aparece .25s ease-out; }
+.bienvenida { position: relative; width: min(460px, 100%); background: var(--surface, #fff); border-radius: 18px; padding: 34px 28px 24px; text-align: center; box-shadow: 0 30px 80px rgba(0, 0, 0, .35); overflow: hidden; display: grid; gap: 6px; justify-items: center; animation: bienvenida-sube .35s cubic-bezier(.2, .8, .2, 1); }
+.bienvenida-franja { position: absolute; inset: 0 0 auto 0; height: 6px; background: var(--brand-gradient); }
+.bienvenida-saludo { margin: 0; color: var(--muted); font-size: 15px; }
+.bienvenida h2 { margin: 0 0 6px; font-family: var(--font-display); font-size: 30px; letter-spacing: -.02em; }
+.bienvenida-reloj { display: grid; gap: 2px; padding: 12px 18px; border-radius: 12px; background: var(--primary-soft); width: 100%; }
+.bienvenida-fecha { font-weight: 600; }
+.bienvenida-hora { font-family: var(--font-display); font-size: 30px; font-weight: 700; font-variant-numeric: tabular-nums; }
+.bienvenida-reloj small { color: var(--muted); }
+.bienvenida blockquote { margin: 14px 4px 10px; font-size: 16.5px; line-height: 1.45; font-style: italic; color: var(--text); }
+.bienvenida .btn { padding: 10px 22px; }
+@keyframes bienvenida-aparece { from { opacity: 0; } }
+@keyframes bienvenida-sube { from { opacity: 0; transform: translateY(14px) scale(.97); } }
+@media (prefers-reduced-motion: reduce) { .bienvenida-fondo, .bienvenida { animation: none; } }
