@@ -9,6 +9,7 @@ import { LineEditor, emptyPrenda, emptyDiseno, lineaDigitalizado, esDigitalizado
 import { RentabilidadCard, VendedorCard, EnvioCostosCard, CostosRealesCard, CreditosCard, reglaSugerida } from '../components/FinancePanels.jsx';
 import { RedactarIAModal } from '../components/IA.jsx';
 import { ClienteBuscador, PedidoAntesModal, FaltaPorCompletar } from '../components/CotizadorAtajos.jsx';
+import { ProduccionExternaCard } from '../components/ProduccionExterna.jsx';
 import { PROCESOS } from '../../../shared/pricing.js';
 
 /** Regla de comisión con la tasa vigente (misma lógica que el servidor). */
@@ -390,6 +391,7 @@ export default function JobEditor() {
 
         <div className="stack sticky">
           {!logistica && <FaltaPorCompletar pendientes={pendientes} />}
+          {id && isOrder && <ProduccionExternaCard job={job} notify={notify} onUpdated={reload} />}
           {id && !logistica && <Proofs job={job} setJob={setJob} notify={notify} onDesign={abrirDecorador} />}
           {editable && (
             <div className="row gap ajuste-meta">

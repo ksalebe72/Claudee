@@ -52,13 +52,13 @@ const now = () => new Date().toISOString().replace('T', ' ').slice(0, 19);
 // ---------- helpers de dominio ----------
 function contactById(id) { return id ? get('SELECT * FROM contacts WHERE id = ?', id) : null; }
 
-function nextNumber(prefix, key) {
+export function nextNumber(prefix, key) {
   const n = getSetting(key, 1000) + 1;
   setSetting(key, n);
   return `${prefix}-${n}`;
 }
 
-function loadJob(id) {
+export function loadJob(id) {
   const job = get('SELECT * FROM jobs WHERE id = ?', id);
   if (!job) throw fail(404, 'No encontrado');
   job.items = all(
@@ -108,7 +108,7 @@ function saveItems(jobId, items) {
   computeJob(jobId);
 }
 
-function logSystem(job, body) {
+export function logSystem(job, body) {
   insert('activities', { contact_id: job.contact_id, job_id: job.id, type: 'sistema', body });
 }
 
@@ -120,7 +120,7 @@ function moveOpportunity(id, stage) {
   fire('opportunity.stage_changed', { opportunity: { ...opp, stage }, contact: contactById(opp.contact_id), from: opp.stage, to: stage });
 }
 
-function setOrderStatus(id, status) {
+export function setOrderStatus(id, status) {
   const job = get('SELECT * FROM jobs WHERE id = ?', id);
   if (!job || job.kind !== 'order' || job.status === status) return;
   if (!ORDER_STATUSES.includes(status)) throw fail(400, 'Estado inválido');
@@ -464,7 +464,9 @@ api.get('/jobs', wrap((req) => {
   const filas = all(`SELECT j.*, c.name AS contact_name, c.company AS contact_company,
       COALESCE((SELECT SUM(amount) FROM payments p WHERE p.job_id = j.id),0) AS paid,
       (SELECT SUM(qty) FROM job_items i WHERE i.job_id = j.id) AS pieces,
-      (SELECT status FROM proofs pr WHERE pr.job_id = j.id ORDER BY version DESC LIMIT 1) AS proof_status
+      (SELECT status FROM proofs pr WHERE pr.job_id = j.id ORDER BY version DESC LIMIT 1) AS proof_status,
+      (SELECT po.status FROM production_pos po WHERE po.job_id = j.id AND po.status != 'cancelado' ORDER BY po.id DESC LIMIT 1) AS po_status,
+      (SELECT t.name FROM production_pos po JOIN talleres t ON t.id = po.taller_id WHERE po.job_id = j.id AND po.status != 'cancelado' ORDER BY po.id DESC LIMIT 1) AS po_taller
     FROM jobs j LEFT JOIN contacts c ON c.id = j.contact_id
     ${cond.length ? 'WHERE ' + cond.join(' AND ') : ''} ORDER BY j.id DESC`, ...params);
   // Logística no ve márgenes ni comisiones

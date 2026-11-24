@@ -892,3 +892,26 @@ code { font-size: .92em; font-weight: var(--fw-medium); }
 .size-stock.cero { color: var(--muted); text-decoration: line-through; }
 .size-stock.falta { color: var(--danger, #d92d20); font-weight: 700; }
 .nota-stock { margin-top: 4px; }
+
+/* ===== Producción externa: PO para el taller ===== */
+.produccion-externa h3 { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.requisitos { list-style: none; margin: 0 0 8px; padding: 0; display: grid; gap: 4px; font-size: var(--fs-sm, 13px); }
+.requisitos .ok { color: var(--estado-ok, #1a7f4b); }
+.requisitos .falta { color: var(--muted); }
+.badge.po-borrador { background: #eef0f5; color: #555; }
+.badge.po-enviado { background: #e7f0ff; color: #1556c0; }
+.badge.po-recibido { background: #fff3d6; color: #8a5a00; }
+.badge.po-terminado { background: #dff5e7; color: #17663c; }
+.badge.po-cancelado { background: #fde8e6; color: #b42318; }
+.po-lineas { display: grid; gap: 8px; margin: 10px 0; }
+.po-linea { border: 1px solid var(--border); border-radius: 8px; padding: 8px 10px; display: grid; gap: 3px; }
+.po-deco { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; font-size: var(--fs-sm, 13px); padding-top: 3px; border-top: 1px dashed var(--border); }
+.po-deco .mini { width: 70px; }
+.po-compra { margin-top: 10px; border-top: 1px solid var(--border); padding-top: 8px; display: grid; gap: 6px; }
+.po-tallas { display: flex; flex-wrap: wrap; gap: 6px; margin: 4px 0; }
+.po-tallas span { display: grid; text-align: center; border: 1px solid var(--border); border-radius: 6px; padding: 3px 9px; min-width: 44px; }
+.po-tallas span.total { background: var(--primary-soft); }
+.taller-form { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin: 8px 0; }
+.taller-form .ancho { grid-column: 1 / -1; }
+.link-btn.danger { color: var(--danger, #d92d20); }
+@media (max-width: 800px) { .taller-form { grid-template-columns: minmax(0, 1fr); } }

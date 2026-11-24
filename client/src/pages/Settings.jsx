@@ -1,10 +1,11 @@
 import React, { useEffect, useState } from 'react';
+import { Talleres } from '../components/ProduccionExterna.jsx';
 import { api } from '../api.js';
 import { fmtDateTime, money, today, useLoad } from '../utils.js';
 import { Field, PageHeader, useMeta, useToast } from '../components/ui.jsx';
 import { LOCATIONS } from '../components/JobLines.jsx';
 
-const TABS = { tarifas: 'Tarifas', comisiones: 'Vendedores y comisiones', usuarios: 'Usuarios', historial: 'Historial de cambios', importar: 'Importar de DecoNetwork', general: 'General' };
+const TABS = { tarifas: 'Tarifas', comisiones: 'Vendedores y comisiones', usuarios: 'Usuarios', talleres: 'Talleres', historial: 'Historial de cambios', importar: 'Importar de DecoNetwork', general: 'General' };
 
 export default function Settings() {
   const meta = useMeta();
@@ -22,6 +23,7 @@ export default function Settings() {
       {tab === 'tarifas' && <Tarifas editable={esDuena} notify={notify} />}
       {tab === 'comisiones' && <Comisiones editable={esDuena} notify={notify} />}
       {tab === 'usuarios' && esDuena && <Usuarios notify={notify} />}
+      {tab === 'talleres' && <Talleres notify={notify} />}
       {tab === 'historial' && esDuena && <Historial />}
       {tab === 'importar' && esDuena && <ImportarDeco notify={notify} />}
       {tab === 'general' && esDuena && <General notify={notify} />}

@@ -10,6 +10,7 @@ import { programarRespaldos } from './backup.js';
 import { authRouter, usersRouter, requireAuth } from './auth.js';
 import { scopeMiddleware } from './scope.js';
 import { tableroApi } from './tablero.js';
+import { produccionExternaApi } from './produccion-externa.js';
 import { aplicarMigraciones } from './migraciones.js';
 import { seedIfEmpty } from './seed.js';
 
@@ -31,6 +32,7 @@ app.use('/api', requireAuth);
 app.use('/api', scopeMiddleware); // qué datos ve cada rol (vendedor: solo sus clientes)
 app.use('/api', usersRouter);
 app.use('/api', tableroApi);
+app.use('/api', produccionExternaApi); // talleres externos y PO de producción
 app.use('/api', financeApi);
 app.use('/api', iaApi);
 app.use('/api', opsApi);

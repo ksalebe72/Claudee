@@ -8,6 +8,7 @@ import DonPixel from './components/DonPixel.jsx';
 import { applyBrand, BrandMark } from './brand.jsx';
 import Dashboard from './pages/Dashboard.jsx';
 import Contacts, { ClientesInactivos } from './pages/Contacts.jsx';
+import TallerPO from './pages/TallerPO.jsx';
 import ContactDetail from './pages/ContactDetail.jsx';
 import Pipeline from './pages/Pipeline.jsx';
 import Jobs from './pages/Jobs.jsx';
@@ -66,7 +67,7 @@ export default function App() {
   }, []);
 
   if (loc.pathname.startsWith('/portal/')) {
-    return <Routes><Route path="/portal/:token" element={<Portal />} /></Routes>;
+    return <Routes><Route path="/portal/taller/:token" element={<TallerPO />} /><Route path="/portal/:token" element={<Portal />} /></Routes>;
   }
   if (!auth) return <div className="loading">Cargando…</div>;
   if (!auth.usuario) return <Login setup={auth.necesitaConfiguracion} requiereCodigo={auth.requiereCodigo} brand={auth.marca} onDone={(u) => setAuth((a) => ({ ...a, necesitaConfiguracion: false, usuario: u }))} />;

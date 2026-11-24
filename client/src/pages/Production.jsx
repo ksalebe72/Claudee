@@ -42,6 +42,7 @@ export default function Production() {
                   <span className={late ? 'danger' : ''}>📅 {fmtDate(j.due_date)}</span>
                   {j.proof_status && <Badge status={j.proof_status}>arte: {label(j.proof_status)}</Badge>}
                 </div>
+                {j.po_status && <div className="small"><span className={`badge po-${j.po_status}`}>PO {label(j.po_status)}</span> {j.po_taller}</div>}
                 {j.total - j.paid > 0.009 && <div className="small danger">Saldo {money(j.total - j.paid)}</div>}
               </Link>
             );
